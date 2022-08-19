@@ -1,0 +1,1710 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.AgentComReportExtendMapper">
+
+    <sql id="depotCostList_Detail">
+        SELECT
+	        username,agyaccount,payout,rate,gamelogoId,startday,
+	        CASE WHEN rate>0 AND payout<![CDATA[ < ]]>0 THEN TRUNCATE(ABS(rate/100*payout),2)+IFNULL(waterCost,0)
+	        ELSE IFNULL(waterCost,0) END cost,depotname,additionalServicerate
+        FROM(
+	        SELECT a.username,ag.agyaccount,SUM(payout) payout, IFNULL(ge.rate,0) rate,lg.id gamelogoId,
+	        CONCAT(a.depotcode,cat.catname) depotname,SUM(waterCost) waterCost,ag.additionalServicerate,a.startday
+	        FROM (
+		        SELECT r.platform, d.id depotId,payout,r.username,r.startday,d.depotcode,r.cost waterCost,
+		        case when r.gamecategory='Chess' then '6'
+		        when r.gamecategory='Sport' then '1'
+		        when r.gamecategory='Live' then '3'
+		        when r.gamecategory='Slot' then '5'
+		        when r.gamecategory='Hunter' then '8'
+		        when r.gamecategory='Esport' then '9'
+		        when r.gamecategory='Lottery' then '12'
+		        end type,r.gamecategory
+		        from rpt_bet_rcd_day r
+		        LEFT JOIN t_gm_depot d ON r.platform = d.depotcode
+		        WHERE r.gamecategory != ''
+	        ) a
+	        INNER JOIN mbr_account t ON t.loginname = a.username
+	        LEFT JOIN t_game_logo lg ON a.depotid = lg.depotid and lg.catid = a.type
+	        LEFT JOIN set_gm_game ge ON ge.gamelogoid = lg.id
+	        LEFT JOIN agy_account ag ON ag.id = t.cagencyid
+			LEFT JOIN (SELECT max(depth) agentLevel,childnodeid from agy_tree GROUP by childnodeid) ar ON ar.childnodeid = ag.id
+	        LEFT JOIN t_gm_cat cat ON cat.id = a.type
+	        WHERE a.type != '' AND a.depotId != '' AND ag.feemodel != 2
+			<if test="agentLevel != null and (agyId == null or agyId == '')">
+				AND ar.agentLevel = #{agentLevel}
+			</if>
+	        <if test="agyId != null and agyId != ''">
+	            AND ag.parentid = #{agyId}
+	        </if>
+	        <if test="agyAccount != null and agyAccount != ''">
+	            AND ag.agyAccount =#{agyAccount}
+	        </if>
+	        <if test="loginName != null and loginName != ''">
+	            AND a.username =#{loginName}
+	        </if>
+	        <if test="startTime != null and startTime != ''">
+	            AND a.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+	        </if>
+	        <if test="endTime != null and endTime != ''">
+	            AND a.startday <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+	        </if>
+	        <if test="cagencyId != null">
+	            and t.cagencyid =#{cagencyId}
+	        </if>
+	        <if test="subcagencyId != null">
+	            and t.subcagencyId =#{subcagencyId}
+	        </if>
+	        <!--<choose>
+	            <when test="groubyAgent == true">
+	                GROUP BY ag.agyaccount,a.depotid,a.type
+	            </when>
+	            <otherwise>
+	                GROUP BY a.username,a.depotid,a.type
+	            </otherwise>
+	        </choose>-->
+	         GROUP BY ag.agyaccount,a.depotid,a.type
+        ) b
+    </sql>
+ 
+    <sql id="serviceCostList_Detail">
+        SELECT TRUNCATE(SUM(t.cost),2) serviceCost, t.agyaccount,t.createTime FROM
+			(
+     			SELECT
+					CASE WHEN agy.depositServicerate > 0 
+					THEN ABS(IFNULL(SUM(actualarrival),0) * agy.depositServicerate/100)
+					ELSE 0 
+					END cost,agy.agyaccount,str_to_date(d.audittime, '%Y-%m-%d') createTime
+            	FROM fund_deposit d
+	            LEFT JOIN mbr_account t ON d.accountid = t.id
+				LEFT JOIN agy_account agy ON agy.id = t.cagencyid
+				LEFT JOIN (SELECT max(depth) agentLevel,childnodeid from agy_tree GROUP by childnodeid) ar ON ar.childnodeid = agy.id
+           		WHERE d.`status`=1 AND agy.feemodel != 1
+				<if test="agentLevel != null and (agyId == null or agyId == '')">
+					AND ar.agentLevel = #{agentLevel}
+				</if>
+				<if test="agyId != null and agyId != ''">
+           			AND t.cagencyid IN (SELECT id FROM agy_account WHERE parentid = #{agyId})
+				</if>
+           	 	AND str_to_date(d.audittime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+            	AND str_to_date(d.audittime, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+            	GROUP BY t.id
+            	
+			UNION ALL
+			
+           		SELECT
+					CASE WHEN agy.withdrawServicerate > 0 
+					THEN ABS(IFNULL(SUM(actualarrival),0) * agy.withdrawServicerate/100)
+					ELSE 0 
+					END cost,agy.agyaccount,str_to_date(d.passtime, '%Y-%m-%d') createTime
+          		FROM fund_acc_withdraw d
+           		LEFT JOIN mbr_account t ON d.accountid = t.id
+				LEFT JOIN agy_account agy on agy.id = t.cagencyid
+				LEFT JOIN (SELECT max(depth) agentLevel,childnodeid from agy_tree GROUP by childnodeid) ar ON ar.childnodeid = agy.id
+          		WHERE d.`status`= 1 AND agy.feemodel != 1
+				<if test="agentLevel != null and (agyId == null or agyId == '')">
+					AND ar.agentLevel = #{agentLevel}
+				</if>
+				<if test="agyId != null and agyId != ''">
+          			AND t.cagencyid IN (SELECT id FROM agy_account WHERE parentid = #{agyId})
+				</if>
+           		AND str_to_date(d.passtime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+	            AND str_to_date(d.passtime, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+	            GROUP BY t.id
+		) t group by t.agyaccount
+    </sql>
+
+	<sql id="countAgyIsCagency1AgentLevel">
+		SELECT ct.id pid,ct.agyaccount parentAgyAccount, t.*,ct2.id,ct2.agyaccount,ct.feemodel,ct.departmentid
+		FROM agy_account ct
+		LEFT JOIN (SELECT max(depth) agentLevel,childnodeid from agy_tree GROUP by childnodeid) ar ON ct.id = ar.childnodeid
+		LEFT JOIN agy_tree e ON ar.childnodeid = e.parentid
+		LEFT JOIN agy_tree t ON e.childnodeid = t.parentid
+		LEFT JOIN agy_account ct2 on ct2.id = t.parentid
+		WHERE ar.agentLevel = #{agentLevel} AND e.depth=0
+	</sql>
+
+    <sql id="count_agy_where">
+        SELECT DISTINCT t.id agyId
+        FROM mbr_account mbr
+        INNER JOIN (
+        <if test="isCagency == 1">
+			<choose>
+				<when test="agentLevel != null and (agyId == null or agyId == '')">
+					<include refid="countAgyIsCagency1AgentLevel"/>
+				</when>
+				<otherwise>
+					SELECT ct.id pid,ct.agyaccount parentAgyAccount, t.*,ct2.id,ct2.agyaccount,ct.feemodel,ct.departmentid
+					FROM agy_account ct
+					LEFT JOIN agy_tree e ON ct.id = e.parentid
+					LEFT JOIN agy_tree t ON e.childnodeid = t.parentid
+					LEFT JOIN agy_account ct2 on ct2.id = t.parentid
+					WHERE ct.id = #{agyId} AND e.depth = 1
+				</otherwise>
+			</choose>
+        </if>
+        <if test="isCagency == 0">
+            select e.*,ct.agyaccount,e.parentid id, 0 pid, '股东' parentAgyAccount,ct.feemodel,ct.departmentid
+            from agy_account ct
+            left JOIN agy_tree e ON ct.id = e.parentid
+            where ct.parentid = 0
+        </if>
+        ) t ON  t.childnodeid = mbr.cagencyId
+        <where>
+            <if test="departmentid != null and departmentid != 0">
+                AND t.departmentid = #{departmentid}
+            </if>
+            <if test="departmentid != null and departmentid == 0">
+                AND t.departmentid IS NULL
+            </if>
+            <if test="isTest == false">
+                AND NOT EXISTS (
+                SELECT * from agy_tree tree WHERE  tree.childnodeid = mbr.cagencyid AND tree.parentid = 4
+                )
+            </if>
+            <if test="isTest == true">
+                AND  EXISTS (
+                SELECT * FROM agy_tree tree WHERE  tree.childnodeid = mbr.cagencyid AND tree.parentid = 4
+                )
+            </if>
+        </where>
+    </sql>
+    
+    <select id="tagencyTotalFromReport" resultType="com.wsdy.saasops.modules.agent.dto.AgentComReportDto">
+        SELECT
+        	a.agyId,
+	        a.agyAccount,
+	        a.tagencyId,
+	        a.parentId,
+	        SUM(a.netwinlose) netwinlose,
+	        a.feemodel,
+	        a.additionalServicerate,
+	        SUM(a.totalDepositBalance) totalDepositBalance,
+	       	SUM(a.totalActualarrival) totalActualarrival,
+	        SUM(a.totalDepositBalanceNum) totalDepositBalanceNum,
+	        SUM(a.totalDrawAmount) totalDrawAmount,
+	        SUM(a.totalDrawAmountNum) totalDrawAmountNum,
+	        SUM(a.totalBonusAmount) totalBonusAmount,
+	        SUM(a.totalBonusAmountNum) totalBonusAmountNum,
+	       	SUM(a.totalPayout) totalPayout,
+	        SUM(a.totalValidBets) totalValidBets,
+	        SUM(a.totalNewMbrs) totalNewMbrs,
+	        SUM(a.totalNewDeposits) totalNewDeposits,
+	        SUM(a.totalNewDepositAmount) totalNewDepositAmount,
+	        SUM(a.totalActiveMbrs) totalActiveMbrs,
+	        a.totalSubAgentNum totalSubAgentNum,
+	        a.totalSubMbrNum totalSubMbrNum,
+	        a.ctRatio,
+	        a.lsRatio,
+	        a.syRatio,
+	        a.yhRatio,
+	        a.ctDiffer,
+	        IFNULL(SUM(a.sumDepositAndWithdrawal), 0) sumDepositAndWithdrawal,
+	        IFNULL(SUM(a.totalBetMbrs), 0) totalBetMbrs,
+	        IFNULL(SUM(a.betCount), 0) betCount,
+	        IFNULL(SUM(a.calculateProfit), 0) calculateProfit,
+	        -1*IFNULL(SUM(a.totalPayout), 0) - IFNULL(SUM(a.totalBonusAmount), 0) - IFNULL(SUM(a.calculateProfit), 0) totalProfit
+        FROM (
+	        SELECT a.*
+	        FROM (
+		        	<include refid="tagencyTotalFromReportSql"/>
+		        ) a
+	        GROUP BY a.agyAccount
+        ) a
+    </select>
+    
+    <sql id="tagencyTotalFromReportSql">
+        SELECT
+	        ttt.agyId,
+	        SUM(calculateProfit) calculateProfit,
+	        ttt.agyAccount,
+	        ttt.tagencyId,
+	        ttt.parentId,
+	        ttt.netwinlose,
+	        ttt.feemodel,
+	        ttt.additionalServicerate,
+	        IFNULL(SUM(ttt.totalDepositBalance),0)  totalDepositBalance,
+	        IFNULL(SUM(ttt.totalActualarrival),0)  totalActualarrival,
+	        COUNT( distinct (CASE WHEN ttt.totalDepositBalanceNum != 0 THEN ttt.totalDepositBalanceNum ELSE NULL END )) totalDepositBalanceNum,
+	        IFNULL(SUM(ttt.totalDrawAmount),0)  totalDrawAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalDrawAmountNum != 0 THEN ttt.totalDrawAmountNum ELSE NULL END )) totalDrawAmountNum,
+	        IFNULL(SUM(ttt.totalBonusAmount),0) + IFNULL(SUM(ttt.totalTaskBonus),0) totalBonusAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalBonusAmountNum != 0 THEN ttt.totalBonusAmountNum ELSE NULL END )) totalBonusAmountNum,
+	        IFNULL(SUM(ttt.totalPayout),0)  totalPayout,
+	        IFNULL(SUM(ttt.totalValidBets),0)  totalValidBets,
+	        COUNT( distinct (CASE WHEN ttt.totalNewMbrs != 0 THEN ttt.totalNewMbrs ELSE NULL END )) totalNewMbrs,
+	        COUNT( distinct (CASE WHEN ttt.totalNewDeposits != 0 THEN ttt.totalNewDeposits ELSE NULL END )) totalNewDeposits,
+	        IFNULL(SUM(ttt.totalNewDepositAmount),0) totalNewDepositAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalActiveMbrs != 0 THEN ttt.totalActiveMbrs ELSE NULL END )) totalActiveMbrs,
+	        IFNULL(agent.totalSubAgentNum,0) totalSubAgentNum,IFNULL(mbr.totalSubMbrNum,0) totalSubMbrNum,
+	        ROUND(IFNULL(SUM(ttt.totalDrawAmount)/ SUM(ttt.totalDepositBalance) , 0),4) ctRatio,
+	        ROUND(IFNULL(SUM(ttt.totalValidBets) / (SUM(ttt.totalDepositBalance) + SUM(ttt.totalBonusAmount) + SUM(ttt.totalTaskBonus)),0 ),4 ) lsRatio,
+	        ROUND(IFNULL(SUM(ttt.totalPayout) / SUM(ttt.totalValidBets),0), 4) syRatio,
+	        ROUND(IFNULL((SUM(ttt.totalBonusAmount) + SUM(ttt.totalTaskBonus)) / SUM(ttt.totalDepositBalance), 0),4) yhRatio,
+	        (SUM(ttt.totalDepositBalance) - SUM(ttt.totalDrawAmount)) ctDiffer,
+	        IFNULL(SUM(ttt.totalDepositBalance),0)+ IFNULL(SUM(ttt.totalDrawAmount),0) sumDepositAndWithdrawal,
+	        IFNULL(SUM(ttt.betCount),0) betCount,
+			IFNULL(SUM(ttt.totalBetMbrs),0) totalBetMbrs,
+			MAX(bettime.winloseLastTime) winloseLastTime
+	        FROM (
+				SELECT 
+					acc.agyId, acc.agyAccount,acc.tagencyId, acc.parentId, tt.*,acc.feemodel,acc.additionalServicerate,
+					pro.netwinlose
+				FROM (
+					-- 查询符合代理条件的会员(带代理信息)
+					<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.new_agy_where"/>
+				) acc
+		        LEFT jOIN agy_commission_profit pro ON acc.agyId = pro.agentid
+				LEFT JOIN (
+				(
+					-- 存款金额/存款人数/存款实际到账金额
+					SELECT tt.* FROM (
+						SELECT
+							t.accountId,
+							0 calculateProfit,
+							t.deposit totalDepositBalance,
+							t.actualdeposit totalActualarrival,
+							t.accountId  totalDepositBalanceNum,
+							0 totalDrawAmount,
+							0 totalDrawAmountNum,
+							0 totalBonusAmount,
+							0 totalBonusAmountNum,
+							0 totalPayout,
+							0 totalValidBets,
+							0 totalTaskBonus,
+							0 totalNewMbrs,
+							0 totalNewDeposits,
+							0 totalNewDepositAmount,
+							0 betCount,
+					        0 totalBetMbrs,
+							0 totalActiveMbrs
+						FROM mbr_funds_report t
+						WHERE t.deposit > 0 and t.actualdeposit > 0
+					<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.reportTime_where"/>
+					) tt
+				)
+
+				UNION ALL
+				(
+					-- 取款金额/取款人数
+					SELECT tt.* FROM (
+						SELECT
+							t.accountId,
+							0 calculateProfit,
+							0 totalDepositBalance,
+							0 totalActualarrival,
+							0 totalDepositBalanceNum,
+							t.actualarrival totalDrawAmount,
+							t.accountId totalDrawAmountNum,
+							0 totalBonusAmount,
+							0 totalBonusAmountNum,
+							0 totalPayout,
+							0 totalValidBets,
+							0 totalTaskBonus,
+							0 totalNewMbrs,
+							0 totalNewDeposits,
+							0 totalNewDepositAmount,
+							0 betCount,
+					        0 totalBetMbrs,
+							0 totalActiveMbrs
+						FROM fund_acc_withdraw t
+						WHERE t.status = 1
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.passTime_where"/>
+					) tt
+				)
+        
+				 UNION ALL
+				(
+					-- 人工资金调整
+					SELECT tt.* FROM (
+						SELECT
+							t.accountId,
+							SUM(IF(t.financialCode = 'AM', -1 * amount, amount)) calculateProfit,
+							0 totalDepositBalance,
+							0 totalActualarrival,
+							0 totalDepositBalanceNum,
+							0 totalDrawAmount,
+							0 totalDrawAmountNum,
+							0 totalBonusAmount,
+							0 totalBonusAmountNum,
+							0 totalPayout,
+							0 totalValidBets,
+							0 totalTaskBonus,
+							0 totalNewMbrs,
+							0 totalNewDeposits,
+							0 totalNewDepositAmount,
+							0 betCount,
+					        0 totalBetMbrs,
+							0 totalActiveMbrs
+						FROM fund_audit t
+						WHERE t.status = 1 AND t.isCalculateProfit = 1
+						<include refid="createTime_where"/>
+						GROUP BY t.accountId
+					) tt
+				)
+
+				UNION ALL
+				(
+					-- 优惠金额
+					SELECT tt.* FROM (
+						SELECT
+							t.accountId,
+							0 calculateProfit,
+							0 totalDepositBalance,
+							0 totalActualarrival,
+							0 totalDepositBalanceNum,
+							0 totalDrawAmount,
+							0 totalDrawAmountNum,
+							IF(t.source = 3, -1 * t.bonusamount, t.bonusamount) totalBonusAmount,
+							t.accountId totalBonusAmountNum,
+							0 totalPayout,
+							0 totalValidBets,
+							0 totalTaskBonus,
+							0 totalNewMbrs,
+							0 totalNewDeposits,
+							0 totalNewDepositAmount,
+							0 betCount,
+					        0 totalBetMbrs,
+							0 totalActiveMbrs
+						FROM opr_act_bonus t
+						WHERE t.status = 1
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.applicationTime_where"/>
+					) tt
+				)
+				
+				UNION ALL
+				(
+					-- 优惠金额/优惠人数  优惠：任务+红利(活动)
+					SELECT tt.* FROM (
+						SELECT
+							t.accountId,
+							0 calculateProfit,
+							0 totalDepositBalance,
+							0 totalActualarrival,
+							0 totalDepositBalanceNum,
+							0 totalDrawAmount,
+							0 totalDrawAmountNum,
+							0 totalBonusAmount,
+							0 totalBonusAmountNum,
+							0 totalPayout,
+							0 totalValidBets,
+							t.taskbonus totalTaskBonus,
+							0 totalNewMbrs,
+							0 totalNewDeposits,
+							0 totalNewDepositAmount,
+							0 betCount,
+					        0 totalBetMbrs,
+							0 totalActiveMbrs
+						FROM mbr_funds_report t
+						WHERE t.bonus > 0
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.reportTime_where"/>
+					) tt
+				)
+
+				UNION ALL
+				(
+					-- 派彩金额/有效投注
+					select tt.* FROM (
+						select
+							a.id accountId,
+							0 calculateProfit,
+							0 totalDepositBalance,
+							0 totalActualarrival,
+							0 totalDepositBalanceNum,
+							0 totalDrawAmount,
+							0 totalDrawAmountNum,
+							0 totalBonusAmount,
+							0 totalBonusAmountNum,
+							t.payout totalPayout,
+							t.validbet totalValidBets,
+							0 totalTaskBonus,
+							0 totalNewMbrs,
+							0 totalNewDeposits,
+							0 totalNewDepositAmount,
+							0 betCount,
+					        0 totalBetMbrs,
+							0 totalActiveMbrs
+						from rpt_bet_rcd_day t
+						inner join mbr_account a on a.loginName=t.username
+						where 1=1
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+						<!--<include refid="startday_where"/>-->
+					) tt
+				)
+
+				UNION ALL
+				(
+					-- 新增会员
+					select tt.* FROM (
+						select
+							t.id accountId,
+							0 calculateProfit,
+							0 totalDepositBalance,
+							0 totalActualarrival,
+							0 totalDepositBalanceNum,
+							0 totalDrawAmount,
+							0 totalDrawAmountNum,
+							0 totalBonusAmount,
+							0 totalBonusAmountNum,
+							0 totalPayout,
+							0 totalValidBets,
+							0 totalTaskBonus,
+							t.id totalNewMbrs,
+							0 totalNewDeposits,
+							0 totalNewDepositAmount,
+							0 betCount,
+					        0 totalBetMbrs,
+							0 totalActiveMbrs
+						from mbr_account t
+						where 1=1
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.registerTime_where"/>
+						<!--<include refid="registerTime_where"/>-->
+					) tt
+				)
+
+				UNION ALL
+				(
+					-- 首存人数
+					select tt.* FROM (
+						select
+							t.accountId,
+							0 calculateProfit,
+							0 totalDepositBalance,
+							0 totalActualarrival,
+							0 totalDepositBalanceNum,
+							0 totalDrawAmount,
+							0 totalDrawAmountNum,
+							0 totalBonusAmount,
+							0 totalBonusAmountNum,
+							0 totalPayout,
+							0 totalValidBets,
+							0 totalTaskBonus,
+							0 totalNewMbrs,
+							d.id totalNewDeposits,
+							<!-- d.depositamount totalNewDepositAmount, -->
+							d.actualArrival totalNewDepositAmount,
+							0 betCount,
+					        0 totalBetMbrs,
+							0 totalActiveMbrs
+						from fund_deposit t
+						inner join(
+							-- 所有会员通过的首存
+							select accountid,min(id) id,depositamount,actualArrival
+							from fund_deposit
+							where status = 1
+							group by accountid
+						) d on t.id = d.id
+						where t.status = 1
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.auditTime_where"/>
+						<!--<include refid="auditTime_where"/>-->
+					) tt
+				)
+
+				UNION ALL
+				(
+					-- 活跃人数 （投注or存款or提款）
+					SELECT tt.* FROM (
+						SELECT
+							t.accountId,
+							0 calculateProfit,
+							0 totalDepositBalance,
+							0 totalActualarrival,
+							0 totalDepositBalanceNum,
+							0 totalDrawAmount,
+							0 totalDrawAmountNum,
+							0 totalBonusAmount,
+							0 totalBonusAmountNum,
+							0 totalPayout,
+							0 totalValidBets,
+							0 totalTaskBonus,
+							0 totalNewMbrs,
+							0 totalNewDeposits,
+							0 totalNewDepositAmount,
+							0 betCount,
+					        0 totalBetMbrs,
+							t.accountId totalActiveMbrs
+						from  (
+						-- 投注
+						select a.id accountId,SUM(t.bet) bet
+						from rpt_bet_rcd_day t
+						inner join mbr_account a on a.loginName=t.username
+						where 1=1 
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+						GROUP BY accountId HAVING bet >= 100
+						) t
+					) tt
+				)
+				union all
+        		(
+			        -- 投注人数,注单数量
+			        select tt.* from (
+				        select
+					        a.id accountId,
+					        0 calculateProfit,
+					        0 totalDepositBalance,
+					        0 totalActualarrival,
+					        0 totalDepositBalanceNum,
+					        0 totalDrawAmount,
+					        0 totalDrawAmountNum,
+					        0 totalBonusAmount,
+					        0 totalBonusAmountNum,
+					        0 totalPayout,
+					        0 totalValidBets,
+					        0 totalTaskBonus,
+					        0 totalNewMbrs,
+					        0 totalNewDeposits,
+					        0 totalNewDepositAmount,
+					        IFNULL(SUM(t.quantity),0) betCount,
+					        IFNULL(COUNT(DISTINCT t.username),0) totalBetMbrs,
+					        0 totalActiveMbrs
+				        FROM rpt_bet_rcd_day t
+				        LEFT JOIN mbr_account a on a.loginName = t.username
+				        WHERE 1=1
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+						GROUP BY accountId
+			        ) tt
+        		)
+        	
+        	)tt ON acc.id = tt.accountId
+        )ttt
+        -- 代理个数:不含自己
+        LEFT JOIN
+        (
+	        SELECT parentid,COUNT(IFNULL(parentid,0)) totalSubAgentNum
+	        FROM agy_tree
+	        WHERE depth > 0
+	        AND parentid in (
+	            <include refid="count_agy_where"/>
+	        )
+        ) agent ON 1=1
+        -- 会员个数
+        LEFT JOIN
+        (
+	        SELECT agy.id,COUNT(ifnull(agy.id,0)) totalSubMbrNum
+	        FROM agy_account agy
+	        INNER JOIN agy_tree t on agy.id = t.parentid
+	        INNER JOIN mbr_account mbr on mbr.cagencyid = t.childnodeid
+	        WHERE mbr.cagencyid > 0
+	        AND agy.id IN (
+	            <include refid="count_agy_where"/>
+	        )
+        ) mbr ON 1=1 
+        -- 盈亏更新时间
+        LEFT JOIN
+        (
+	        SELECT agy.id agyId,MAX(t.createtime) winloseLastTime
+	        FROM rpt_bet_rcd_day t 
+	        LEFT JOIN mbr_account mbr on mbr.loginname = t.username
+	        LEFT JOIN agy_tree tree on mbr.cagencyid = tree.childnodeid
+	        INNER JOIN agy_account agy on agy.id = tree.parentid
+	        WHERE mbr.cagencyid > 0
+	        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+	        GROUP BY agyId
+        ) bettime ON bettime.agyId = ttt.agyId 
+        GROUP BY ttt.agyId
+        <!--<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.order_detail"/>-->
+        <!--<include refid="order_detail"/>-->
+    </sql>
+    
+    <sql id="createTime_where">
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(t.createTime, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND t.createTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.createTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </sql>
+    
+    <select id="categoryTotalFromReport" resultType="com.wsdy.saasops.modules.agent.dto.AgentComReportDto">
+    	SELECT 
+			a.agyaccount,
+	        a.tagencyId,
+	        a.parentId,
+	        a.departmentid,
+	        a.calculateProfit,
+	        a.totalDepositBalance,
+	        a.totalDepositBalanceNum,
+	        a.totalDrawAmount,
+	        a.totalDrawAmountNum,
+	        a.totalBonusAmount,
+	        a.totalBonusAmountNum,
+	        a.totalPayout,
+	        a.totalValidBets,
+	        a.totalNewMbrs,
+	        a.totalNewDeposits,
+	        a.totalActiveMbrs,
+	        a.totalBetMbrs,
+	        a.betCount,
+	        a.totalSubAgentNum,
+	        a.totalSubMbrNum,
+	        a.ctRatio,
+	        a.lsRatio,
+	        a.syRatio,
+	        a.yhRatio,
+	        a.ctDiffer,
+            -1*IFNULL(SUM(a.totalPayout), 0) - IFNULL(SUM(a.totalBonusAmount), 0) - IFNULL(SUM(a.totalTaskBonus), 0) - IFNULL(SUM(a.calculateProfit), 0) totalProfit
+        FROM (
+	        SELECT a.*
+	        	FROM ( <include refid="categoryTotalFromReportSql"/> ) a
+	        GROUP BY a.agyAccount
+        ) a
+        GROUP BY a.agyaccount
+    </select>
+
+    <sql id="categoryTotalFromReportSql">
+        SELECT
+        	ttt.agyaccount,
+	        ttt.tagencyId,
+	        ttt.agyId,
+        	ttt.feemodel,
+        	ttt.additionalServicerate,
+	        ttt.parentId,
+	        ttt.departmentid,
+	        IFNULL(SUM(ttt.calculateProfit),0) calculateProfit,
+	        IFNULL(SUM(ttt.totalDepositBalance),0)  totalDepositBalance,
+	        COUNT( distinct (CASE WHEN ttt.totalDepositBalanceNum != 0 THEN ttt.totalDepositBalanceNum ELSE NULL END )) totalDepositBalanceNum,
+	        IFNULL(SUM(ttt.totalDrawAmount),0)  totalDrawAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalDrawAmountNum != 0 THEN ttt.totalDrawAmountNum ELSE NULL END )) totalDrawAmountNum,
+	        IFNULL(SUM(ttt.totalBonusAmount),0)  totalBonusAmount,
+	        IFNULL(SUM(ttt.totalTaskBonus),0)  totalTaskBonus,
+	        COUNT( distinct (CASE WHEN ttt.totalBonusAmountNum != 0 THEN ttt.totalBonusAmountNum ELSE NULL END )) totalBonusAmountNum,
+	        IFNULL(SUM(ttt.totalPayout),0) totalPayout,
+	        IFNULL(SUM(ttt.totalValidBets),0)  totalValidBets,
+	        COUNT( distinct (CASE WHEN ttt.totalNewMbrs != 0 THEN ttt.totalNewMbrs ELSE NULL END )) totalNewMbrs,
+	        COUNT( distinct (CASE WHEN ttt.totalNewDeposits != 0 THEN ttt.totalNewDeposits ELSE NULL END )) totalNewDeposits,
+	        COUNT( distinct (CASE WHEN ttt.totalActiveMbrs != 0 THEN ttt.totalActiveMbrs ELSE NULL END )) totalActiveMbrs,
+	        IFNULL(agent.totalSubAgentNum,0) totalSubAgentNum,IFNULL(mbr.totalSubMbrNum,0) totalSubMbrNum,
+	        ROUND(IFNULL(SUM(ttt.totalDrawAmount)/ SUM(ttt.totalDepositBalance) , 0),4) ctRatio,
+	        ROUND(IFNULL(SUM(ttt.totalValidBets) / (SUM(ttt.totalDepositBalance) + SUM(ttt.totalBonusAmount)),0 ),4 ) lsRatio,
+	        ROUND(IFNULL(SUM(ttt.totalPayout) / SUM(ttt.totalValidBets),0), 4) syRatio,
+	        ROUND(IFNULL(SUM(ttt.totalBonusAmount) / SUM(ttt.totalDepositBalance), 0),4) yhRatio,
+	        (SUM(ttt.totalDepositBalance) - SUM(ttt.totalDrawAmount)) ctDiffer,
+	        IFNULL(SUM(totalBetMbrs),0) totalBetMbrs,
+			IFNULL(SUM(betCount),0) betCount
+        FROM (
+        SELECT 
+        	acc.parentId,acc.departmentid,acc.tagencyId, tt.*,acc.agyaccount,acc.feemodel,acc.additionalServicerate,acc.agyId
+        FROM (
+	        -- 查询符合代理条件的会员(带代理信息)
+	        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.agy_cateGory_where"/>
+        ) acc
+        LEFT JOIN (
+	        (
+		        -- 存款金额/存款人数
+		        select tt.* FROM (
+			        select
+				        t.accountId,
+				        0 calculateProfit,
+				        t.deposit totalDepositBalance,
+				        t.accountId  totalDepositBalanceNum,
+				        0 totalDrawAmount,
+				        0 totalDrawAmountNum,
+				        0 totalBonusAmount,
+				        0 totalBonusAmountNum,
+				        0 totalPayout,
+				        0 totalValidBets,
+				        0 totalTaskBonus,
+				        0 totalNewMbrs,
+				        0 totalNewDeposits,
+				        0 totalActiveMbrs,
+				        0 totalBetMbrs,
+				        0 betCount
+			        from mbr_funds_report t
+			        where t.deposit > 0
+			        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.reportTime_where"/>
+		        ) tt
+	        )
+	        
+	        UNION ALL
+	         (
+	             -- 人工资金调整
+	             SELECT tt.* FROM (
+	                SELECT  t.accountId,
+		                IF(t.financialCode = 'AM', -1 * amount, amount) calculateProfit,
+				        0 totalDepositBalance,
+				        0 totalDepositBalanceNum,
+				        0 totalDrawAmount,
+				        0 totalDrawAmountNum,
+				        0 totalBonusAmount,
+				        0 totalBonusAmountNum,
+				        0 totalPayout,
+				        0 totalValidBets,
+				        0 totalTaskBonus,
+				        0 totalNewMbrs,
+				        0 totalNewDeposits,
+				        0 totalActiveMbrs,
+				        0 totalBetMbrs,
+				        0 betCount
+	                 FROM mbr_account mbr
+	                 LEFT JOIN fund_audit t on mbr.id = t.accountId
+	                 WHERE t.status = 1 AND t.isCalculateProfit = 1
+	                <include refid="createTime_where"/>
+	             ) tt
+	         )
+	
+	        UNION ALL
+	        (
+	        -- 取款金额/取款人数
+	        select tt.* FROM (
+		        select
+			        t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalDepositBalanceNum,
+			        t.actualarrival totalDrawAmount,
+			        t.accountId totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalActiveMbrs,
+			        0 totalBetMbrs,
+			        0 betCount
+		        FROM fund_acc_withdraw t
+		        WHERE t.status = 1
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.passTime_where"/>
+	        ) tt
+	        )
+	
+	        UNION ALL
+	        (
+	        -- 红利优惠金额
+	        SELECT tt.* FROM (
+		        SELECT
+			        t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        t.bonus totalBonusAmount,
+			        t.accountId totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalActiveMbrs,
+			        0 totalBetMbrs,
+			        0 betCount
+		        FROM mbr_funds_report t
+		        WHERE bonus > 0
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.reportTime_where"/>
+		        ) tt
+	        )
+	        
+			UNION ALL
+			(
+				-- 任务金额
+				SELECT tt.* FROM (
+					SELECT
+						t.accountId,
+				        0 calculateProfit,
+				        0 totalDepositBalance,
+				        0 totalDepositBalanceNum,
+				        0 totalDrawAmount,
+				        0 totalDrawAmountNum,
+				        0 totalBonusAmount,
+				        0 totalBonusAmountNum,
+				        0 totalPayout,
+				        0 totalValidBets,
+				        t.taskbonus totalTaskBonus,
+				        0 totalNewMbrs,
+				        0 totalNewDeposits,
+				        0 totalActiveMbrs,
+				        0 totalBetMbrs,
+				        0 betCount
+					FROM mbr_funds_report t
+					WHERE t.bonus > 0
+					<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.reportTime_where"/>
+				) tt
+			)
+	
+	        UNION ALL
+	        (
+	        -- 派彩金额/有效投注
+	        SELECT tt.* FROM (
+		        SELECT
+			        a.id accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        t.payout totalPayout,
+			        t.validbet totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalActiveMbrs,
+			        0 totalBetMbrs,
+			        0 betCount
+		        FROM rpt_bet_rcd_day t
+		        INNER JOIN mbr_account a on a.loginName=t.username
+		        WHERE 1=1
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+	        ) tt
+	        )
+	
+	        UNION ALL
+	        (
+		        -- 新增会员
+		        select tt.* FROM (
+			        select
+				        t.id accountId,
+				        0 calculateProfit,
+				        0 totalDepositBalance,
+				        0 totalDepositBalanceNum,
+				        0 totalDrawAmount,
+				        0 totalDrawAmountNum,
+				        0 totalBonusAmount,
+				        0 totalBonusAmountNum,
+				        0 totalPayout,
+				        0 totalValidBets,
+				        0 totalTaskBonus,
+				        t.id totalNewMbrs,
+				        0 totalNewDeposits,
+				        0 totalActiveMbrs,
+				        0 totalBetMbrs,
+				        0 betCount
+			        from mbr_account t
+			        where 1=1
+			        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.registerTime_where"/>
+		        ) tt
+	        )
+	
+	        UNION ALL
+	        (
+	        -- 首存人数
+	        select tt.* FROM (
+		        select
+			        t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        d.id totalNewDeposits,
+			        0 totalActiveMbrs,
+			        0 totalBetMbrs,
+			        0 betCount
+			        
+		        from fund_deposit t
+		        inner join(
+		        -- 所有会员通过的首存
+		        select accountid,min(id) id
+		        from fund_deposit
+		        where status = 1
+		        group by accountid
+		        ) d on t.id = d.id
+		        where 1=1
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.auditTime_where"/>
+	        ) tt
+	        )
+	
+	        UNION ALL
+	        (
+		        -- 活跃人数 （投注or存款or提款）
+		        select tt.* FROM (
+			        select
+				        t.accountId,
+				        0 calculateProfit,
+				        0 totalDepositBalance,
+				        0 totalDepositBalanceNum,
+				        0 totalDrawAmount,
+				        0 totalDrawAmountNum,
+				        0 totalBonusAmount,
+				        0 totalBonusAmountNum,
+				        0 totalPayout,
+				        0 totalValidBets,
+				        0 totalTaskBonus,
+				        0 totalNewMbrs,
+				        0 totalNewDeposits,
+				        t.accountId totalActiveMbrs,
+				        0 totalBetMbrs,
+				        0 betCount
+			        from  (
+			        -- 投注
+			        select a.id accountId,SUM(t.bet) bet
+			        from rpt_bet_rcd_day t
+			        inner join mbr_account a on a.loginName=t.username
+			        where 1=1 
+			        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+			        GROUP BY accountId HAVING bet >= 100
+			        ) t
+		        ) tt
+	        )
+	        
+	           UNION ALL
+	        (
+		        -- 投注人数,注单数量
+		        SELECT tt.* from (
+			        SELECT
+				        a.id accountId,
+				        0 calculateProfit,
+				        0 totalDepositBalance,
+				        0 totalDepositBalanceNum,
+				        0 totalDrawAmount,
+				        0 totalDrawAmountNum,
+				        0 totalBonusAmount,
+				        0 totalBonusAmountNum,
+				        0 totalPayout,
+				        0 totalValidBets,
+				        0 totalTaskBonus,
+				        0 totalNewMbrs,
+				        0 totalNewDeposits,
+				        0 totalActiveMbrs,
+				        IFNULL(COUNT(DISTINCT t.username),0) totalBetMbrs,
+				        IFNULL(SUM(t.quantity),0) betCount
+			        FROM  rpt_bet_rcd_day t
+			        LEFT JOIN mbr_account a ON a.loginName = t.username
+			        WHERE 1=1
+			        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+			        GROUP BY accountId
+		        ) tt
+	        )
+        )tt on acc.id = tt.accountId
+        )ttt
+        -- 代理个数
+        LEFT JOIN
+        (
+	        select ct2.departmentid,COUNT(ifnull(ct2.departmentid,0)) totalSubAgentNum
+	        from agy_tree e
+	        LEFT JOIN agy_tree t ON e.childnodeid = t.parentid
+	        left join agy_account ct2 on ct2.id = t.parentid
+	        WHERE e.parentid = #{agyId}  and e.depth = 1
+
+        ) agent on IFNULL(agent.departmentid,0) = IFNULL(ttt.departmentid,0)
+        -- 会员个数
+        LEFT JOIN
+        (
+	        SELECT t.departmentid,COUNT(ifnull(t.departmentid,0)) totalSubMbrNum
+	        FROM mbr_account mbr
+	        INNER JOIN  (
+	        select t.childnodeid,ct2.departmentid
+	        from agy_tree e
+	        LEFT JOIN agy_tree t ON e.childnodeid = t.parentid
+	        LEFT JOIN agy_account ct2 on ct2.id = t.parentid
+	        WHERE e.parentid = #{agyId}  and e.depth > 0
+	        )t on mbr.cagencyid = t.childnodeid
+        ) mbr on  IFNULL(mbr.departmentid,0) = IFNULL(ttt.departmentid,0)
+    </sql>
+
+    <select id="memberTotalFromReport" resultType="com.wsdy.saasops.modules.agent.dto.AgentComReportDto">
+        SELECT
+	        ttt.accountId,
+	        ttt.loginName,
+	        ttt.tagencyId,
+	        ttt.departmentid,
+	        ttt.netwinlose,
+	        ttt.parentAgyAccount,
+	        (
+	        -- 公司净盈利 = -总派彩 - 总优惠(红利+任务） (- 总返利 sdy无返利)
+	        -- 对应资金报表：公司净盈利 =  -总派彩 - 总红利 -任务返利  - 总返利
+	        IF(SIGN(SUM(ttt.totalPayout))=-1, ABS(SUM(ttt.totalPayout)), -1*SUM(ttt.totalPayout)) - SUM(ttt.totalBonusAmount) - SUM(ttt.totalTaskBonus) - SUM(ttt.calculateProfit)
+	        ) totalProfit,
+	        IFNULL(SUM(ttt.totalDepositBalance),0)  totalDepositBalance,
+	        IFNULL(SUM(ttt.totalActualarrival),0)  totalActualarrival,
+	        COUNT( distinct (CASE WHEN ttt.totalDepositBalanceNum != 0 THEN ttt.totalDepositBalanceNum ELSE NULL END )) totalDepositBalanceNum,
+	        IFNULL(SUM(ttt.totalDrawAmount),0)  totalDrawAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalDrawAmountNum != 0 THEN ttt.totalDrawAmountNum ELSE NULL END )) totalDrawAmountNum,
+	        IFNULL(SUM(ttt.totalBonusAmount),0) + IFNULL(SUM(ttt.totalTaskBonus),0) totalBonusAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalBonusAmountNum != 0 THEN ttt.totalBonusAmountNum ELSE NULL END )) totalBonusAmountNum,
+	        IFNULL(SUM(ttt.totalPayout),0)  totalPayout,
+	        IFNULL(SUM(ttt.totalValidBets),0)  totalValidBets,
+	        COUNT( distinct (CASE WHEN ttt.totalNewMbrs != 0 THEN ttt.totalNewMbrs ELSE NULL END )) totalNewMbrs,
+	        COUNT( distinct (CASE WHEN ttt.totalNewDeposits != 0 THEN ttt.totalNewDeposits ELSE NULL END )) totalNewDeposits,
+	        IFNULL(SUM(ttt.totalNewDepositAmount),0) totalNewDepositAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalActiveMbrs != 0 THEN ttt.totalActiveMbrs ELSE NULL END )) totalActiveMbrs,
+	        (SUM(ttt.totalDepositBalance) - SUM(ttt.totalDrawAmount)) ctDiffer,
+	       	IFNULL(SUM(ttt.betCount),0) betCount,
+	       	IFNULL(SUM(ttt.totalBetMbrs),0) totalBetMbrs,
+	       	IFNULL(SUM(ttt.calculateProfit),0) calculateProfit,
+	       	MAX(ttt.winloseLastTime) winloseLastTime
+        FROM (
+        SELECT  tt.*,mbr.loginname loginName,mbr.tagencyId,ct2.agyaccount parentAgyAccount,ct2.departmentid,pro.netwinlose,
+       			bet.winloseLastTime
+	        FROM (
+			        (
+			        -- 存款金额/存款人数/存款实际到账金额
+			        SELECT tt.* FROM (
+				        SELECT
+					        t.accountId,
+					        0 calculateProfit,
+					        t.deposit totalDepositBalance,
+					        t.actualdeposit totalActualarrival,
+					        t.accountId  totalDepositBalanceNum,
+					        0 totalDrawAmount,
+					        0 totalDrawAmountNum,
+					        0 totalBonusAmount,
+					        0 totalBonusAmountNum,
+					        0 totalPayout,
+					        0 totalValidBets,
+					        0 totalTaskBonus,
+					        0 totalNewMbrs,
+					        0 totalNewDeposits,
+					        0 totalNewDepositAmount,
+				        	0 betCount,
+				        	0 totalBetMbrs,
+					        0 totalActiveMbrs
+				        FROM mbr_funds_report t
+				        WHERE deposit > 0
+				        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.reportTime_where"/>
+			        ) tt
+		        )
+		
+		        UNION ALL
+		        (
+		        -- 人工资金调整
+		        SELECT tt.* FROM (
+			        SELECT
+				        t.accountId,
+				   		IF(t.financialCode = 'AM', -1 * amount, amount) calculateProfit,
+				        0 totalDepositBalance,
+				        0 totalActualarrival,
+				        0 totalDepositBalanceNum,
+				        0 totalDrawAmount,
+				        0 totalDrawAmountNum,
+				        0 totalBonusAmount,
+				        0 totalBonusAmountNum,
+				        0 totalPayout,
+				        0 totalValidBets,
+				        0 totalTaskBonus,
+				        0 totalNewMbrs,
+				        0 totalNewDeposits,
+				        0 totalNewDepositAmount,
+				        0 betCount,
+				        0 totalBetMbrs,
+				        0 totalActiveMbrs
+			        FROM mbr_account mbr
+		          	LEFT JOIN fund_audit t on mbr.id = t.accountId
+                    WHERE t.status = 1 AND t.isCalculateProfit = 1
+			        <include refid="createTime_where"/>
+			        ) tt
+		        )
+		
+		        UNION ALL
+		        (
+		        -- 取款金额/取款人数
+		        SELECT tt.* FROM (
+			        SELECT
+				        t.accountId,
+				        0 calculateProfit,
+				        0 totalDepositBalance,
+				        0 totalActualarrival,
+				        0 totalDepositBalanceNum,
+				        t.actualarrival totalDrawAmount,
+				        t.accountId totalDrawAmountNum,
+				        0 totalBonusAmount,
+				        0 totalBonusAmountNum,
+				        0 totalPayout,
+				        0 totalValidBets,
+				        0 totalTaskBonus,
+				        0 totalNewMbrs,
+				        0 totalNewDeposits,
+				        0 totalNewDepositAmount,
+				        0 betCount,
+				        0 totalBetMbrs,
+				        0 totalActiveMbrs
+			        FROM fund_acc_withdraw t
+			        WHERE t.status = 1
+			        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.passTime_where"/>
+			        ) tt
+		        )
+		        
+		        UNION ALL
+		        (
+		        -- 注单数量
+		        SELECT tt.* FROM (
+			        SELECT
+				        a.id accountId,
+				        0 calculateProfit,
+				        0 totalDepositBalance,
+				        0 totalActualarrival,
+				        0 totalDepositBalanceNum,
+				        0 totalDrawAmount,
+				        0 totalDrawAmountNum,
+				        0 totalBonusAmount,
+				        0 totalBonusAmountNum,
+				        0 totalPayout,
+				        0 totalValidBets,
+				        0 totalTaskBonus,
+				        0 totalNewMbrs,
+				        0 totalNewDeposits,
+				        0 totalNewDepositAmount,
+				        IFNULL(SUM(t.quantity),0) betCount,
+				        IFNULL(COUNT(DISTINCT t.username),0) totalBetMbrs,
+				        0 totalActiveMbrs
+			        FROM rpt_bet_rcd_day t
+			        RIGHT JOIN mbr_account a on a.loginName = t.username
+			        WHERE 1=1 AND a.cagencyId = #{agyId}
+			        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+				    GROUP BY accountId
+			        ) tt
+		        )
+		
+		        UNION ALL
+		        (
+			        -- 红利金额
+			        SELECT tt.* FROM (
+				        SELECT
+					        t.accountId,
+					        0 calculateProfit,
+					        0 totalDepositBalance,
+					        0 totalActualarrival,
+					        0 totalDepositBalanceNum,
+					        0 totalDrawAmount,
+					        0 totalDrawAmountNum,
+					        IF(t.source = 3, -1 * t.bonusamount, t.bonusamount) totalBonusAmount,
+					        t.accountId totalBonusAmountNum,
+					        0 totalPayout,
+					        0 totalValidBets,
+					        0 totalTaskBonus,
+					        0 totalNewMbrs,
+					        0 totalNewDeposits,
+					        0 totalNewDepositAmount,
+				        	0 betCount,
+				        	0 totalBetMbrs,
+					        0 totalActiveMbrs
+			        FROM opr_act_bonus t
+			        WHERE status = 1
+			        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.applicationTime_where"/>
+			        ) tt
+		        )
+		        
+		        UNION ALL
+				(
+					-- 任务金额
+					SELECT tt.* FROM (
+						SELECT
+							t.accountId,
+					        0 calculateProfit,
+					        0 totalDepositBalance,
+					        0 totalActualarrival,
+					        0 totalDepositBalanceNum,
+					        0 totalDrawAmount,
+					        0 totalDrawAmountNum,
+					        0 totalBonusAmount,
+					        0 totalBonusAmountNum,
+					        0 totalPayout,
+					        0 totalValidBets,
+					        t.taskbonus totalTaskBonus,
+					        0 totalNewMbrs,
+					        0 totalNewDeposits,
+					        0 totalNewDepositAmount,
+				        	0 betCount,
+				        	0 totalBetMbrs,
+					        0 totalActiveMbrs
+						FROM mbr_funds_report t
+						WHERE t.bonus > 0
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.reportTime_where"/>
+					) tt
+				)
+		
+		        UNION ALL
+		        (
+			        -- 派彩金额/有效投注
+			        SELECT tt.* FROM (
+				        SELECT
+					        a.id accountId,
+					        0 calculateProfit,
+					        0 totalDepositBalance,
+					        0 totalActualarrival,
+					        0 totalDepositBalanceNum,
+					        0 totalDrawAmount,
+					        0 totalDrawAmountNum,
+					        0 totalBonusAmount,
+					        0 totalBonusAmountNum,
+					        t.payout totalPayout,
+					        t.validbet totalValidBets,
+					        0 totalTaskBonus,
+					        0 totalNewMbrs,
+					        0 totalNewDeposits,
+					        0 totalNewDepositAmount,
+				        	0 betCount,
+				        	0 totalBetMbrs,
+					        0 totalActiveMbrs
+				        FROM rpt_bet_rcd_day t
+				        INNER JOIN mbr_account a ON a.loginName=t.username
+				        WHERE 1=1
+				        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+			        ) tt
+		        )
+		
+		        UNION ALL
+		        (
+			        -- 新增会员
+			        SELECT tt.* FROM (
+				        SELECT
+					        t.id accountId,
+					        0 calculateProfit,
+					        0 totalDepositBalance,
+					        0 totalActualarrival,
+					        0 totalDepositBalanceNum,
+					        0 totalDrawAmount,
+					        0 totalDrawAmountNum,
+					        0 totalBonusAmount,
+					        0 totalBonusAmountNum,
+					        0 totalPayout,
+					        0 totalValidBets,
+					        0 totalTaskBonus,
+					        t.id totalNewMbrs,
+					        0 totalNewDeposits,
+					        0 totalNewDepositAmount,
+				        	0 betCount,
+				        	0 totalBetMbrs,
+					        0 totalActiveMbrs
+				        FROM mbr_account t
+				        WHERE 1=1
+				        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.registerTime_where"/>
+			        ) tt
+		        )
+		
+		        UNION ALL
+		        (
+			        -- 首存人数
+			        SELECT tt.* FROM (
+				        SELECT
+					        t.accountId,
+					        0 calculateProfit,
+					        0 totalDepositBalance,
+					        0 totalActualarrival,
+					        0 totalDepositBalanceNum,
+					        0 totalDrawAmount,
+					        0 totalDrawAmountNum,
+					        0 totalBonusAmount,
+					        0 totalBonusAmountNum,
+					        0 totalPayout,
+					        0 totalValidBets,
+					        0 totalTaskBonus,
+					        0 totalNewMbrs,
+					        d.id totalNewDeposits,
+					        <!-- d.depositamount totalNewDepositAmount, -->
+							d.actualArrival totalNewDepositAmount,
+				        	0 betCount,
+				        	0 totalBetMbrs,
+					        0 totalActiveMbrs
+				        FROM fund_deposit t
+				        INNER JOIN(
+					        -- 所有会员通过的首存
+					        SELECT accountid,min(id) id,depositamount,actualArrival
+					        FROM fund_deposit WHERE status = 1 GROUP BY accountid
+				        ) d ON t.id = d.id
+				        WHERE 1=1
+				        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.auditTime_where"/>
+			        ) tt
+		        )
+		
+		        UNION ALL
+		        (
+			        -- 活跃人数 （投注or存款or提款）
+			        SELECT tt.* FROM (
+				        SELECT
+					        t.accountId,
+					        0 calculateProfit,
+					        0 totalDepositBalance,
+					        0 totalActualarrival,
+					        0 totalDepositBalanceNum,
+					        0 totalDrawAmount,
+					        0 totalDrawAmountNum,
+					        0 totalBonusAmount,
+					        0 totalBonusAmountNum,
+					        0 totalPayout,
+					        0 totalValidBets,
+					        0 totalTaskBonus,
+					        0 totalNewMbrs,
+					        0 totalNewDeposits,
+					        0 totalNewDepositAmount,
+				        	0 betCount,
+				        	0 totalBetMbrs,
+					        t.accountId totalActiveMbrs
+				        FROM  (
+					        -- 投注
+					        SELECT a.id accountId,SUM(t.bet) bet
+					        FROM rpt_bet_rcd_day t
+					        INNER JOIN mbr_account a ON a.loginName=t.username
+					        WHERE 1=1
+					        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+					         GROUP BY accountId HAVING bet >= 100
+				        ) t
+			        ) tt
+		        )
+	        )tt
+	        LEFT JOIN mbr_account mbr ON mbr.id = tt.accountId
+	        LEFT JOIN agy_account ct2 ON ct2.id =  #{agyId}
+	        LEFT JOIN agy_commission_profit pro ON ct2.id = pro.agentid
+	        LEFT JOIN (
+				SELECT t.username, MAX(t.createtime) winloseLastTime
+	        	FROM rpt_bet_rcd_day t
+	        	LEFT JOIN mbr_account mbr on t.username = mbr.loginname
+	        	WHERE mbr.cagencyId = #{agyId}
+	        	<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+	        	GROUP BY t.username
+	        ) bet ON bet.username = mbr.loginname
+	        WHERE mbr.cagencyId = #{agyId}
+        )ttt
+    </select>
+
+    <select id="cagencyMemberTotalFromReport" resultType="com.wsdy.saasops.modules.agent.dto.AgentComReportDto">
+        SELECT
+	        ttt.accountId,
+	        ttt.loginName,
+	        ttt.tagencyId,
+	        ttt.departmentname cateGory,
+	        ttt.netwinlose,
+	        ttt.agyAccount,
+	        ttt.parentAgyAccount,
+	        ttt.agyId,
+	        (
+	        -- 公司净盈利 = -总派彩 - 总优惠(红利+任务） (- 总返利 sdy无返利)
+	        -- 对应资金报表：公司净盈利 =  -总派彩 - 总红利 -任务返利  - 总返利
+	        IF(SIGN(SUM(ttt.totalPayout))=-1, ABS(SUM(ttt.totalPayout)), -1*SUM(ttt.totalPayout)) - SUM(ttt.totalBonusAmount) - SUM(ttt.calculateProfit) - SUM(ttt.totalTaskBonus)
+	        ) totalProfit,
+	        IFNULL(SUM(ttt.totalDepositBalance),0)  totalDepositBalance,
+	        IFNULL(SUM(ttt.totalActualarrival),0)  totalActualarrival,
+	        COUNT( distinct (CASE WHEN ttt.totalDepositBalanceNum != 0 THEN ttt.totalDepositBalanceNum ELSE NULL END )) totalDepositBalanceNum,
+	        IFNULL(SUM(ttt.totalDrawAmount),0)  totalDrawAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalDrawAmountNum != 0 THEN ttt.totalDrawAmountNum ELSE NULL END )) totalDrawAmountNum,
+	        IFNULL(SUM(ttt.totalBonusAmount),0) + IFNULL(SUM(ttt.totalTaskBonus),0) totalBonusAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalBonusAmountNum != 0 THEN ttt.totalBonusAmountNum ELSE NULL END )) totalBonusAmountNum,
+	        IFNULL(SUM(ttt.totalPayout),0)  totalPayout,
+	        IFNULL(SUM(ttt.totalValidBets),0)  totalValidBets,
+	        COUNT( distinct (CASE WHEN ttt.totalNewMbrs != 0 THEN ttt.totalNewMbrs ELSE NULL END )) totalNewMbrs,
+	        COUNT( distinct (CASE WHEN ttt.totalNewDeposits != 0 THEN ttt.totalNewDeposits ELSE NULL END )) totalNewDeposits,
+	        IFNULL(SUM(ttt.totalNewDepositAmount),0) totalNewDepositAmount,
+	        COUNT( distinct (CASE WHEN ttt.totalActiveMbrs != 0 THEN ttt.totalActiveMbrs ELSE NULL END )) totalActiveMbrs,
+	        ROUND(IFNULL(SUM(ttt.totalDrawAmount)/ SUM(ttt.totalDepositBalance) , 0),4) ctRatio,
+	        ROUND(IFNULL(SUM(ttt.totalValidBets) / (SUM(ttt.totalDepositBalance) + SUM(ttt.totalBonusAmount)),0 ),4 ) lsRatio,
+	        ROUND(IFNULL(SUM(ttt.totalPayout) / SUM(ttt.totalValidBets),0), 4) syRatio,
+	        ROUND(IFNULL(SUM(ttt.totalBonusAmount) / SUM(ttt.totalDepositBalance), 0),4) yhRatio,
+	        (SUM(ttt.totalDepositBalance) - SUM(ttt.totalDrawAmount)) ctDiffer
+        FROM (
+        SELECT tt.*,mbr.loginname loginName,mbr.tagencyId,ct2.agyaccount agyAccount,ct3.agyaccount parentAgyAccount,ct2.departmentid,dep.departmentname,ct2.id agyId,pro.netwinlose
+        FROM
+        (
+	        (
+	        -- 存款金额/存款人数/存款实际到账金额
+	        select tt.* FROM (
+		        select
+			        t.accountId,
+			        0 calculateProfit,
+			        t.deposit totalDepositBalance,
+			        t.actualdeposit totalActualarrival,
+			        t.accountId  totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalNewDepositAmount,
+			        0 totalActiveMbrs
+		        from mbr_funds_report t
+		        where deposit > 0
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.reportTime_where"/>
+	        ) tt
+        )
+        
+        UNION ALL
+				(
+					-- 优惠金额/优惠人数  优惠：任务+红利(活动)
+					SELECT tt.* FROM (
+						SELECT
+						 	t.accountId,
+					        0 calculateProfit,
+					        0 totalDepositBalance,
+					        0 totalActualarrival,
+					        0 totalDepositBalanceNum,
+					        0 totalDrawAmount,
+					        0 totalDrawAmountNum,
+					        0 totalBonusAmount,
+					        0 totalBonusAmountNum,
+					        0 totalPayout,
+					        0 totalValidBets,
+					        t.taskbonus totalTaskBonus,
+					        0 totalNewMbrs,
+					        0 totalNewDeposits,
+					        0 totalNewDepositAmount,
+					        0 totalActiveMbrs
+						FROM mbr_funds_report t
+						WHERE t.bonus > 0
+						<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.reportTime_where"/>
+					) tt
+				)
+
+        UNION ALL
+        (
+	        -- 人工资金调整
+	        select tt.* FROM (
+		        select
+			        t.accountId,
+			        IF(t.financialCode = 'AM', -1 * amount, amount) calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalActualarrival,
+			        0 totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalNewDepositAmount,
+			        0 totalActiveMbrs
+		        from mbr_account mbr
+	            LEFT JOIN fund_audit t on mbr.id = t.accountId
+	            where t.status = 1 AND t.isCalculateProfit = 1
+	           <include refid="createTime_where"/>
+        	) tt
+        )
+
+        UNION ALL
+        (
+	        -- 取款金额/取款人数
+	        select tt.* FROM (
+		        select
+			        t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalActualarrival,
+			        0 totalDepositBalanceNum,
+			        t.actualarrival totalDrawAmount,
+			        t.accountId totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalNewDepositAmount,
+			        0 totalActiveMbrs
+		        FROM fund_acc_withdraw t
+		        WHERE t.status = 1
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.passTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 优惠金额/优惠人数  优惠：任务+红利(活动)
+	        select tt.* FROM (
+		        select
+			        t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalActualarrival,
+			        0 totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        IF(t.source = 3, -1 * bonusamount, bonusamount) totalBonusAmount,
+			        t.accountId totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalNewDepositAmount,
+			        0 totalActiveMbrs
+		        FROM opr_act_bonus t
+		        WHERE t.status = 1
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.applicationTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 派彩金额/有效投注
+	        select tt.* FROM (
+		        select
+			        a.id accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalActualarrival,
+			        0 totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        t.payout totalPayout,
+			        t.validbet totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalNewDepositAmount,
+			        0 totalActiveMbrs
+		        from rpt_bet_rcd_day t
+		        inner join mbr_account a on a.loginName=t.username
+		        where 1=1
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 新增会员
+	        select tt.* FROM (
+		        select
+			        t.id accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalActualarrival,
+			        0 totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        t.id totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalNewDepositAmount,
+			        0 totalActiveMbrs
+		        from mbr_account t
+		        where 1=1
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.registerTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 首存人数
+	        select tt.* FROM (
+		        select
+			        t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalActualarrival,
+			        0 totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        d.id totalNewDeposits,
+			        d.depositamount totalNewDepositAmount,
+			        0 totalActiveMbrs
+		        from fund_deposit t
+		        inner join(
+			        -- 所有会员通过的首存
+			        select accountid,min(id) id,depositamount
+			        from fund_deposit
+			        where status = 1
+			        group by accountid
+		        ) d on t.id = d.id
+		        where 1=1
+		        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.auditTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 活跃人数 （投注or存款or提款）
+	        select tt.* FROM (
+		        select
+			        t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 totalActualarrival,
+			        0 totalDepositBalanceNum,
+			        0 totalDrawAmount,
+			        0 totalDrawAmountNum,
+			        0 totalBonusAmount,
+			        0 totalBonusAmountNum,
+			        0 totalPayout,
+			        0 totalValidBets,
+			        0 totalTaskBonus,
+			        0 totalNewMbrs,
+			        0 totalNewDeposits,
+			        0 totalNewDepositAmount,
+		        t.accountId totalActiveMbrs
+		        from  (
+			        -- 投注
+			        select a.id accountId,SUM(t.validbet) validbet
+			        from rpt_bet_rcd_day t
+			        inner join mbr_account a on a.loginName=t.username
+			        where 1=1
+			        <include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.startday_where"/>
+			         GROUP BY accountId HAVING validbet >= 100
+		        ) t
+	        ) tt
+        )
+        )tt
+        LEFT JOIN mbr_account mbr ON mbr.id = tt.accountId
+        <if test="(agyAccount == null or agyAccount == '') and (parentAgyAccount == null or parentAgyAccount == '')">
+            LEFT JOIN agy_account ct2 ON ct2.id = mbr.cagencyid
+        </if>
+        <if test="agyAccount != null and agyAccount != ''">
+            LEFT JOIN agy_account ct2 ON ct2.agyaccount = #{agyAccount}
+        </if>
+        <if test="parentAgyAccount != null and parentAgyAccount != '' and isDirectlyAgy == true and (agyAccount == null or agyAccount == '')">
+            LEFT JOIN agy_account ct2 ON ct2.parentid = (SELECT id from agy_account WHERE agyaccount = #{parentAgyAccount})
+        </if>
+        -- 查询下级或者所有下下级
+        <if test="parentAgyAccount != null and parentAgyAccount != '' and isDirectlyAgy != true and (agyAccount == null or agyAccount == '')">
+            LEFT JOIN (
+            	SELECT t.id, t.parentid, t.agyaccount, t.departmentid  FROM (<include refid="getAgentAll"/>) t
+            ) ct2 ON ct2.id = mbr.cagencyid
+        </if>
+        LEFT JOIN agy_account ct3 ON ct3.id = ct2.parentid
+        LEFT JOIN agy_department dep ON dep.id = ct2.departmentid
+        LEFT JOIN agy_commission_profit pro ON ct2.id = pro.agentid
+        WHERE mbr.cagencyId = ct2.id
+        )ttt GROUP BY ttt.agyAccount
+
+        <!--<include refid="order_member"/>-->
+    </select>
+    
+    <sql id="getAgentAll">
+		 SELECT t.childnodeid id, t.parentid parentid, ct2.agyaccount,ct2.departmentid
+			FROM agy_account ct
+			LEFT JOIN agy_tree e ON ct.id = e.parentid
+			LEFT JOIN agy_tree t ON e.childnodeid = t.parentid
+			LEFT JOIN agy_account ct2 ON ct2.id = t.childnodeid
+			WHERE e.depth = 1
+			<if test="agyId != null">
+          		AND ct.id = #{agyId} 
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+           		AND ct.agyAccount = #{agyAccount} 
+          	</if>
+    </sql>
+
+	<select id="countAgentLine" resultType="com.wsdy.saasops.modules.agent.dto.AgentComReportDto">
+		SELECT agt.parentid, agt.childnodeid agyId, agt.depth agentLevel, agy2.agyaccount FROM agy_tree agt
+		LEFT JOIN agy_account agy ON agy.id = agt.parentid
+		LEFT JOIN agy_account agy2 on agy2.id = agt.childnodeid
+		WHERE agy.agyaccount=#{agyAccount} AND depth != 0
+		<if test="agentLevel != null and agentLevel.size()>0">
+			AND depth in
+			<foreach item="al" collection="agentLevel" open="(" separator="," close=")">
+				#{al}
+			</foreach>
+		</if>
+	</select>
+	
+</mapper>

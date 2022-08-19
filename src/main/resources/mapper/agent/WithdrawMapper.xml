@@ -1,0 +1,206 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.WithdrawMapper">
+
+    <select id="findAccWithdrawList" resultType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw">
+        SELECT
+        case aw.status when 4 then 2 when 5 then 3 ELSE aw.status
+        end status,aw.id,aw.orderNo,aw.orderPrefix,aw.accountId,aw.drawingAmount,aw.handlingCharge,
+        aw.cutAmount,aw.discountAmount,aw.actualArrival,aw.auditUser,aw.auditTime,aw.passUser,aw.passTime,
+        aw.ip,aw.memo,aw.createUser,aw.createTime,aw.modifyUser,aw.modifyTime,aw.billDetailId,aw.bankCardId,aw.type,aw.memoWithdraw,agt.agyAccount,card.realName,card.bankName,card.address,aw.withdrawSource withdrawSource,detail.orderid,
+        cr.walletname,cr.currencycode,cr.currencyprotocol,cr.walletaddress,aw.actualarrivalcr,aw.exchangerate,aw.methodtype,
+        case aw.`status` when 0 then '失败' when 1 then '成功' when 2 then '待处理' end statusStr,
+        lockStatus,lockOperator,lastLockTime,aw.methodType,aw.hash
+        <if test ="withdrawCount == 1" > ,account.rownum withdrawCount</if>
+        FROM agy_withdraw aw
+        LEFT JOIN agy_account agt ON aw.accountId = agt.id
+        LEFT JOIN agy_bankcard card ON aw.bankCardId = card.id
+        LEFT JOIN fund_merchant_detail detail ON aw.id = detail.accWithdrawId
+        LEFT JOIN agy_cryptocurrencies cr on aw.cryptocurrenciesid = cr.id
+        <if test ="withdrawCount == 1" >
+            LEFT JOIN (select
+            -- rownum  判断  @p_accountid是否和当前的accountid一样 ，true:让 @i+=1 false:重置@i
+            (@i := case  when  @p_accountid=accountid then @i + 1 else 1 end )  rownum,
+            agy_withdraw.id
+            --  设置 @p_accountid等于上一个 accountid
+            ,(@p_accountid:=accountid) accountid
+            from   agy_withdraw ,
+            (SELECT  @i := 0, @p_accountid:='') AS a
+            group  by   accountid,id) account on aw.id=account.id
+        </if>
+        <include refid="accWithdraw_where"/>
+        ORDER BY aw.createTime DESC
+    </select>
+
+    <select id="accSumDrawingAmount" resultType="java.lang.Double"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw">
+		SELECT SUM(actualarrival)
+		FROM agy_withdraw
+		WHERE status = #{status} AND date_format(passTime, '%Y-%m-%d') =
+		#{passTime}
+	</select>
+
+    <select id="findAccWithdrawCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw">
+        SELECT count(*) FROM agy_withdraw aw
+        <include refid="accWithdraw_where"/>
+    </select>
+
+    <sql id="accWithdraw_where">
+        <where>
+            <if test="id != null">
+                AND aw.id =#{id}
+            </if>
+            <if test="groupIds != null and groupIds.size()>0">
+                AND gp.id in
+                <foreach item="groupId" collection="groupIds" open="(" separator="," close=")">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="baseAuth != null">
+                <choose>
+                    <when
+                            test="baseAuth.groupIds != null and baseAuth.groupIds != '' and baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                        <if test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                            AND act.groupId in ( ${baseAuth.groupIds} )
+                        </if>
+                        <if
+                                test="baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                            AND act.cagencyId in ( ${baseAuth.agyAccountIds} )
+                        </if>
+                    </when>
+                    <otherwise>
+                        AND gp.id = -1
+                    </otherwise>
+                </choose>
+            </if>
+            <if test="topAgyAccounts != null and topAgyAccounts.size()>0">
+                AND act.tagencyId in
+                <foreach item="topAgyAccount" collection="topAgyAccounts" open="(" separator="," close=")">
+                    #{topAgyAccount}
+                </foreach>
+            </if>
+            <if test="agyAccountIds != null and agyAccountIds.size()>0">
+                AND act.cagencyId in
+                <foreach item="agyAccountId" collection="agyAccountIds" open="(" separator="," close=")">
+                    #{agyAccountId}
+                </foreach>
+            </if>
+            <if test="statuss != null and statuss.size()>0">
+                AND aw.status in
+                <foreach item="status" collection="statuss" open="(" separator="," close=")">
+                    #{status}
+                </foreach>
+            </if>
+            <if test="notStatus != null">
+                AND aw.status !=#{notStatus}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND act.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND agt.agyAccount =#{agyAccount}
+            </if>
+            <if test="realName != null and realName != ''">
+                AND card.realName LIKE CONCAT('%',#{realName}, '%')
+            </if>
+            <if test="auditUser != null and auditUser != ''">
+                AND aw.auditUser LIKE CONCAT('%',#{auditUser}, '%')
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND aw.createTime <![CDATA[ >= ]]>
+                #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND aw.createTime <![CDATA[ <= ]]>
+                #{endTime}
+            </if>
+            <if test="accountId != null and accountId != ''">
+                AND aw.accountId =#{accountId}
+            </if>
+            <if test="withdrawSourceList != null and withdrawSourceList != ''">
+                AND aw.withdrawSource in (${withdrawSourceList})
+            </if>
+            <if test="orderNo != null and orderNo != ''">
+                AND concat(aw.orderPrefix,aw.orderNo) like concat('%',#{orderNo},'%')
+            </if>
+            <if test="methodType != null">
+                AND aw.methodType =#{methodType}
+            </if>
+            <if test="lockStatus != null">
+                AND aw.lockStatus =#{lockStatus}
+            </if>
+        </where>
+    </sql>
+
+    <select id="findMerchantPayCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundMerchantPay">
+		SELECT count(*) FROM fund_merchant_scope scope
+		LEFT JOIN fund_merchant_pay pay ON scope.merchantId = pay.id
+		LEFT JOIN mbr_group gp ON scope.groupId = gp.id
+		WHERE pay.available = 1 AND gp.id = (SELECT groupId FROM mbr_account WHERE id =#{accountId})
+	</select>
+
+    <select id="fundAccWithdrawMerchant" resultType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw">
+        SELECT withdraw.*,detail.merchantId,detail.transId,detail.id merchantDetailId FROM agy_withdraw withdraw
+        LEFT JOIN fund_merchant_detail detail ON withdraw.id = detail.accWithdrawId
+        WHERE withdraw.`status` = 5
+        <if test="accountId != null">
+            AND withdraw.accountId =#{accountId}
+        </if>
+    </select>
+
+    <select id="withdrawCountByStatus"  parameterType="com.wsdy.saasops.modules.fund.entity.AccWithdraw"
+            resultType="com.wsdy.saasops.modules.fund.dto.CountEntity">
+        SELECT aw.status conditions,count(aw.status) counts
+            FROM agy_withdraw aw
+            LEFT JOIN mbr_account act ON aw.accountId = act.id
+            LEFT JOIN mbr_group gp ON act.groupId = gp.id
+            LEFT JOIN agy_account agt ON act.cagencyId = agt.id
+            LEFT JOIN agy_account topAgt ON topAgt.id = act.tagencyId
+            LEFT JOIN mbr_bankcard card ON aw.bankCardId = card.id
+        <include refid="accWithdraw_where"/>
+        group by aw.status
+    </select>
+
+    <select id="findAccWithdrawListSum" resultType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw">
+        SELECT
+        (
+            SELECT if(SUM(drawingAmount) is null,0,SUM(drawingAmount))  FROM agy_withdraw
+            WHERE STATUS = 1 and date_format(passTime, '%Y-%m-%d') = date_format(now(),'%Y-%m-%d')
+        )as todayWithdraw,
+        sum(if(aw.status=1,aw.drawingAmount,0)) drawingAmount, sum(if(aw.status=1,aw.handlingCharge,0)) handlingCharge, sum(if(aw.status=1,aw.actualArrival,0)) actualArrival
+        FROM agy_withdraw aw
+        LEFT JOIN mbr_account act ON aw.accountId = act.id
+        LEFT JOIN mbr_bankcard card ON aw.bankCardId = card.id
+        LEFT JOIN mbr_group gp ON act.groupId = gp.id
+        <include refid="accWithdraw_where"/>
+    </select>
+
+    <select id="getMerchantPayByOrderno" resultType="com.wsdy.saasops.modules.fund.entity.FundMerchantPay"
+            parameterType="java.lang.String">
+        select p.*
+            from fund_merchant_pay p
+            inner join fund_merchant_detail d on p.id = d.merchantid
+            inner join agy_withdraw w on d.accwithdrawid = w.id
+        <where>
+            <if test="orderNo != null">
+                AND  w.orderno = #{orderNo}
+            </if>
+        </where>
+    </select>
+
+    <update id="updateAllLockStatus">
+        update agy_withdraw set lockstatus=0,lockoperator=null,lastlocktime=null
+        where lockstatus = 1 and  lastlocktime <![CDATA[<]]>CURRENT_TIMESTAMP - INTERVAL 30 MINUTE;
+    </update>
+
+
+    <select id="findAgentMerchantDetailByTransId" resultType="com.wsdy.saasops.modules.agent.entity.AgentMerchantDetail">
+        SELECT * FROM agy_merchant_detail where transId = #{orderId}
+    </select>
+
+</mapper>

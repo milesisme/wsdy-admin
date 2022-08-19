@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.system.systemsetting.dao.SmsLogMapper">
+
+    <select id="queryFailLog" resultType="com.wsdy.saasops.modules.system.systemsetting.entity.SmsLog"
+            parameterType="com.wsdy.saasops.modules.system.systemsetting.entity.SmsLog">
+        select * from sms_log l
+        <where>
+            <if test="type != null">
+                AND l.type =#{type}
+            </if>
+            <if test="status != null">
+                AND l.status =#{status}
+            </if>
+        </where>
+        order by l.platformid
+    </select>
+
+    <update id="updateStatus" parameterType="com.wsdy.saasops.modules.system.systemsetting.entity.SmsLog">
+        UPDATE sms_log SET status =#{status}
+        WHERE id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+    
+    <select id="selectList" resultType="com.wsdy.saasops.modules.system.systemsetting.entity.SmsLog"
+            parameterType="com.wsdy.saasops.modules.system.systemsetting.entity.SmsLog">
+        SELECT * FROM sms_log
+        WHERE isSuccess = 1
+            <if test="module != null">
+                AND module = #{module}
+            </if>
+            <if test="mobile != null and mobile != ''">
+                AND mobile = #{mobile}
+            </if>
+              <if test="startTime != null and startTime != ''">
+                AND createtime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND createtime <![CDATA[ <= ]]> #{endTime}
+            </if>
+        ORDER BY createtime DESC
+    </select>
+    
+</mapper>

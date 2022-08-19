@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.sys.dao.SysMenuExtendMapper">
+    <select id="getSysMenuExtendByParentId" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuExtend">
+        select * from sys_menu_extend where parentid = #{parentId}
+    </select>
+
+
+    <select id="getSysMenuExtend" resultType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2">
+        select sm.menuid id, sm.name label, sm.parentId, sm.type from sys_role_menu_extend srm left join sys_menu_extend sm on srm.menuid=sm.menuid where parentid = #{parentId} and srm.roleid= #{roleId} order by sm.refid
+    </select>
+
+
+    <select id="getParentIdByType" resultType="java.lang.Long">
+        SELECT parentid FROM sys_menu_extend where type = #{type} GROUP BY parentid
+    </select>
+
+    <select id="getMenuIdByType" resultType="java.lang.Long">
+        SELECT menuid FROM sys_menu_extend where type = #{type} and refid in (2, 3) GROUP BY menuid
+    </select>
+
+    <update id="updateMenuName" >
+        update sys_menu_extend set name = #{name} where refid = #{refId} and type = 7
+    </update>
+
+    <update id="deleteMenu" >
+        delete  from sys_menu_extend  where refid = #{refId} and type = 7
+    </update>
+
+    <select id="getSysMenuExtendByRefId" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuExtend">
+        select * from sys_menu_extend where refid = #{refId} and type = 7
+    </select>
+
+</mapper>

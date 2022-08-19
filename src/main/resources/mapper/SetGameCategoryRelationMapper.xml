@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wsdy.saasops.modules.operate.dao.SetGameCategoryRelationMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.wsdy.saasops.modules.operate.entity.SetGameCategoryRelation">
+        <id column="id" property="id" />
+        <result column="gameid" property="gameid" />
+        <result column="gamecategoryid" property="gamecategoryid" />
+        <result column="sortId" property="sortId" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, gameid, gamecategoryid, sortId
+    </sql>
+
+	 <select id="selectByCategoryId" resultType="com.wsdy.saasops.modules.operate.entity.SetGameCategoryRelation">
+        SELECT relation.*, game.gamename FROM 
+        	set_game_category_relation relation
+         LEFT JOIN t_gm_game game ON game.id = relation.gameid
+        	WHERE relation.gamecategoryid = #{id}
+    </select>
+    
+</mapper>

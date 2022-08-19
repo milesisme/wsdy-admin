@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modulesV2.mapper.AgentV2AccountLogMapper">
+    <select id="getAccountLogList" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2AccountLogDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2AccountLogDto">
+		select *
+		from agy_account_log log
+		where 1=1
+		<if test="startTime !=null and startTime !='' ">
+			AND log.createtime <![CDATA[ >= ]]>#{startTime}
+		</if>
+		<if test="endTime !=null and endTime !='' ">
+			AND log.createtime <![CDATA[ <= ]]>#{endTime}
+		</if>
+	</select>
+
+	<select id="getAccountLogListAgent" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2AccountLogDto"
+			parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2AccountLogDto">
+		select log.*
+		from agy_account_log log
+		left join agy_account agy on log.operatoruser = agy.agyaccount
+		inner join (
+			-- 找出属于登录账号下的该代理的agyaccount
+			select agyaccount
+			from agy_account a
+			LEFT JOIN agy_tree e on a.id = e.childnodeid
+			WHERE e.parentid = #{agyId}
+			and a.agyaccount = #{searchName}
+		) agentid on log.operatoruser = agentid.agyaccount
+		where 1=1
+		<if test="startTime !=null and startTime !='' ">
+			AND log.createtime <![CDATA[ >= ]]>#{startTime}
+		</if>
+		<if test="endTime !=null and endTime !='' ">
+			AND log.createtime <![CDATA[ <= ]]>#{endTime}
+		</if>
+		<if test="moduleName !=null and moduleName !='' ">
+			AND log.modulename = #{moduleName}
+		</if>
+		order by log.createtime desc
+	</select>
+
+	<select id="getAccountLogListMbr" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2AccountLogDto"
+			parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2AccountLogDto">
+		select log.*
+		from agy_account_log log
+		left join mbr_account ma on log.operatoruser = ma.loginname
+		where ma.id in(
+			-- 属于该代理(包括自己)的所有会员的id
+			select id from mbr_account where cagencyid in(
+				select childnodeid from agy_tree where  parentid = #{agyId}
+			)
+		)
+		and log.operatoruser = #{searchName}
+		<if test="startTime !=null and startTime !='' ">
+			AND log.createtime <![CDATA[ >= ]]>#{startTime}
+		</if>
+		<if test="endTime !=null and endTime !='' ">
+			AND log.createtime <![CDATA[ <= ]]>#{endTime}
+		</if>
+		<if test="moduleName !=null and moduleName !='' ">
+			AND log.modulename = #{moduleName}
+		</if>
+		order by log.createtime desc
+	</select>
+
+	<select id="getAccountLogListOperator" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2AccountLogDto"
+			parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2AccountLogDto">
+		select log.*
+		from agy_account_log log
+		left join agy_account agy on log.agyid = agy.id
+		inner join (
+			-- 找出属于登录账号下的该代理的agyaccount
+			select id
+			from agy_account a
+			LEFT JOIN agy_tree e on a.id = e.childnodeid
+			WHERE e.parentid = #{agyId}
+			and a.agyaccount = #{searchName}
+		) agentid on log.agyid = agentid.id
+		where 1=1
+		<if test="startTime !=null and startTime !='' ">
+			AND log.createtime <![CDATA[ >= ]]>#{startTime}
+		</if>
+		<if test="endTime !=null and endTime !='' ">
+			AND log.createtime <![CDATA[ <= ]]>#{endTime}
+		</if>
+		<if test="moduleName !=null and moduleName !='' ">
+			AND log.modulename = #{moduleName}
+		</if>
+		order by log.createtime desc
+	</select>
+
+	<insert id="batchInsertAgyAccountLog" parameterType="com.wsdy.saasops.agapi.modulesV2.entity.AgyAccountLog">
+		INSERT INTO agy_account_log (agyid, agyaccount,operatoruser,createtime,beforechange,afterchange,modulename,memo,ip) VALUES
+		<foreach collection="list" item="item" index="index" separator="," >
+			(#{item.agyId}, #{item.agyAccount},#{item.operatorUser},#{item.createTime},#{item.beforeChange},#{item.afterChange},#{item.moduleName},#{item.memo},#{item.ip})
+		</foreach>
+	</insert>
+</mapper>

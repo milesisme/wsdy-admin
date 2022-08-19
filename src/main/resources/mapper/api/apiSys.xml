@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.api.modules.apisys.mapper.ApiSysMapper">
+
+	<select id="findCpSiteOneEquals"
+			resultType="com.wsdy.saasops.api.modules.apisys.entity.TCpSite">
+		select t1.*,t2.siteUrl
+		from t_cp_site t1,t_cp_siteurl t2
+		where t1.id=t2.siteId and t1.available=1 and t2.available=1 and
+		t2.siteUrl = #{siteUrl} limit 1
+	</select>
+
+	<select id="findCpSiteLike"
+			resultType="com.wsdy.saasops.api.modules.apisys.entity.TCpSite">
+		select t1.*,t2.siteUrl
+		from t_cp_site t1,t_cp_siteurl t2
+		where t1.id=t2.siteId and t1.available=1 and t2.available=1 and
+		t2.siteUrl like
+		CONCAT('%',#{siteUrl},'%')
+	</select>
+
+    <select id="findCpSiteOne"
+            resultType="com.wsdy.saasops.api.modules.apisys.entity.TCpSite">
+		select t1.*,t2.siteUrl
+		from t_cp_site t1,t_cp_siteurl t2
+		where t1.id=t2.siteId and t1.available=1 and t2.available=1 and
+		t2.siteUrl like
+		CONCAT('%',#{siteUrl},'%') limit 1
+	</select>
+
+    <select id="findPreciseSiteOne"
+            resultType="com.wsdy.saasops.api.modules.apisys.entity.TCpSite">
+		select t1.*,t2.siteUrl
+		from t_cp_site t1,t_cp_siteurl t2
+		where t1.id=t2.siteId and t1.available=1 and
+		t2.preciseSiteUrl =#{url} limit 1
+	</select>
+
+    <select id="findCpSite"
+            resultType="com.wsdy.saasops.api.modules.apisys.entity.TCpSite">
+		select  t1.* from t_cp_site t1 where   t1.available=1
+	</select>
+
+    <select id="findGmApiOne"
+            resultType="com.wsdy.saasops.api.modules.apisys.entity.TGmApi">
+		select t1.siteCode,t2.prefix,t3.*,t4.depotCode,t4.depotName from t_cp_site
+		t1,t_gm_apiprefix
+		t2,t_gm_api t3,t_gm_depot t4 where t1.id=t2.siteId and
+		t2.apiId=t3.id and t3.depotId=t4.id and t4.available=1
+		<if test=" siteCode !=null and siteCode!=''">
+			and t1.siteCode=#{siteCode}
+		</if>
+		<if test=" depotId !=null and depotId!=''">
+			and t3.depotId=#{depotId}
+		</if>
+		limit 1
+	</select>
+
+    <select id="selectTschemaOne"
+            resultType="com.wsdy.saasops.api.modules.apisys.entity.Tschema">
+		select * from t_schema where isUsed=0 order by id asc limit
+		1
+	</select>
+    <select id="listSysConfig"
+            resultType="com.wsdy.saasops.api.modules.apisys.entity.SsysConfig">
+		select * from s_sys_config where groups=#{groups};
+	</select>
+
+	<select id="queryGiniuyunUrl" resultType="java.lang.String">
+		select `values` from t_sys_config where `groups`=#{param} LIMIT 1
+	</select>
+
+	<select id="getCpSiteCode" resultType="java.lang.String">
+		select a.siteCode from t_cp_site a where a.schemaName=#{siteCode}
+	</select>
+
+    <select id="getCpSiteBySiteCode" resultType="com.wsdy.saasops.api.modules.apisys.entity.TCpSite">
+		select * from t_cp_site where siteCode = #{siteCode}
+	</select>
+
+    <select id="findCpSiteUrlBySiteCode" resultType="com.wsdy.saasops.api.modules.apisys.entity.TcpSiteurl"
+            parameterType="com.wsdy.saasops.api.modules.apisys.entity.TcpSiteurl">
+        SELECT concat_ws('',siteUrl,preciseSiteUrl) siteUrl,id, pid FROM t_cp_siteurl
+        WHERE available = 1 AND siteCode = #{siteCode}
+        <if test="id != null">
+            AND id = #{id}
+        </if>
+    </select>
+
+	<insert id="insertCpSiteUrlInfo" parameterType="com.wsdy.saasops.api.modules.apisys.entity.TcpSiteurl">
+		INSERT INTO t_cp_siteurl (`siteId`, `siteCode`, `siteUrl`, `available`, `clientType`, `preciseSiteUrl`)
+		VALUES
+		(#{siteId}, #{siteCode}, #{siteUrl}, #{available}, #{clientType}, null)
+	</insert>
+
+	<update id="updateCpSiteUrlClientType" parameterType="com.wsdy.saasops.api.modules.apisys.entity.TcpSiteurl">
+		update t_cp_siteurl set clienttype = 1  where siteId=#{siteId} and siteCode=#{siteCode} and siteUrl=#{siteUrl}
+	</update>
+
+	<select id="getSiteurl" resultType="com.wsdy.saasops.api.modules.apisys.entity.TcpSiteurl">
+		select * from t_cp_siteurl url
+		where url.available = 1
+		<if test="siteCode != null and siteCode !=''">
+			and url.sitecode = #{siteCode}
+		</if>
+	</select>
+</mapper>

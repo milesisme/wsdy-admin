@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.mapper.AuditMapper">
+
+    <select id="finAuditList" resultType="com.wsdy.saasops.modules.member.entity.MbrAuditAccount"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAuditAccount">
+        SELECT * FROM mbr_audit_account
+        <where>
+            <if test="accountId != null">
+                AND accountId = #{accountId}
+            </if>
+            <if test="isDrawings != null">
+                AND isDrawings = #{isDrawings}
+            </if>
+        </where>
+        ORDER BY id
+        <choose>
+            <when test="sort == true">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="finAuditBonusList" resultType="com.wsdy.saasops.modules.member.entity.MbrAuditBonus"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAuditBonus">
+        SELECT * FROM mbr_audit_bonus
+        <where>
+            <if test="accountId != null">
+                AND accountId = #{accountId}
+            </if>
+            <if test="isDrawings != null">
+                AND isDrawings = #{isDrawings}
+            </if>
+            <if test="depotId != null">
+                AND depotId = #{depotId}
+            </if>
+            <if test="auditTime != null and auditTime != ''">
+                AND time <![CDATA[ <= ]]> #{auditTime}
+            </if>
+        </where>
+        ORDER BY id
+        <choose>
+            <when test="sort == true">
+                ASC
+            </when>
+            <otherwise>
+                DESC
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="findAuditAccountList" resultType="com.wsdy.saasops.modules.member.dto.AuditDetailDto">
+        SELECT * FROM (
+            SELECT id,'0' auditType,time,depositAmount,auditAmount,validBet,remainValidBet,payOut,status,isOut,
+            discountAmount,'' depotName,'' catName,'' activityName,'' isValid,'' isDispose,discardAmount,
+            0 disposeType,0 disposeAmout,IFNULL(passTime,'-') passTime,reduceauditamount,  0 friendrebateamount
+            FROM mbr_audit_account
+            WHERE accountId=#{accountId}
+            AND  (auditType = 0  OR auditType is NULL)
+            <if test="isDrawings != null">
+                AND isDrawings = #{isDrawings}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND time <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND time <![CDATA[ <= ]]>#{endTime}
+            </if>
+
+            UNION ALL
+
+            SELECT bonus.id,'1'auditType,bonus.time,bonus.depositAmount,bonus.auditAmount,bonus.validBet,
+            bonus.remainValidBet,bonus.payOut,bonus.status,bonus.isOut,bonus.discountAmount,bonus.depotName,
+            cat.catName,activity.activityName,bonus.isValid,bonus.isDispose,null discardAmount,
+            bonus.disposeType,bonus.disposeAmout,'-' passTime,0 reduceauditamount, 0 friendrebateamount
+            FROM mbr_audit_bonus bonus LEFT JOIN t_gm_cat cat on bonus.catId = cat.id
+            LEFT JOIN opr_act_activity activity ON bonus.activityId = activity.id
+            WHERE bonus.accountId=#{accountId}
+            <if test="isDrawings != null">
+                AND bonus.isDrawings = #{isDrawings}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND bonus.time <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND bonus.time <![CDATA[ <= ]]>#{endTime}
+            </if>
+
+            UNION ALL
+            SELECT id, auditType,time, 0 depositAmount,auditAmount,validBet,remainValidBet,payOut,status,isOut,
+            discountAmount,'' depotName,'' catName,'' activityName,'' isValid,'' isDispose,discardAmount,
+            0 disposeType,0 disposeAmout,IFNULL(passTime,'-') passTime,  reduceauditamount, depositAmount friendrebateamount
+            FROM mbr_audit_account
+            WHERE accountId=#{accountId}
+            AND auditType = 2
+            <if test="isDrawings != null">
+                AND isDrawings = #{isDrawings}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND time <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND time <![CDATA[ <= ]]>#{endTime}
+            </if>
+            ) a ORDER BY a.time desc
+    </select>
+
+    <select id="findAuditAccountId" resultType="java.lang.Integer">
+        SELECT DISTINCT a.accountId FROM
+        (SELECT accountId FROM mbr_audit_account
+        UNION ALL SELECT accountId FROM mbr_audit_bonus) a
+        INNER JOIN mbr_account t ON a.accountid = t.id
+        INNER JOIN (
+            SELECT * from rpt_bet_rcd_day WHERE startday<![CDATA[ >= ]]>now()-interval 2 day
+        ) b ON b.username = t.loginname
+        <where>
+            <if test="accountId != null">
+                AND a.accountId =#{accountId}
+            </if>
+        </where>
+    </select>
+
+    <select id="findMbrAuditHistory" resultType="com.wsdy.saasops.modules.member.entity.MbrAuditHistory"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAuditHistory">
+        SELECT * FROM mbr_audit_history
+        <where>
+            <if test="isSign != null">
+                AND isSign =#{isSign}
+            </if>
+            <if test="accountId != null and accountId != ''">
+                AND accountId =#{accountId}
+            </if>
+        </where>
+        ORDER BY startTime DESC
+    </select>
+
+    <select id="fundAuditBonusByTime" resultType="com.wsdy.saasops.modules.member.entity.MbrAuditBonus"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAuditBonus">
+        SELECT * FROM mbr_audit_bonus WHERE accountId =#{accountId}
+        <if test="isDrawings != null">
+            AND isDrawings =#{isDrawings}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND time <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND time <![CDATA[ <= ]]>#{endTime}
+        </if>
+        ORDER BY time
+    </select>
+
+    <select id="findAuditAccountBounsCount" resultType="java.lang.Integer">
+        SELECT count(*) FROM mbr_audit_account WHERE depositAudit > 1
+        AND `status` = 0 AND accountId =#{accountId}
+    </select>
+
+    <select id="findAuditAccountPreferential" resultType="java.lang.Integer">
+      SELECT count(*) FROM mbr_audit_account acount
+      LEFT JOIN opr_act_rule rule ON acount.ruleId = rule.id
+      LEFT JOIN t_op_acttmpl al ON rule.actTmplId = al.id
+      WHERE acount.accountId=#{accountId} AND al.tmplCode =#{tmplCode}
+      AND acount.status =0
+    </select>
+
+    <select id="findAuditAccountWithoutWater" resultType="java.lang.Integer">
+        select count(*)
+        from mbr_audit_account
+        where ruleid is not null and status = 0 and accountId=#{accountId}
+        and ruleid not in (
+            -- 反水优惠
+           select rule.id
+           from opr_act_rule rule
+           LEFT JOIN t_op_acttmpl al ON rule.actTmplId = al.id
+           where al.tmplCode='AQ0000005'
+        )
+    </select>
+
+    <select id="findAuditAccountPreferentialEx" resultType="com.wsdy.saasops.modules.member.entity.MbrAuditAccount">
+      SELECT acount.* FROM mbr_audit_account acount
+      LEFT JOIN opr_act_rule rule ON acount.ruleId = rule.id
+      LEFT JOIN t_op_acttmpl al ON rule.actTmplId = al.id
+      WHERE acount.accountId=#{accountId} AND al.tmplCode =#{tmplCode}
+      order by acount.time desc
+      limit 1
+    </select>
+
+    <select id="findAccountByIdAndTime" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT DISTINCT t.* FROM mbr_account t
+        LEFT JOIN rpt_bet_rcd_day d ON t.loginName = d.username
+        WHERE t.id = #{accountId} AND d.startday <![CDATA[ >= ]]>#{startTime}
+        AND d.startday <![CDATA[ <= ]]>#{endTime}
+    </select>
+
+    <select id="finAuditByLoginNameList" resultType="com.wsdy.saasops.modules.member.entity.MbrAuditAccount">
+        SELECT * FROM mbr_audit_account WHERE accountId = #{accountId}
+        and id <![CDATA[ >= ]]> (SELECT id FROM mbr_audit_account WHERE accountId = #{accountId} and `status` =0 ORDER BY id LIMIT 1)
+    </select>
+</mapper>

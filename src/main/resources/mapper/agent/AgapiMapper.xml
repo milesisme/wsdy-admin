@@ -1,0 +1,188 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modules.mapper.AgapiMapper">
+
+    <select id="findAccountInfo" resultType="com.wsdy.saasops.agapi.modules.dto.AgentAccountDto">
+        SELECT t.id,t.agyAccount,t.mobile,t.qq,t.spreadCode,t.realName,t.email,
+        t.weChat,w.balance,w.netProfitBalance
+        FROM agy_account t
+        LEFT JOIN agy_wallet w ON t.id = w.accountId
+        WHERE t.id = #{accountId}
+    </select>
+
+    <select id="findBillDetail" resultType="com.wsdy.saasops.modules.agent.entity.AgyBillDetail"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyBillDetail">
+        SELECT * FROM agy_bill_detail
+        <where>
+            <if test="orderNo != null and orderNo != ''">
+                AND concat(orderPrefix,orderNo) LIKE CONCAT('%',#{orderNo},'%' )
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND orderTime <![CDATA[ >= ]]>#{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND orderTime <![CDATA[ <= ]]>#{createTimeTo}
+            </if>
+            <if test="opType != null">
+                AND opType =#{opType}
+            </if>
+            <if test="accountId != null">
+                AND accountId =#{accountId}
+            </if>
+        </where>
+    </select>
+
+    <select id="findAgentAccountReportList" resultType="com.wsdy.saasops.agapi.modules.dto.AgentAccountReportDto">
+        SELECT t.loginName,IFNULL(deposit.depositAmount,0) depositAmount,IFNULL(bonus.bonusAmount,0) bonusAmount,
+        IFNULL(rpt.validbet,0) validbet,IFNULL(rpt.payout,0) payout,IFNULL(rpt.jackpotPayout,0) jackpotPayout,
+        IFNULL(aw.withdrawAmount,0) withdrawAmount,IFNULL(addAudit.addAmount-reduceAudit.reduceAmount,0) auditAmount,t.registerTime
+        FROM mbr_account t
+        LEFT JOIN (
+            SELECT sum(depositAmount) depositAmount,accountId FROM fund_deposit  WHERE status =1
+            <if test="startTime != null and startTime != ''">
+                AND DATE_FORMAT(createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND DATE_FORMAT(createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{endTime}
+            </if>
+            GROUP BY accountId
+        ) deposit ON deposit.accountId = t.id
+
+        LEFT JOIN (
+            SELECT sum(bonusAmount) bonusAmount,accountId FROM opr_act_bonus WHERE status =1
+            <if test="startTime != null and startTime != ''">
+                  AND DATE_FORMAT(applicationTime,'%Y-%m-%d') <![CDATA[ >= ]]> startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                  AND DATE_FORMAT(applicationTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{endTime}
+            </if>
+            GROUP BY accountId
+        ) bonus ON bonus.accountId = t.id
+
+        LEFT JOIN (
+           SELECT sum(validbet) validbet,sum(payout) payout,sum(jackpotPayout) jackpotPayout,username FROM rpt_bet_rcd_day
+           <if test="startTime != null and startTime != ''">
+                AND startday <![CDATA[ >= ]]> #{startTime}
+           </if>
+           <if test="endTime != null and endTime != ''">
+                AND startday <![CDATA[ >= ]]> #{endTime}
+           </if>
+          GROUP BY username
+        ) rpt ON rpt.username = t.loginName
+
+        LEFT JOIN (
+            SELECT sum(actualarrival) withdrawAmount,accountId FROM fund_acc_withdraw WHERE status =1
+            <if test="startTime != null and startTime != ''">
+                AND DATE_FORMAT(createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND DATE_FORMAT(createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{endTime}
+            </if>
+            GROUP BY accountId
+        ) aw ON aw.accountId = t.id
+
+        LEFT JOIN (
+            SELECT sum(amount) reduceAmount,accountId FROM fund_audit
+            WHERE status =1 AND financialCode ='AM'
+            <if test="startTime != null and startTime != ''">
+                AND DATE_FORMAT(createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND DATE_FORMAT(createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{endTime}
+            </if>
+            GROUP BY accountId
+        ) reduceAudit ON reduceAudit.accountId = t.id
+
+        LEFT JOIN (
+            SELECT sum(amount) addAmount,accountId FROM fund_audit
+            WHERE status =1 AND financialCode ='AA'
+            <if test="startTime != null and startTime != ''">
+                AND DATE_FORMAT(createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND DATE_FORMAT(createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{endTime}
+            </if>
+            GROUP BY accountId
+        ) addAudit ON addAudit.accountId = t.id
+        WHERE t.cagencyId =#{cagencyId}
+    </select>
+
+    <select id="fundAgentList" resultType="com.wsdy.saasops.agapi.modules.dto.AgentListDto">
+        SELECT agy.agyAccount,topAgy.agyAccount agyTopAccount,IFNULL(t.accountNum,0) accountNum,
+        IFNULL(valid.validAccountNum,0) validAccountNum,agy.id,
+        IFNULL(wt.balance,0) balance,agy.createTime registerTime,agy.`status`,agy.available
+        FROM agy_account agy
+        LEFT JOIN agy_account topAgy ON topAgy.id = agy.parentId
+        LEFT JOIN (SELECT count(*) accountNum,cagencyId FROM mbr_account GROUP BY cagencyId) t ON t.cagencyId = agy.id
+        LEFT JOIN (
+          SELECT count(*) validAccountNum,cagencyId FROM (
+          SELECT DISTINCT a.accountId FROM (
+              SELECT accountId FROM fund_deposit
+              union all
+              SELECT t.id accountId FROM rpt_bet_rcd_day d
+              LEFT JOIN mbr_account t ON d.username = t.loginName WHERE t.id >0 ) a
+          ) a1 LEFT JOIN mbr_account t ON a1.accountId = t.id GROUP BY t.cagencyId)
+        valid ON valid.cagencyId = agy.id
+        LEFT JOIN agy_wallet wt ON wt.accountId = agy.id
+        <where>
+            <if test="startTime != null and startTime != ''">
+                AND agy.createTime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND agy.createTime <![CDATA[ >= ]]> #{endTime}
+            </if>
+            <if test="id != null">
+                AND agy.parentId =#{id}
+            </if>
+        </where>
+    </select>
+
+
+    <select id="isTagency" resultType="java.lang.Boolean">
+        SELECT case when t.parentId=0 then true else false end FROM agy_account t
+        WHERE t.id = #{accountId}
+    </select>
+
+    <select id="selectCryptoCurrenciesByAddress" resultType="com.wsdy.saasops.modules.agent.entity.AgentCryptoCurrencies">
+        select t.*,ma.agyaccount
+        from agy_cryptocurrencies t
+        left join agy_account ma on t.accountId=ma.id
+        where t.id =#{id} and t.accountId = #{accountId}
+    </select>
+
+    <select id="selectCryptocurrenciesCount" resultType="com.wsdy.saasops.modules.agent.entity.AgentCryptoCurrencies">
+        select *
+        from agy_cryptocurrencies t
+        <where>
+            <if test="id != null">
+                AND id != #{id}
+            </if>
+            <if test="walletaddress != null and walletaddress != ''">
+                AND walletaddress =#{walletaddress}
+            </if>
+        </where>
+    </select>
+
+    <select id="userCryptoCurrencies" parameterType="com.wsdy.saasops.modules.agent.entity.AgentCryptoCurrencies"
+            resultType="com.wsdy.saasops.modules.agent.entity.AgentCryptoCurrencies">
+        select t1.*,logo.picpcpath bankLog,logo.walletbackimg,
+        (select count(1) from fund_acc_withdraw t where t.accountId=t1.accountId and t.cryptoCurrenciesId=t1.id) as isDraw
+        from agy_cryptocurrencies t1
+        left join t_bs_bank t2 on t1.bankCardId=t2.id
+        left join t_pay_cryptocurrencies_logo logo on t1.walletid = logo.id
+        <where>
+            <if test="accountId != null">
+                AND t1.accountId=#{accountId}
+            </if>
+            <if test="isDel != null">
+                AND t1.isDel=#{isDel}
+            </if>
+            <if test="available != null">
+                AND t1.available=#{available}
+            </if>
+        </where>
+        order by t1.currencyProtocol desc ,t1.createtime asc
+    </select>
+
+</mapper>

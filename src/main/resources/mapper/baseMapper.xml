@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.base.mapper.BaseMapper">
+	<select id="findBaseArea" resultType="com.wsdy.saasops.modules.base.entity.BaseArea"
+		parameterType="com.wsdy.saasops.modules.base.entity.BaseArea">
+		<include refid="sql_complete"></include>
+	</select>
+	<!-- 字段 -->
+	<sql id="sql_complete">
+		<choose>
+			<when test="prov!= null and prov != ''">
+				select id,city,prov from t_bs_area where prov=#{prov}
+			</when>
+			<otherwise>
+				select distinct provinceid,prov from t_bs_area
+			</otherwise>
+		</choose>
+	</sql>
+	<select id="findTopWinList" resultType="com.wsdy.saasops.modules.base.entity.TWinTop">
+		select t1.id,
+				date_format(t1.winDate, '%Y-%m-%d') winDate,
+				t1.winAmount,
+				t1.loginName,
+				t1.gameCode,
+				t1.depotId,
+				t2.id gameId,
+				t2.logo
+		 from t_win_top t1 left join t_gm_game t2 on t1.depotId=t2.depotId and t1.gameCode=t2.gameCode
+		where t2.logo !=''
+			<if test="startDate != null and startDate != ''">
+				and t1.winDate&gt;=#{startDate}
+			</if>
+			<if test="endDate != null and endDate != ''">
+				and t1.winDate&lt;=#{endDate}
+			</if>
+			order by t1.winAmount desc limit #{rows}
+
+	</select>
+	
+		<select id="queryWebOprAdvList" parameterType="com.wsdy.saasops.modules.base.entity.ToprAdv" resultType="com.wsdy.saasops.modules.base.entity.ToprAdv">
+		SELECT * from t_opr_adv adv where adv.useStart<![CDATA[ <= ]]> now() and  adv.useEnd <![CDATA[ >= ]]> now() and adv.available=1
+			<if test="clientShow!=null and clientShow==0">
+				AND (adv.clientShow = 0 or adv.clientShow = 2)
+			</if>
+			<if test="clientShow!=null and clientShow==1">
+				AND (adv.clientShow = 1 or adv.clientShow = 2)
+			</if>
+			<if test="advType!=null">
+				AND adv.advType = #{advType}
+			</if>
+			<if test="gameCat!=null">
+				AND adv.gameCat = #{gameCat}
+			</if>
+			<if test="depotId!=null">
+				AND adv.depotId = #{depotId}
+			</if>
+	</select>
+
+	<select id="findBankList" resultType="com.wsdy.saasops.modules.base.entity.BaseBank">
+		select bb.id, bb.bankName, pb.clientType, pb.payId from t_pay_bank pb left join t_bs_bank bb on pb.bankId = bb.id where pb.payId = #{payId}
+	</select>
+
+	<select id="getApiPrefixBySiteCode"  resultType="java.lang.String">
+		SELECT LOWER(ap.prefix) FROM t_cp_site s left join
+			t_gm_apiprefix ap ON s.id=ap.siteId
+		WHERE s.siteCode=#{siteCode} GROUP BY ap.prefix
+	</select>
+
+	<select id="findDepotCodesById" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+		SELECT id,depotCode FROM t_gm_depot
+		WHERE id in
+		<foreach collection="depotIds" open="(" close=")" separator="," item="depotId">
+			#{depotId}
+		</foreach>
+	</select>
+</mapper>

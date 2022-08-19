@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.WaterCostMapper">
+
+    <sql id="depotCostList_Detail_where">
+        WHERE a.type != '' and a.depotId != '' AND (ag.feemodel = 1 OR ag.feemodel = 3)
+        <if test="accountAgyAccount != null and accountAgyAccount != ''">
+            AND ag.agyAccount =#{accountAgyAccount}
+        </if>
+        <if test="loginName != null and loginName != ''">
+            AND a.username =#{loginName}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND a.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND a.startday <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+        </if>
+        <if test="cagencyId != null">
+            and t.cagencyid =#{cagencyId}
+        </if>
+        <if test="subcagencyId != null">
+            and t.subcagencyId =#{subcagencyId}
+        </if>
+        <choose>
+            <when test="groubyAgent == true">
+                GROUP BY ag.agyaccount,a.depotid,a.type
+            </when>
+            <otherwise>
+                GROUP BY a.username,a.depotid,a.type
+            </otherwise>
+        </choose>
+    </sql>
+
+    <select id="findAgentCostSum" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.DepotCostDto">
+        select '总计' agyAccount,sum(payout) payout,sum(validbet) validbet,sum(cost) cost
+        from(<include refid="findCostReportViewAgent_sql"/>) a
+    </select>
+
+    <select id="findCostReportViewAgent" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.DepotCostDto">
+        SELECT a.pagy agyAccount,SUM(payout) payout,SUM(validbet) validbet,SUM(cost) cost
+        FROM(<include refid="findCostReportViewAgent_sql"/>) a
+        GROUP BY a.pid
+    </select>
+
+    <sql id="findCostReportViewAgent_sql">
+        -- 3.按会员group, 便于统计个数
+        SELECT 
+       		a.pid,a.pagy,a.level,ma.validbet validbet,ma.payout payout,
+       		ma.cost cost,ma.username,waterrate,waterCost,ma.rate,ma.depotname
+        FROM (<include refid="account_cost_where"/>) ma
+        INNER JOIN (
+            -- 2.得到目标代理下所有的子代(含目标代理)
+            SELECT t.pid,t.pagy, e.childnodeid, a.agyaccount, t.level
+            FROM agy_tree e
+            INNER JOIN
+            (
+            -- 1.找到目标代理 （股东-找所有的总代)
+            <if test="agyAccount ==null or agyAccount =='' ">
+                SELECT t.id pid, t.agyaccount pagy, t.parentid level
+                	FROM agy_account t
+                WHERE t.feemodel != 2
+                   <if test="topAgyAccount ==null or topAgyAccount =='' ">
+                       AND t.parentid = 1
+                   </if>
+                   <if test="topAgyAccount != null and topAgyAccount != ''">
+                       AND t.agyAccount =#{topAgyAccount}
+                   </if>
+            </if>
+            -- 1.找到目标代理 （代理-找到下级代理)
+            <if test="agyAccount !=null and agyAccount !='' ">
+                SELECT t1.id pid, t1.agyaccount pagy, t1.parentid level
+                	FROM agy_account t
+	                INNER JOIN agy_tree e on t.id = e.parentid AND depth = 1
+	                INNER JOIN agy_account t1 ON e.childnodeid = t1.id
+               	WHERE  t.agyaccount = #{agyAccount} AND t.feemodel != 2
+            </if>
+            )t ON e.parentid = t.pid
+            INNER JOIN agy_account a ON a.id = e.childnodeid
+        )a ON a.childnodeid = ma.cagencyId
+    </sql>
+
+    <select id="findCostLostReportView" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.DepotCostDto">
+        SELECT #{agyAccount} agyAccount,
+        SUM(a.cost) cost,sum(a.validbet) validbet,SUM(a.payout) payout
+        FROM(
+            SELECT ma.validbet validbet,ma.payout payout,ma.cost cost
+            FROM (<include refid="account_cost_where"/>) ma
+            INNER JOIN (
+            -- 获取 1该代理的所有下级代理id  2该代理id 3 该代理+所有下级代理id
+            SELECT e.childNodeId FROM agy_tree e
+            INNER JOIN agy_account t ON e.parentId = t.id
+            WHERE t.agyAccount=#{agyAccount}
+            <if test="isSign =='1'.toString()">
+                and depth>0
+            </if>
+            <if test="isSign =='2'.toString()">
+                and depth=0
+            </if>
+            )a ON a.childNodeId = ma.cagencyId
+        ) a
+    </select>
+
+    <select id="findCostListLevel" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.DepotCostDto">
+        select a.username loginName,sum(payout) payout,sum(validbet) validbet,sum(cost) cost
+        from(<include refid="findCostReportViewAgent_sql"/>) a
+        group by a.username
+    </select>
+
+    <select id="findCostListLevelSum" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.DepotCostDto">
+        select '总计' loginName,sum(payout) payout,sum(validbet) validbet,sum(cost) cost
+        from(<include refid="findCostReportViewAgent_sql"/>) a
+    </select>
+
+    <select id="findCostAccountDetails" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.DepotCostDto">
+        select username loginName, payout, validbet, cost,rate,waterrate,waterCost,depotname
+        from(<include refid="account_cost_where"/>) a
+    </select>
+
+
+    <sql id="account_cost_where">
+        SELECT	
+       		username,agyaccount,payout,rate,gamelogoId,validbet,
+	        depotname,accountid,cagencyid,IFNULL(waterrate,0) waterrate,IFNULL(waterCost,0) waterCost,
+	        CASE 
+	        	WHEN rate>0 AND payout<![CDATA[ < ]]>0 AND (feemodel = 1 OR feemodel = 3)
+	        	THEN TRUNCATE(ABS(rate/100*payout) + IFNULL(waterCost,0) 
+	        			+ (ABS(RATE/100*payout) + IFNULL(waterCost,0)) * additionalServicerate / 100, 2)
+	        	WHEN (feemodel != 1 AND feemodel != 3) THEN 0
+	        ELSE 
+	        	TRUNCATE(waterCost + waterCost * additionalServicerate / 100, 2) END cost
+        FROM(
+            SELECT 
+           		a.username,ag.agyaccount,SUM(payout) payout,SUM(validbet) validbet,IFNULL(ge.rate,0) rate,lg.id gamelogoId,
+	            IFNULL(ge.depotname, concat(a.depotcode,cat.catname)) depotname,SUM(waterCost) waterCost,
+	            t.id accountid,t.cagencyid,MAX(a.waterrate) waterrate,ag.additionalServicerate,ag.feemodel
+            FROM (
+                SELECT r.platform, d.id depotId,payout,r.username,r.startday,d.depotcode,r.cost waterCost,validbet,waterrate,
+	                CASE when r.gamecategory='Chess' THEN '6'
+	                WHEN r.gamecategory='Sport' THEN '1'
+	                WHEN r.gamecategory='Live' THEN '3'
+	                WHEN r.gamecategory='Slot' THEN '5'
+	                WHEN r.gamecategory='Hunter' THEN '8'
+	                WHEN r.gamecategory='Esport' THEN '9'
+	                WHEN r.gamecategory='Lottery' THEN '12'
+	                END type,r.gamecategory
+                FROM rpt_bet_rcd_day r
+                LEFT JOIN t_gm_depot d ON r.platform = d.depotcode
+                WHERE r.gamecategory != ''
+            ) a
+            INNER JOIN mbr_account t ON t.loginname = a.username
+            LEFT JOIN t_game_logo lg ON a.depotid = lg.depotid and lg.catid = a.type
+            LEFT JOIN set_gm_game ge ON ge.gamelogoid = lg.id
+            LEFT JOIN agy_account ag ON ag.id = t.cagencyid
+            LEFT JOIN t_gm_cat cat ON cat.id = a.type
+            <include refid="depotCostList_Detail_where"/>
+        ) b
+    </sql>
+
+</mapper>

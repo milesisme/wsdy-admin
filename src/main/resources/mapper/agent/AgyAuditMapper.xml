@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.AgyAuditMapper">
+
+    <select id="auditList" resultType="com.wsdy.saasops.modules.agent.entity.AgentAudit"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAudit">
+        SELECT * FROM agy_audit
+        <where>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND agyAccount = #{agyAccount}
+            </if>
+            <if test="walletType != null">
+                AND walletType = #{walletType}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND modifyTime <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND modifyTime <![CDATA[ <= ]]>#{endTime}
+            </if>
+        </where>
+        order by createTime desc
+    </select>
+
+</mapper>

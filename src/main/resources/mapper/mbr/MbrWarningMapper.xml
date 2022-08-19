@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.member.mapper.MbrWarningMapper">
+
+    <select id="list" resultType="com.wsdy.saasops.modules.member.dto.MbrWarningDto">
+        SELECT
+        *
+        FROM
+        mbr_warning sw
+        <where>
+            <if test="startTime != null and startTime != ''">
+                AND sw.createtime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND sw.createtime <![CDATA[ <= ]]> #{endTime}
+            </if>
+            <if test="status != null ">
+                AND sw.STATUS =  #{status}
+            </if>
+        </where>
+
+        ORDER BY
+        sw.createtime DESC
+
+    </select>
+
+
+
+    <select id="getWarningInfoCount" resultType="java.lang.Integer">
+        SELECT
+        count(*)
+        FROM
+        mbr_warning sw
+        where  (TO_DAYS(#{calcDay}) - TO_DAYS(sw.warningdate)) <![CDATA[ <  ]]>  #{days} and (TO_DAYS(#{calcDay}) - TO_DAYS(sw.warningdate)) <![CDATA[ >= ]]> 0
+        and sw.type = #{type}
+        and sw.loginname = #{loginName}
+        and sw.excontent = #{exContent}
+    </select>
+
+
+    <select id="getMbrWarningCount" resultType="java.lang.Integer">
+        SELECT
+            count(*)
+        FROM
+            mbr_warning
+        WHERE
+            loginName = #{loginName}
+          AND type != 6
+	      AND type != 5
+          AND status = 0
+    </select>
+</mapper>

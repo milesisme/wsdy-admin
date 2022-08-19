@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.dao.TGmGameMapper">
+
+    <select id="queryCatList" resultType="com.wsdy.saasops.modules.operate.entity.TGmCat">
+		select 
+			cat.id id,
+			cat.catName catName,
+			count(gm.id) gameCount,
+			SUM(gm.monthPer) tMonthPer,
+			SUM(gm.lastdayPer) tLastDayPer
+		from 
+			t_gm_game gm,
+			t_gm_cat cat,
+			t_gm_depot depot
+		<include refid="queryCat"/> 
+		GROUP BY gm.catId
+	</select>
+	
+	<sql id="queryCat">
+		<where>
+			cat.id = gm.catId 
+			AND 
+			depot.id = gm.depotId 
+			<if test="id!=null">
+				AND depot.id = #{id}
+			</if>
+			<if test="available!=null">
+				AND depot.available=#{available}
+			</if>
+		</where>
+	</sql>
+	
+	 <select id="getBySubCatId" resultType="com.wsdy.saasops.modules.operate.entity.TGmGame">
+			SELECT 
+			t1.id,
+			t1.sortid,
+			t1.depotid,
+			t1.gamename
+		 FROM 
+			t_gm_game t1 
+			LEFT JOIN set_game t3 ON t1.id = t3.gameId
+		WHERE t1.subcatid = #{subCatId}  AND t1.depotId = #{gamelogoid}
+<!-- 			AND t1.enableMb = 1  AND (t3.enableGmaeMb =1 or t3.enableGmaeMb IS NULL) -->
+			AND t1.catId= 12 AND t1.available = 1 
+	</select>
+	
+	
+</mapper>

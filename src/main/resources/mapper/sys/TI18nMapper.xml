@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.api.modules.apisys.dao.TI18nMapper">
+	<insert id="insertI18nBatch" parameterType="com.wsdy.saasops.modules.sys.dao.SysI18nDto">
+		INSERT INTO t_i18n (source, translate,i18nflag) VALUES
+		<foreach collection="list" item="item" index="index" separator="," >
+			(#{item.source}, #{item.translate},#{item.i18nflag})
+		</foreach>
+	</insert>
+
+</mapper>

@@ -1,0 +1,323 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modules.mapper.AgentWinLoseMapper">
+
+    <sql id="gameTableSql">
+       (SELECT tb1.depotName platform,tb1.depotId,tb2.catName,tb2.id catId,tb1.gameCode codeid,tb1.gameName codename FROM
+       (SELECT * FROM ( SELECT id,depotId,depotName,catId,gameCode,gameName,subCatId FROM t_gm_game WHERE gameCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,mbGameCode,gameName,subCatId FROM t_gm_game WHERE mbGameCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,adGameCode,gameName,subCatId FROM t_gm_game WHERE adGameCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,downGameCode,gameName,subCatId FROM t_gm_game WHERE downGameCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,embeddedCode,gameName,subCatId FROM t_gm_game WHERE embeddedCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,embeddedCode1,gameName,subCatId FROM t_gm_game WHERE embeddedCode1 !='') d
+        GROUP BY d.depotId,d.catId,d.gameCode ORDER BY d.gameCode )tb1,t_gm_cat tb2 WHERE tb1.catId=tb2.id)
+    </sql>
+
+    <select id="findWinLostReportList" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT #{isSign} level,count(tb1.username) total,sum(tb1.bet) betTotal,sum(tb1.validbet) validbetTotal,
+        sum(tb1.payout) payoutTotal,CONCAT(tb1.platform,tb1.catName) categoryTotal,#{username} username
+        FROM (
+        SELECT rbrd.username,rbrd.platform,tb.catName ,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout
+        FROM rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        INNER JOIN (<include refid="gameTableSql"/>) tb ON rbrd.platform=tb.platform AND rbrd.gametype=tb.codeid
+        <include refid="winLost_where"/>
+        GROUP BY tb.platform,tb.catName,rbrd.username
+        ) tb1 GROUP BY tb1.platform,tb1.catName
+    </select>
+
+    <select id="findWinLostSum" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT  count(a.username) total,sum(a.bet) betTotal,sum(a.validbet) validbetTotal,sum(a.payout) payoutTotal
+        FROM (SELECT rbrd.username,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout,ma.cagencyId
+        FROM rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        <include refid="winLost_where"/>
+        GROUP BY rbrd.username) a
+    </select>
+
+    <select id="findWinLostListLevelAgyAccount" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT a.level,count(a.username) total,sum(a.bet) betTotal,sum(a.validbet) validbetTotal,sum(a.payout) payoutTotal,
+        t.agyAccount username FROM
+        (
+        SELECT e1.depth level,rbrd.username,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout,a.childNodeId
+        FROM rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        INNER JOIN (SELECT e.childNodeId FROM agy_tree e
+        INNER JOIN agy_account t ON e.parentId = t.id WHERE t.agyAccount=#{agyAccount} and depth=1 )
+        a ON a.childNodeId = ma.cagencyId
+        INNER JOIN agy_tree e1 ON e1.childNodeId = a.childNodeId
+        INNER JOIN agy_account t ON e1.parentId = t.id AND t.parentId = 0
+        <where><include refid="winLostTime_where"/></where>
+        GROUP BY rbrd.username
+        ) a
+        LEFT JOIN agy_account t ON a.childNodeId = t.id
+        GROUP BY a.childNodeId
+    </select>
+
+
+    <select id="findWinLostLoginName" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT rbrd.username username,sum(rbrd.bet) betTotal,sum(rbrd.validbet) validbetTotal,sum(rbrd.payout) payoutTotal
+        FROM rpt_bet_rcd_day rbrd INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        <include refid="winLost_where"/>
+        <if test="isGroup == true">
+            GROUP BY rbrd.username
+        </if>
+    </select>
+
+    <select id="findWinLostReportListByLoginName" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT 'account' level,count(tb1.username) total,sum(tb1.bet) betTotal,sum(tb1.validbet) validbetTotal,
+        sum(tb1.payout) payoutTotal,CONCAT(tb1.platform,tb1.catName) categoryTotal,#{loginName} username
+        FROM (
+        SELECT rbrd.username,rbrd.platform,tb.catName ,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,
+        sum(rbrd.payout) payout,ma.parentId FROM rpt_bet_rcd_day rbrd
+        INNER JOIN (
+        SELECT act.loginName,e.childNodeId,e.parentId
+        FROM mbr_account ma
+        INNER JOIN agy_account t ON t.id = ma.cagencyId
+        INNER JOIN mbr_tree e ON e.parentId = ma.id
+        INNER JOIN mbr_account act ON act.id = e.childNodeId
+        WHERE ma.loginName = #{loginName}
+        ) ma ON rbrd.username= ma.loginName
+        INNER JOIN ( <include refid="gameTableSql"/>) tb
+        ON rbrd.platform=tb.platform AND rbrd.gametype=tb.codeid
+        <where><include refid="winLostTime_where"/></where>
+        GROUP BY tb.platform,tb.catName,rbrd.username) tb1 GROUP BY tb1.platform,tb1.catName
+    </select>
+
+    <select id="findWinLostListSumByLoginName" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT count(tb1.username) total,sum(tb1.bet) betTotal,sum(tb1.validbet) validbetTotal,sum(tb1.payout) payoutTotal
+        FROM (
+        SELECT rbrd.username,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout,ma.parentId
+        FROM rpt_bet_rcd_day rbrd
+        INNER JOIN (
+        SELECT act.loginName,e.childNodeId,e.parentId
+        FROM mbr_account ma
+        INNER JOIN agy_account t ON t.id = ma.cagencyId
+        INNER JOIN mbr_tree e ON e.parentId = ma.id
+        INNER JOIN mbr_account act ON act.id = e.childNodeId
+        WHERE ma.loginName = #{loginName}
+        <if test="isSign =='account'">
+            AND e.depth >0
+        </if>
+        ) ma ON rbrd.username= ma.loginName
+        <where><include refid="winLostTime_where"/></where>
+        GROUP BY rbrd.username
+        ) tb1
+    </select>
+
+    <select id="findWinLostListSumLoginName" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT 1 total,rbrd.username,sum(rbrd.bet) betTotal,sum(rbrd.validbet) validbetTotal,sum(rbrd.payout) payoutTotal
+        FROM rpt_bet_rcd_day rbrd INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        <include refid="winLost_where"/>
+    </select>
+
+
+
+    <select id="findAgyAccountLevelLoginName" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT 'account' level,count(tb1.username) total,sum(tb1.bet) betTotal,
+        sum(tb1.validbet) validbetTotal,sum(tb1.payout) payoutTotal,t.loginName username
+        FROM (
+        SELECT rbrd.username,a.parentId,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout
+        FROM rpt_bet_rcd_day rbrd
+        INNER JOIN ( SELECT act.loginName,e.childNodeId,e.parentId FROM mbr_account ma
+        INNER JOIN agy_account t ON t.id = ma.cagencyId
+        INNER JOIN mbr_tree e ON e.parentId = ma.id
+        INNER JOIN mbr_account act ON act.id = e.childNodeId
+        WHERE t.agyAccount=#{agyAccount} GROUP BY e.childNodeId
+        ) a ON a.loginName = rbrd.username
+        <where><include refid="winLostTime_where"/></where>
+        GROUP BY rbrd.username
+        ) tb1
+        LEFT JOIN mbr_account t on t.id= tb1.parentId
+        GROUP BY tb1.parentId
+    </select>
+
+    <select id="findWinLostListLevelLoginName" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT 'account' level,count(rbrd.username) total,sum(rbrd.bet) betTotal,sum(rbrd.validbet) validbetTotal,
+        sum(rbrd.payout) payoutTotal,t.loginName username FROM (
+        SELECT rbrd.username,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout,ma.parentId
+        FROM rpt_bet_rcd_day rbrd
+        INNER JOIN (
+        SELECT act.loginName,e1.childNodeId,e1.parentId
+        FROM mbr_account ma
+        INNER JOIN agy_account t ON t.id = ma.cagencyId
+        INNER JOIN mbr_tree e ON e.parentId = ma.id and e.depth=1
+        INNER JOIN mbr_tree e1 ON e1.parentId = e.childNodeId
+        INNER JOIN mbr_account act ON act.id = e1.childNodeId
+        WHERE ma.loginName = #{loginName}
+        ) ma ON rbrd.username= ma.loginName
+        <where><include refid="winLostTime_where"/></where>
+        GROUP BY rbrd.username ) rbrd
+        LEFT JOIN mbr_account t ON t.id = rbrd.parentId
+        GROUP BY rbrd.parentId
+    </select>
+
+    <select id="findWinLostAccount" resultType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT 'account' level,count(tb1.username) total,sum(tb1.bet) betTotal,sum(tb1.validbet) validbetTotal,
+        sum(tb1.payout) payoutTotal,CONCAT(tb1.platform,tb1.catName) categoryTotal,#{loginName} username
+        FROM (
+        SELECT rbrd.username,rbrd.platform,tb.catName ,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,
+        sum(rbrd.payout) payout FROM rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        INNER JOIN ( <include refid="gameTableSql"/>) tb
+        ON rbrd.platform=tb.platform AND rbrd.gametype=tb.codeid
+        <include refid="winLost_where"/>
+        GROUP BY tb.platform,tb.catName,rbrd.username
+        ) tb1 GROUP BY tb1.platform,tb1.catName
+    </select>
+
+    <sql id="winLostTime_where">
+        <if test="startTime !=null and startTime !='' ">
+            AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime !=null and endTime !='' ">
+            AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+        </if>
+    </sql>
+
+    <sql id="winLost_where">
+        <where>
+            <include refid="winLostTime_where"/>
+            <if test="loginName !=null and loginName !='' ">
+                AND ma.loginName = #{loginName}
+            </if>
+            <if test="agyAccount !=null and agyAccount !='' ">
+                AND EXISTS(
+                SELECT e.childNodeId FROM agy_tree e
+                INNER JOIN agy_account t ON e.parentId = t.id
+                WHERE t.agyAccount =#{agyAccount} AND ma.cagencyId = e.childNodeId
+                )
+            </if>
+        </where>
+    </sql>
+
+    <select id="findAgyAccountDepth" resultType="java.lang.String">
+        SELECT e.depth FROM agy_tree e
+        LEFT JOIN agy_account t ON e.parentId = t.id
+        LEFT JOIN agy_account t1 ON t1.id = e.childNodeId
+        WHERE t1.agyAccount = #{agyAccount} AND t.parentId = 0
+    </select>
+
+    <select id="findAgyAccountDepthLevel" resultType="java.lang.Integer">
+        SELECT count(*) FROM agy_tree e
+        LEFT JOIN agy_account t ON e.parentId = t.id
+        WHERE t.agyAccount = #{agyAccount} AND e.depth > 0
+    </select>
+
+    <select id="selectAgentByParentIdList" resultType="com.wsdy.saasops.agapi.modules.dto.AgentListDto">
+        select agy.id,agy.agyAccount from agy_account agy join agy_tree at on agy.id=at.childNodeId where at.parentId= #{agyAccountId} and at.depth=1
+    </select>
+
+    <select id="selectMbrAccountByAgrIdAndLoginName" resultType="java.lang.String">
+          select ma.loginName from mbr_account ma join agy_account agy on ma.cagencyId=agy.id where agy.id in (select DISTINCT agy.id from agy_account agy join agy_tree at on agy.id=at.childNodeId where at.parentId= #{agyAccountId} and at.depth=1 or agy.id=#{agyAccountId}) and ma.loginName=#{loginName}
+    </select>
+
+
+    <sql id="winLostTime_cat_rpt">
+        <if test="catCodes != null and catCodes.size()>0">
+            and rbrd.gamecategory  in
+            <foreach collection="catCodes" open="(" close=")" separator="," item="catCode">
+                #{catCode}
+            </foreach>
+        </if>
+    </sql>
+
+
+    <select id="findWinLostReportView" resultType="com.wsdy.saasops.modules.analysis.dto.WinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        SELECT #{agyAccount} username ,
+        <if test="isSign =='1'.toString()">
+            'agent' level,
+        </if>
+        <if test="isSign =='2'.toString()">
+            'mbr' level,
+        </if>
+        <if test="isSign =='3'.toString()">
+            'all' level,
+        </if>
+        count(a.username) total,sum(a.bet) betTotal,sum(a.validbet) validbetTotal,sum(a.payout) payoutTotal
+        FROM(
+        -- 按会员group, 便于统计个数
+        SELECT a.childNodeId, rbrd.username,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout
+        FROM rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        INNER JOIN (
+        -- 获取 1该代理的所有下级代理id  2该代理id 3 该代理+所有下级代理id
+        SELECT e.childNodeId FROM agy_tree e
+        INNER JOIN agy_account t ON e.parentId = t.id
+        WHERE t.agyAccount=#{agyAccount}
+        <if test="isSign =='1'.toString()">
+            and depth>0
+        </if>
+        <if test="isSign =='2'.toString()">
+            and depth=0
+        </if>
+        <if test="isSign =='3'.toString()">
+        </if>
+        )a ON a.childNodeId = ma.cagencyId
+        <where>
+            <include refid="winLostTime_where"/>
+            <include refid="winLostTime_cat_rpt"/>
+        </where>
+        GROUP BY rbrd.username
+        ) a
+    </select>
+
+    <select id="findWinLostReportViewAgent" resultType="com.wsdy.saasops.modules.analysis.dto.WinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.AgentWinLostReportModelDto">
+        -- 4.汇总数据
+        select a.level,a.pagy username,
+        count(a.username) total,sum(a.bet) betTotal,sum(a.validbet) validbetTotal,sum(a.payout) payoutTotal
+        from(
+        -- 3.按会员group, 便于统计个数
+        SELECT a.pid,a.pagy,rbrd.username,a.level,
+        sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout
+        FROM rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        INNER JOIN (
+        -- 2.得到目标代理下所有的子代(不含目标代理)
+        select t.pid,t.pagy, e.childnodeid, a.agyaccount, t.level
+        from agy_tree e
+        inner join
+        (
+        -- 1.找到目标代理 （股东-找所有的总代，代理-找到下级代理)
+        <if test="agyAccount ==null or agyAccount =='' ">
+            select t.id pid, t.agyaccount pagy, t.parentid level
+            from agy_account t
+            where t.parentid = 0
+        </if>
+        <if test="agyAccount !=null and agyAccount !='' ">
+            select t1.id pid, t1.agyaccount pagy, t1.parentid level
+            from agy_account t
+            inner join agy_tree e on t.id = e.parentid and depth = 1
+            inner join agy_account t1 on e.childnodeid = t1.id
+            where  t.agyAccount = #{agyAccount}
+        </if>
+
+
+        )t on e.parentid = t.pid
+        inner join agy_account a on a.id = e.childnodeid
+        where  e.depth >0
+        )a ON a.childnodeid = ma.cagencyId
+        <where>
+            <include refid="winLostTime_where"/>
+            <include refid="winLostTime_cat_rpt"/>
+        </where>
+        group by  rbrd.username
+        )a
+        group by a.pid
+    </select>
+
+
+</mapper>

@@ -1,0 +1,565 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modules.mapper.FinaceReportMapper">
+
+    <select id="agentFinanceReportList"
+            resultType="com.wsdy.saasops.agapi.modules.dto.ReportResultDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.ReportParamsDto">
+        SELECT * FROM (
+            SELECT time,SUM(newMbrs) newMbrs,
+            SUM(totalDepositBalanceNum) totalDepositBalanceNum,
+            SUM(totalNewDeposits) totalNewDeposits,
+            SUM(totalDepositBalance) totalDepositBalance,
+            SUM(totalDrawAmountNum) totalDrawAmountNum,
+            SUM(totalDrawAmount) totalDrawAmount,
+            SUM(totalValidBets) totalValidBets,
+            SUM(totalBonusAmount) totalBonusAmount,
+            SUM(totalPayout) totalPayout,
+            SUM(totalProfit) - SUM(calculateProfit) totalProfit,
+            SUM(totalSurrogateAmount) totalSurrogateAmount,
+            SUM(totalTaskbonus) totalTaskbonus
+            from (
+                -- 新会员
+                SELECT DATE_FORMAT(t.registerTime,'%Y-%m-%d') time, 0 calculateProfit, count(*) newMbrs,
+                0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,0 totalDrawAmountNum,
+                0 totalDrawAmount,0 totalValidBets,0 totalBonusAmount,0 totalPayout,0 totalProfit,
+                0 totalSurrogateAmount, 0 totalTaskbonus
+                FROM mbr_account t
+                WHERE DATE_FORMAT(t.registerTime, '%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime}, '%Y-%m-%d')
+                AND DATE_FORMAT(t.registerTime, '%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime}, '%Y-%m-%d')
+                <include refid="findAgent_where"/>
+                GROUP BY DATE_FORMAT(t.registerTime,'%Y-%m-%d')
+
+                UNION ALL
+                -- 存款人数，总存款金额
+                SELECT DATE_FORMAT(d.audittime,'%Y-%m-%d') time, 0 calculateProfit, 0 newMbrs,
+                count(DISTINCT d.accountid) totalDepositBalanceNum,0 totalNewDeposits,
+                SUM(d.actualarrival) totalDepositBalance,0 totalDrawAmountNum,
+                0 totalDrawAmount,0 totalValidBets,0 totalBonusAmount,0 totalPayout,0 totalProfit,
+                0 totalSurrogateAmount, 0 totalTaskbonus
+                FROM fund_deposit d
+                LEFT JOIN mbr_account t ON d.accountid = t.id
+                WHERE DATE_FORMAT(d.audittime, '%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime}, '%Y-%m-%d')
+                AND DATE_FORMAT(d.audittime, '%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime}, '%Y-%m-%d')
+                AND d.status = 1
+                <include refid="findAgent_where"/>
+                GROUP BY DATE_FORMAT(d.audittime,'%Y-%m-%d')
+
+                UNION ALL
+                -- 人工资金调整
+                SELECT 
+                	DATE_FORMAT(d.createTime,'%Y-%m-%d') time,
+                	SUM(IF(d.financialCode = 'AM', -1 * amount, amount)) calculateProfit,
+                	0 newMbrs,
+	                0 totalDepositBalanceNum,
+	                0 totalNewDeposits,
+	                0 totalDepositBalance,
+	                0 totalDrawAmountNum,
+	                0 totalDrawAmount,
+	                0 totalValidBets,
+	                0 totalBonusAmount,
+	                0 totalPayout,
+	                0 totalProfit,
+	                0 totalSurrogateAmount,
+	                0 totalTaskbonus
+                FROM fund_audit d
+                LEFT JOIN mbr_account t ON d.accountid = t.id
+                WHERE DATE_FORMAT(d.createTime, '%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime}, '%Y-%m-%d')
+                AND DATE_FORMAT(d.createTime, '%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime}, '%Y-%m-%d')
+                AND d.status = 1 AND d.isCalculateProfit = 1
+                <include refid="findAgent_where"/>
+                GROUP BY DATE_FORMAT(d.createTime,'%Y-%m-%d')
+
+                UNION ALL
+                -- 首存人数
+                SELECT DATE_FORMAT(d.audittime,'%Y-%m-%d') time, 0 calculateProfit, 0 newMbrs,
+                0 totalDepositBalanceNum,count(DISTINCT d.id) totalNewDeposits,
+                0 totalDepositBalance,0 totalDrawAmountNum,
+                0 totalDrawAmount,0 totalValidBets,0 totalBonusAmount,0 totalPayout,0 totalProfit,
+                0 totalSurrogateAmount, 0 totalTaskbonus
+                FROM fund_deposit d
+                INNER JOIN (
+                    SELECT accountid,min(id) id FROM fund_deposit
+                    where status = 1 group by accountid
+                ) nd on nd.id = d.id
+                LEFT JOIN mbr_account t ON d.accountid = t.id
+                WHERE DATE_FORMAT(d.audittime, '%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime}, '%Y-%m-%d')
+                AND DATE_FORMAT(d.audittime, '%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime}, '%Y-%m-%d')
+                <include refid="findAgent_where"/>
+                GROUP BY DATE_FORMAT(d.audittime,'%Y-%m-%d')
+
+                UNION ALL
+                -- 提款人数。提款金额
+                SELECT DATE_FORMAT(d.passtime,'%Y-%m-%d') time, 0 calculateProfit, 0 newMbrs,
+                0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+                count(DISTINCT t.id) totalDrawAmountNum,
+                SUM(actualarrival) totalDrawAmount,0 totalValidBets,
+                0 totalBonusAmount,0 totalPayout,0 totalProfit,
+                0 totalSurrogateAmount, 0 totalTaskbonus
+                FROM fund_acc_withdraw d
+                LEFT JOIN mbr_account t ON d.accountid = t.id
+                WHERE DATE_FORMAT(d.passtime, '%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime}, '%Y-%m-%d')
+                AND DATE_FORMAT(d.passtime, '%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime}, '%Y-%m-%d')
+                AND d.status = 1
+                <include refid="findAgent_where"/>
+                GROUP BY DATE_FORMAT(d.passtime,'%Y-%m-%d')
+
+                UNION ALL
+                -- 代充人数。代充金额
+                SELECT DATE_FORMAT(d.orderTime,'%Y-%m-%d') time, 0 calculateProfit, 0 newMbrs,
+                0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+                0 totalDrawAmountNum,0 totalDrawAmount,0 totalValidBets,
+                0 totalBonusAmount,0 totalPayout,0 totalProfit,
+                SUM(d.amount) totalSurrogateAmount, 0 totalTaskbonus
+                FROM agy_bill_detail d
+                LEFT JOIN mbr_account t ON d.meraccountid =  t.id
+                WHERE DATE_FORMAT(d.orderTime, '%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime}, '%Y-%m-%d')
+                AND DATE_FORMAT(d.orderTime, '%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime}, '%Y-%m-%d')
+                AND d.financialcode in ('ADZ','ASF','MSF')
+                <include refid="findAgent_where"/>
+                GROUP BY DATE_FORMAT(d.orderTime,'%Y-%m-%d')
+
+                UNION ALL
+                -- 红利优惠
+                SELECT 
+                	DATE_FORMAT(fr.applicationtime,'%Y-%m-%d') time, 0 calculateProfit, 0 newMbrs,
+	                0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+	                0 totalDrawAmountNum,0 totalDrawAmount,0 totalValidBets,
+	                SUM(IF(fr.source = 3, -1 * fr.bonusamount, fr.bonusamount)) totalBonusAmount,
+	                0 totalPayout,0 totalProfit, 0 totalSurrogateAmount, 0 totalTaskbonus
+                FROM opr_act_bonus fr
+                LEFT JOIN mbr_account t on t.id = fr.accountId
+                WHERE fr.status = 1
+                AND DATE_FORMAT(fr.applicationtime, '%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime}, '%Y-%m-%d')
+                AND DATE_FORMAT(fr.applicationtime, '%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime}, '%Y-%m-%d')
+
+                <include refid="findAgent_where"/>
+                GROUP BY DATE_FORMAT(fr.applicationtime,'%Y-%m-%d')
+                
+              UNION ALL
+	          -- 任务金额
+	          SELECT 
+	           DATE_FORMAT(bo.time,'%Y-%m-%d') time, 0 calculateProfit, 0 newMbrs,
+               0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+               0 totalDrawAmountNum,0 totalDrawAmount,0 totalValidBets,
+               0 totalBonusAmount, 0 totalPayout,0 totalProfit, 
+               0 totalSurrogateAmount,SUM(bo.bonusamount) totalTaskbonus
+	          FROM task_bonus bo
+	          LEFT JOIN mbr_account t ON t.id = bo.accountId
+	          WHERE  bo.time <![CDATA[ >= ]]> #{startTime}
+	           AND bo.time <![CDATA[ <= ]]> #{endTime}
+	          <include refid="findAgent_where"/>
+	           GROUP BY DATE_FORMAT(bo.time,'%Y-%m-%d')
+
+             UNION ALL
+             -- 派彩
+             SELECT DATE_FORMAT(br.startday,'%Y-%m-%d') time, 0 calculateProfit, 0 newMbrs,
+             0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+             0 totalDrawAmountNum,0 totalDrawAmount,SUM(br.validbet) totalValidBets,
+             0 totalBonusAmount,SUM(br.payout) totalPayout,0 totalProfit,
+             0 totalSurrogateAmount, 0 totalTaskbonus
+             FROM rpt_bet_rcd_day br
+             LEFT JOIN mbr_account t on t.loginName = br.username
+             WHERE DATE_FORMAT(br.startday, '%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime}, '%Y-%m-%d')
+             AND DATE_FORMAT(br.startday, '%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime}, '%Y-%m-%d')
+             <include refid="findAgent_where"/>
+             GROUP BY DATE_FORMAT(br.startday,'%Y-%m-%d')
+             
+            UNION ALL
+             SELECT 
+              b.startday time, 0 calculateProfit, 0 newMbrs,
+              0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+              0 totalDrawAmountNum,0 totalDrawAmount,0 totalValidBets,
+              0 totalBonusAmount,0 totalPayout,b.amount totalProfit,
+              0 totalSurrogateAmount, 0 totalTaskbonus
+             FROM (
+                 SELECT totalPayout-(bonusamount) amount,
+                 b.startday,b.bonusamount,b.validbet
+                 from (<include refid="depotPayout_where"/>) b
+                 GROUP BY b.startday
+             ) b
+
+            ) a GROUP BY time
+        ) t
+        <choose>
+            <when test="orderBy != null and orderBy !='' and desc != null and desc == true">
+                ORDER BY ${orderBy} DESC 
+            </when>
+             <when test="orderBy != null and orderBy !='' and desc != null and desc == false">
+                ORDER BY ${orderBy} ASC
+            </when>
+            <otherwise>
+                ORDER BY time desc
+            </otherwise>
+        </choose>
+    </select>
+    
+      <select id="agentFinanceReportTotal"
+            resultType="com.wsdy.saasops.agapi.modules.dto.ReportResultDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.ReportParamsDto">
+            SELECT 
+	            time,
+	            SUM(newMbrs) newMbrs,
+                COUNT( distinct (CASE WHEN totalDepositBalanceNum != 0 THEN totalDepositBalanceNum ELSE NULL END ))  totalDepositBalanceNum,
+	            SUM(totalNewDeposits) totalNewDeposits,
+                IFNULL(SUM(totalDepositBalance),0) totalDepositBalance,
+                COUNT( DISTINCT (CASE WHEN totalDrawAmountNum != 0 THEN totalDrawAmountNum ELSE NULL END )) totalDrawAmountNum,
+                SUM(totalDrawAmount) totalDrawAmount,
+	            SUM(totalValidBets) totalValidBets,
+	            SUM(totalBonusAmount) totalBonusAmount,
+	            SUM(totalPayout) totalPayout,
+	            SUM(totalTaskbonus) totalTaskbonus,
+                SUM(totalProfit) - SUM(calculateProfit) - SUM(totalPayout) - SUM(totalTaskbonus) - SUM(totalBonusAmount) totalProfit,
+	            SUM(totalSurrogateAmount) totalSurrogateAmount
+            from (
+                -- 新会员
+                SELECT 
+                  DATE_FORMAT(t.registerTime,'%Y-%m-%d') time,
+                  0 calculateProfit, 
+	              COUNT(*) newMbrs,
+	              0 totalDepositBalanceNum,
+	              0 totalNewDeposits,
+	              0 totalDepositBalance,
+	              0 totalDrawAmountNum,
+                  0 totalDrawAmount,
+	              0 totalValidBets,
+	              0 totalBonusAmount,
+	              0 totalPayout,
+	              0 totalProfit,
+                  0 totalSurrogateAmount,
+                  0 totalTaskbonus
+                FROM mbr_account t
+                WHERE str_to_date(t.registerTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+                AND str_to_date(t.registerTime, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+                <include refid="findAgent_where"/>
+
+                UNION ALL
+	                -- 存款人数，总存款金额
+	                SELECT DATE_FORMAT(d.reportdate,'%Y-%m-%d') time, 0 calculateProfit, 0 newMbrs,
+	                d.accountid totalDepositBalanceNum,0 totalNewDeposits,
+	                d.actualdeposit totalDepositBalance,0 totalDrawAmountNum,
+	                0 totalDrawAmount,0 totalValidBets,0 totalBonusAmount,0 totalPayout,0 totalProfit,
+	                0 totalSurrogateAmount, 0 totalTaskbonus
+	                FROM mbr_funds_report d
+	                LEFT JOIN mbr_account t ON d.accountid = t.id
+	                WHERE str_to_date(d.reportdate, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+	                AND str_to_date(d.reportdate, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+	                AND d.deposit > 0
+	                <include refid="findAgent_where"/>
+
+                UNION ALL
+	                -- 人工资金调整
+	                SELECT 
+	                	DATE_FORMAT(d.createTime,'%Y-%m-%d') time,
+	                	SUM(IF(d.financialCode = 'AM', -1 * amount, amount)) calculateProfit,
+	                	0 newMbrs,
+		                0 totalDepositBalanceNum,
+		                0 totalNewDeposits,
+		                0 totalDepositBalance,
+		                0 totalDrawAmountNum,
+		                0 totalDrawAmount,
+		                0 totalValidBets,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                0 totalProfit,
+		                0 totalSurrogateAmount,
+		                0 totalTaskbonus
+	                FROM fund_audit d
+	                LEFT JOIN mbr_account t ON d.accountid = t.id
+	                WHERE d.status = 1 AND d.isCalculateProfit = 1
+	                AND STR_TO_DATE(d.createTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+	                AND STR_TO_DATE(d.createTime, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+	                <include refid="findAgent_where"/>
+                UNION ALL
+	                -- 首存人数
+	                SELECT DATE_FORMAT(d.audittime,'%Y-%m-%d') time,0 calculateProfit, 0 newMbrs,
+	                0 totalDepositBalanceNum,count(DISTINCT d.id) totalNewDeposits,
+	                0 totalDepositBalance,0 totalDrawAmountNum,
+	                0 totalDrawAmount,0 totalValidBets,0 totalBonusAmount,0 totalPayout,0 totalProfit,
+	                0 totalSurrogateAmount, 0 totalTaskbonus
+	                FROM fund_deposit d
+	                INNER JOIN (
+	                    SELECT accountid,min(id) id FROM fund_deposit
+	                    where status = 1 group by accountid
+	                ) nd on nd.id = d.id
+	                LEFT JOIN mbr_account t ON d.accountid = t.id
+	                WHERE str_to_date(d.audittime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+	                AND str_to_date(d.audittime, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+	                <include refid="findAgent_where"/>
+
+                UNION ALL
+	                -- 提款人数。提款金额
+	                SELECT DATE_FORMAT(d.reportdate,'%Y-%m-%d') time,0 calculateProfit, 0 newMbrs,
+	                0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+	                d.accountId totalDrawAmountNum,
+	                d.withdraw totalDrawAmount,0 totalValidBets,
+	                0 totalBonusAmount,0 totalPayout,0 totalProfit,
+	                0 totalSurrogateAmount, 0 totalTaskbonus
+	                FROM mbr_funds_report d
+	                LEFT JOIN mbr_account t ON d.accountid = t.id
+	                WHERE str_to_date(d.reportdate, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+	                AND str_to_date(d.reportdate, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+	                AND d.withdraw > 0
+	                <include refid="findAgent_where"/>
+
+                UNION ALL
+	                -- 代充人数。代充金额
+	                SELECT DATE_FORMAT(d.orderTime,'%Y-%m-%d') time,0 calculateProfit, 0 newMbrs,
+	                0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+	                0 totalDrawAmountNum,0 totalDrawAmount,0 totalValidBets,
+	                0 totalBonusAmount,0 totalPayout,0 totalProfit,
+	                SUM(d.amount) totalSurrogateAmount, 0 totalTaskbonus
+	                FROM agy_bill_detail d
+	                LEFT JOIN mbr_account t ON d.meraccountid =  t.id
+	                WHERE str_to_date(d.orderTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+	                AND str_to_date(d.orderTime, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+	                AND d.financialcode in ('ADZ','ASF','MSF')
+	                <include refid="findAgent_where"/>
+
+                UNION ALL
+		          -- 红利优惠
+		          SELECT 
+		          	  DATE_FORMAT(fr.applicationtime,'%Y-%m-%d') time,0 calculateProfit, 0 newMbrs,
+			          0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+			          0 totalDrawAmountNum,0 totalDrawAmount,0 totalValidBets,
+			          SUM(IF(fr.source = 3, -1 * fr.bonusamount, fr.bonusamount)) totalBonusAmount,
+			          0 totalPayout,0 totalProfit, 0 totalSurrogateAmount, 0 totalTaskbonus
+		          FROM opr_act_bonus fr
+		          LEFT JOIN mbr_account t on t.id = fr.accountId
+		          WHERE fr.status = 1
+		          AND str_to_date(fr.applicationtime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+		          AND str_to_date(fr.applicationtime, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+		          <include refid="findAgent_where"/>
+		          
+		      UNION ALL
+		          -- 任务金额
+		          SELECT DATE_FORMAT(fr.reportdate,'%Y-%m-%d') time,0 calculateProfit, 0 newMbrs,
+		          0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+		          0 totalDrawAmountNum,0 totalDrawAmount,0 totalValidBets,
+		          0 totalBonusAmount,0 totalPayout,0 totalProfit,
+		          0 totalSurrogateAmount,SUM(fr.taskbonus) totalTaskbonus
+		          FROM mbr_funds_report fr
+		          LEFT JOIN mbr_account t ON t.id = fr.accountId
+		          WHERE fr.bonus > 0
+		          AND str_to_date(fr.reportdate, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+		          AND str_to_date(fr.reportdate, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+		          <include refid="findAgent_where"/>
+
+	          UNION ALL
+		          -- 派彩
+		          SELECT DATE_FORMAT(br.startday,'%Y-%m-%d') time,0 calculateProfit, 0 newMbrs,
+		          0 totalDepositBalanceNum,0 totalNewDeposits,0 totalDepositBalance,
+		          0 totalDrawAmountNum,0 totalDrawAmount,SUM(br.validbet) totalValidBets,
+		          0 totalBonusAmount,SUM(br.payout) totalPayout,0 totalProfit,
+		          0 totalSurrogateAmount, 0 totalTaskbonus
+		          FROM rpt_bet_rcd_day br
+		          LEFT JOIN mbr_account t on t.loginName = br.username
+		          WHERE str_to_date(br.startday, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+		          AND str_to_date(br.startday, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+		
+		          <include refid="findAgent_where"/>
+           ) a
+    </select>
+
+    <sql id="findAgent_where">
+        <if test="cagencyId != null">
+            AND t.cagencyId =#{cagencyId}
+        </if>
+        <if test="subCagencyId != null">
+            AND t.subCagencyId =#{subCagencyId}
+        </if>
+    </sql>
+
+    <sql id="depotPayout_where">
+        SELECT a.startday,a.validbet,a.sumbonusamount bonusamount,IFNULL(-1*SUM(totalPayout),0) totalPayout
+        from (
+            SELECT a.totalPayout,IFNULL(b.taskBonusamount,0) sumbonusamount,
+            a.startday,a.validbet
+            FROM (
+                SELECT IFNULL(SUM(r.payout),0) totalPayout,
+                IFNULL(SUM(r.validbet),0) validbet,
+                date_format(startday, '%Y-%m-%d') startday
+                FROM mbr_account t
+                LEFT JOIN rpt_bet_rcd_day r ON r.username = t.loginname
+                WHERE date_format(r.startday, '%Y-%m-%d')<![CDATA[ >= ]]>date_format(#{startTime}, '%Y-%m-%d')
+                and date_format(r.startday, '%Y-%m-%d')<![CDATA[ <= ]]>date_format(#{endTime}, '%Y-%m-%d')
+                <include refid="findAgent_where"/>
+                GROUP BY date_format(startday, '%Y-%m-%d')
+            ) a
+
+            LEFT JOIN (
+        select IFNULL(SUM(r.bonus),0) taskBonusamount , r.reportdate time
+               from mbr_funds_report r
+        LEFT JOIN mbr_account t on r.accountid=t.id
+        where
+        date_format(r.reportdate, '%Y-%m-%d')<![CDATA[ >= ]]>date_format(#{startTime}, '%Y-%m-%d')
+        and date_format(r.reportdate, '%Y-%m-%d')<![CDATA[ <= ]]>date_format(#{endTime}, '%Y-%m-%d')
+        <include refid="findAgent_where"/>
+        GROUP BY r.reportdate
+            ) b ON a.startday = b.time
+
+
+        ) a GROUP BY a.startday
+    </sql>
+    
+      <select id="depotCostDetailList" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.ReportParamsDto">
+	       SELECT c.agyAccount,c.payout,c.rate,c.gamelogoId,
+		       CASE WHEN c.feemodel != 2 THEN TRUNCATE((c.cost + c.cost * c.additionalServicerate / 100), 2) ELSE 0 END cost,
+		       c.depotname, c.waterCost,c.waterrate,c.validbet 
+	       FROM (
+		       SELECT agyaccount agyAccount,payout,rate,gamelogoId,
+		       CASE WHEN rate>0 AND payout<![CDATA[ < ]]>0 THEN TRUNCATE(ABS(rate/100*payout) + waterCost, 2) ELSE waterCost END cost,
+		       depotname, waterCost,waterrate,validbet, b.feemodel,b.additionalServicerate
+		       FROM(
+		           SELECT ag.agyaccount,SUM(payout) payout, IFNULL(ge.rate,0) rate,lg.id gamelogoId,SUM(validbet) validbet,ag.feemodel,ag.additionalServicerate,
+	               IFNULL(ge.depotname, CONCAT(a.depotcode,cat.catname)) depotname,SUM(waterCost) waterCost,MAX(a.waterrate) waterrate
+		           FROM (
+		               SELECT r.platform, d.id depotId,payout,r.username,r.startday,d.depotcode,r.cost waterCost,
+		               validbet,waterrate,
+		               case when r.gamecategory='Chess' then '6'
+		               when r.gamecategory='Sport' then '1'
+		               when r.gamecategory='Live' then '3'
+		               when r.gamecategory='Slot' then '5'
+		               when r.gamecategory='Hunter' then '8'
+		               when r.gamecategory='Esport' then '9'
+		               when r.gamecategory='Lottery' then '12'
+		               end type,r.gamecategory
+		               from rpt_bet_rcd_day r
+		               LEFT JOIN t_gm_depot d ON r.platform = d.depotcode
+		               WHERE r.gamecategory != ''
+		           ) a
+		           INNER JOIN mbr_account t ON t.loginname = a.username
+		           LEFT JOIN t_game_logo lg ON a.depotid = lg.depotid and lg.catid = a.type
+		           LEFT JOIN set_gm_game ge ON ge.gamelogoid = lg.id
+		           LEFT JOIN agy_account ag ON ag.id = t.cagencyid
+		           LEFT JOIN t_gm_cat cat ON cat.id = a.type
+		           WHERE a.type != '' and a.depotId != ''
+		           <if test="agyAccount != null and agyAccount != ''">
+		               AND ag.agyAccount =#{agyAccount}
+		           </if>
+		           <if test="startTime != null and startTime != ''">
+		               AND a.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+		           </if>
+		           <if test="endTime != null and endTime != ''">
+		               AND a.startday <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+		           </if>
+	               GROUP BY ag.agyaccount,a.depotid,a.type
+		       ) b
+	       ) c
+      </select>
+      
+      <select id="depotCostTotal" resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.ReportParamsDto">
+            SELECT IFNULL(SUM(t.cost), 0) from (
+	           SELECT
+	       	 	 	IF(b.feemodel =1 OR b.feemodel = 3,
+					 TRUNCATE(
+					 	SUM(CASE WHEN b.rate>0 AND b.payout <![CDATA[< 0 ]]> THEN TRUNCATE(ABS(b.rate/100*b.payout) + b.waterCost, 2) ELSE b.waterCost END) * b.additionalServicerate / 100
+					 	+ SUM(CASE WHEN b.rate>0 AND b.payout <![CDATA[ < ]]> 0 THEN TRUNCATE(ABS(b.rate/100*b.payout) + b.waterCost, 2) ELSE b.waterCost END) , 2)
+					 ,0) cost, b.agyaccount
+		       FROM(
+		           SELECT SUM(payout) payout, IFNULL(ge.rate,0) rate,IFNULL(SUM(waterCost),0) waterCost, ag.feemodel,ag.agyaccount, ag.additionalServicerate
+		           FROM (
+		               SELECT r.platform, d.id depotId,payout,r.username,r.startday,d.depotcode,r.cost waterCost,
+			               CASE WHEN r.gamecategory='Chess' THEN '6'
+			               when r.gamecategory='Sport' then '1'
+			               when r.gamecategory='Live' then '3'
+			               when r.gamecategory='Slot' then '5'
+			               when r.gamecategory='Hunter' then '8'
+			               when r.gamecategory='Esport' then '9'
+			               when r.gamecategory='Lottery' then '12'
+			               END  type,r.gamecategory
+		               FROM rpt_bet_rcd_day r
+		               LEFT JOIN t_gm_depot d ON r.platform = d.depotcode
+		               WHERE r.gamecategory != ''
+		                   <if test="username != null and username != ''">
+			               		AND r.username = #{username}
+			          	   </if>
+		           ) a
+		           INNER JOIN mbr_account t ON t.loginname = a.username
+		           LEFT JOIN t_game_logo lg ON a.depotid = lg.depotid and lg.catid = a.type
+		           LEFT JOIN set_gm_game ge ON ge.gamelogoid = lg.id
+		           LEFT JOIN agy_account ag ON ag.id = t.cagencyid
+		           LEFT JOIN t_gm_cat cat ON cat.id = a.type
+		           WHERE a.type != '' and a.depotId != ''
+	          			AND ag.id IN (
+	          				SELECT agyt.agyId FROM (
+	          				<choose>
+	          					<when test="isNotIncludeSelf == true">
+									SELECT agyw.childnodeid  agyId FROM (
+			          					<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.new_agy_where"/>
+			          				) agyw
+	          					</when>
+	          					<otherwise>
+			          				SELECT id agyId FROM agy_account WHERE id = #{agyId} OR agyaccount = #{agyAccount}
+			          				UNION ALL
+									SELECT agyw.childnodeid  agyId FROM (
+			          					<include refid="com.wsdy.saasops.modules.agent.mapper.AgentComReportMapper.new_agy_where"/>
+			          				) agyw
+	          					</otherwise>
+	          				</choose>
+	          				) agyt GROUP BY agyt.agyId
+	          			)
+		           <if test="startTime != null and startTime != ''">
+		               AND a.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+		           </if>
+		           <if test="endTime != null and endTime != ''">
+		               AND a.startday <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+		           </if>
+	               GROUP BY ag.agyaccount,a.depotid,a.type
+		       ) b GROUP BY b.agyaccount
+	       ) t
+      </select>
+      
+     <select id="depotCostTotalForSingle" resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.ReportParamsDto">
+           SELECT
+       	 	 	IFNUll(IF(b.feemodel =1 OR b.feemodel = 3,
+				 TRUNCATE(
+				 	SUM(CASE WHEN b.rate>0 AND b.payout <![CDATA[< 0 ]]> THEN TRUNCATE(ABS(b.rate/100*b.payout) + b.waterCost, 2) ELSE b.waterCost END) * b.additionalServicerate / 100
+				 	+ SUM(CASE WHEN b.rate>0 AND b.payout <![CDATA[ < ]]> 0 THEN TRUNCATE(ABS(b.rate/100*b.payout) + b.waterCost, 2) ELSE b.waterCost END) , 2)
+				 ,0) ,0) cost
+	       FROM(
+	           SELECT SUM(payout) payout, IFNULL(ge.rate,0) rate,IFNULL(SUM(waterCost),0) waterCost, ag.feemodel,ag.additionalServicerate
+	           FROM (
+	               SELECT r.platform, d.id depotId,payout,r.username,r.startday,d.depotcode,r.cost waterCost,
+		               CASE WHEN r.gamecategory='Chess' THEN '6'
+		               when r.gamecategory='Sport' then '1'
+		               when r.gamecategory='Live' then '3'
+		               when r.gamecategory='Slot' then '5'
+		               when r.gamecategory='Hunter' then '8'
+		               when r.gamecategory='Esport' then '9'
+		               when r.gamecategory='Lottery' then '12'
+		               END  type,r.gamecategory
+	               FROM rpt_bet_rcd_day r
+	               LEFT JOIN t_gm_depot d ON r.platform = d.depotcode
+	               WHERE r.gamecategory != ''
+	                   <if test="username != null and username != ''">
+		               		AND r.username = #{username}
+		          	   </if>
+	           ) a
+	           INNER JOIN mbr_account t ON t.loginname = a.username
+	           LEFT JOIN t_game_logo lg ON a.depotid = lg.depotid and lg.catid = a.type
+	           LEFT JOIN set_gm_game ge ON ge.gamelogoid = lg.id
+	           LEFT JOIN agy_account ag ON ag.id = t.cagencyid
+	           LEFT JOIN t_gm_cat cat ON cat.id = a.type
+	           WHERE a.type != '' and a.depotId != ''
+           		<if test="agyId != null">
+           			AND ag.id = #{agyId}
+           		</if>
+ 				<if test="agyAccount != null and agyAccount != ''">
+            		AND ag.agyAccount =#{agyAccount}
+         		</if>	           		
+	           <if test="startTime != null and startTime != ''">
+	               AND a.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+	           </if>
+	           <if test="endTime != null and endTime != ''">
+	               AND a.startday <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+	           </if>
+               GROUP BY ag.agyaccount,a.depotid,a.type
+	       ) b
+      </select>
+      
+</mapper>

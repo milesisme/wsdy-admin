@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrDepositCountMapper">
+
+    <update id="updateCount"  parameterType="com.wsdy.saasops.modules.member.entity.MbrDepositCount">
+        update mbr_deposit_count SET num =num+1 WHERE accountid = #{accountId} and startday = #{startDay}
+    </update>
+
+    <update id="resetDepositLockNum" parameterType="com.wsdy.saasops.modules.member.entity.MbrDepositCount">
+        update mbr_deposit_count SET num = 0 WHERE accountid = #{accountId} and startday = #{startDay}
+    </update>
+</mapper>

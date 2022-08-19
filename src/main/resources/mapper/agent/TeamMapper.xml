@@ -1,0 +1,604 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modules.mapper.TeamMapper">
+
+    <select id="directMember" resultType="com.wsdy.saasops.agapi.modules.dto.DirectMemberDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.DirectMemberParamDto">
+        SELECT  a.*, (a.depositAmount-a.withdrawAmount) ctDiffer FROM(
+	            SELECT 	t.loginname,e.tiername,insert(t.realname,2,8, '**') realname,
+			            t.mobile mobile,t.logintime logintime,t.registertime,
+			            t.id accountId,IFNULL(f.actualarrival,0) depositAmount,IFNULL(w.actualarrival,0) withdrawAmount,
+			            am.numbering,am.memoType,IFNULL(tp.payout,0) payout,IFNULL(audit.auditAmAmount,0) auditAmAmount,
+			            IFNULL(tp.validBet, 0) validBet,t.offLineTime,
+			            IFNULL(tp.bet, 0) betTotal,
+			            IFNULL(task.taskBonusamount,0) + IFNULL(bonus.bonusamount,0) bonusamountAll,
+			            IFNULL(ca.calculateProfit,0) calculateProfit
+            FROM mbr_account t
+            LEFT JOIN agy_account act ON act.id = t.cagencyid
+            LEFT JOIN mbr_activity_level e ON t.actlevelid = e.id
+            LEFT JOIN agy_account_memo am ON t.id = am.accountid
+            LEFT JOIN (<include refid="findRptBetRcdDay"/>) tp on tp.accountid=t.id
+            LEFT JOIN (
+                SELECT d.accountid,SUM(d.actualarrival) actualarrival from fund_deposit d
+                LEFT JOIN mbr_account t on d.accountid = t.id
+                WHERE d.status=1
+                <if test="startTime != null and startTime != ''">
+                    AND d.createTime <![CDATA[ >= ]]>#{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND d.createTime <![CDATA[ <= ]]>#{endTime}
+                </if>
+                <include refid="find_cagencyId_where"/>
+                GROUP BY d.accountid
+            ) f ON f.accountid = t.id
+            LEFT JOIN (
+                SELECT d.accountid,SUM(d.actualarrival) actualarrival from fund_acc_withdraw d
+                LEFT JOIN mbr_account t on d.accountid = t.id
+                WHERE d.status=1
+                <if test="startTime != null and startTime != ''">
+                    AND d.createTime <![CDATA[ >= ]]>#{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND d.createTime <![CDATA[ <= ]]>#{endTime}
+                </if>
+                <include refid="find_cagencyId_where"/>
+                GROUP BY d.accountid
+            ) w ON w.accountid = t.id
+            
+            LEFT JOIN (
+                SELECT t.id accountid,IFNULL(SUM(s.bonusamount),0) taskBonusamount
+                from task_bonus s
+                LEFT JOIN mbr_account t ON s.accountid = t.id
+                <where>
+                    <if test="startTime != null and startTime != ''">
+                        AND s.time <![CDATA[ >= ]]> #{startTime}
+                    </if>
+                    <if test="endTime != null and endTime != ''">
+                        AND s.time <![CDATA[ <= ]]> #{endTime}
+                    </if>
+                    <include refid="find_cagencyId_where"/>
+                </where>
+                GROUP BY s.accountid
+            ) task ON task.accountid = t.id
+            LEFT JOIN (
+                SELECT t.id accountid,IFNULL(SUM(IF(s.source = 3, -1 * s.bonusamount, s.bonusamount)),0) bonusamount
+                	FROM opr_act_bonus s
+                LEFT JOIN mbr_account t ON s.accountid = t.id
+                WHERE s.status =1
+                <if test="startTime != null and startTime != ''">
+                    AND s.applicationTime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND s.applicationTime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                <include refid="find_cagencyId_where"/>
+                GROUP BY s.accountid
+             ) bonus ON bonus.accountid = t.id
+            LEFT JOIN (
+                SELECT 
+                	t.id accountid,IFNULL(SUM(audit.amount),0) auditAmAmount
+                FROM fund_audit audit
+                LEFT JOIN mbr_account t ON audit.accountid = t.id
+                WHERE audit.status = 1 AND audit.financialcode = 'AM'
+                <if test="startTime != null and startTime != ''">
+                    AND audit.audittime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND audit.audittime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                <include refid="find_cagencyId_where"/>
+                GROUP BY audit.accountid
+             ) audit ON audit.accountid = t.id
+            
+            -- 人工调整
+            LEFT JOIN (
+                SELECT 
+                	t.id accountid,SUM(IF(audit.financialCode = 'AM', -1 * audit.amount, audit.amount)) calculateProfit
+                FROM fund_audit audit
+                LEFT JOIN mbr_account t ON audit.accountid = t.id
+                WHERE audit.status = 1 AND audit.isCalculateProfit = 1
+                <if test="startTime != null and startTime != ''">
+                    AND audit.audittime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND audit.audittime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                <include refid="find_cagencyId_where"/>
+                GROUP BY audit.accountid
+             ) ca ON ca.accountid = t.id
+            <where>
+                <if test="agyAccount != null and agyAccount != ''">
+                    AND act.agyaccount =#{agyAccount}
+                </if>
+                <if test="numbering != null and numbering != ''">
+                    AND am.numbering =#{numbering}
+                </if>
+                <include refid="find_cagencyId_where"/>
+            </where>
+        )a
+        <choose>
+            <when test="orderBy != null and orderBy !=''">
+                ORDER BY ${orderBy}
+            </when>
+            <otherwise>
+                ORDER BY registertime desc
+            </otherwise>
+        </choose>
+    </select>
+
+    <sql id="find_cagencyId_where">
+        <if test="subAgentId != null">
+            AND EXISTS(
+            SELECT e1.childNodeId FROM agy_tree e1
+            INNER JOIN agy_account t1 ON e1.parentId = t1.id
+            WHERE t1.id =#{subAgentId}
+            and e1.depth=1 AND t2.id = e1.childNodeId
+            )
+        </if>
+        <if test="cagencyId != null">
+            AND t.cagencyId =#{cagencyId}
+        </if>
+        <if test="cagencyId != null">
+            AND t.subCagencyId is null
+        </if>
+        <if test="subCagencyId != null">
+            AND t.subCagencyId =#{subCagencyId}
+        </if>
+        <if test="loginName != null and loginName != ''">
+            AND t.loginName =#{loginName}
+        </if>
+        <if test="accountId != null">
+            AND t.id =#{accountId}
+        </if>
+    </sql>
+
+    <sql id="findRptBetRcdDay">
+        SELECT -1*IFNULL(SUM(y.payout),0) payout,
+        IFNULL(SUM(validbet),0) validBet,IFNULL(SUM(bet),0) bet,t.loginname,t.id accountid,
+        t.cagencyId,t.subcagencyid
+        from rpt_bet_rcd_day y
+        LEFT JOIN mbr_account t ON y.username = t.loginname
+        LEFT JOIN agy_account t2 ON t2.id = t.cagencyid
+        <where>
+            <if test="startTime != null and startTime != ''">
+                AND y.startday <![CDATA[ >= ]]> str_to_date(#{startTime}, '%Y-%m-%d')
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND y.startday <![CDATA[ <= ]]> str_to_date(#{endTime}, '%Y-%m-%d')
+            </if>
+            <include refid="find_cagencyId_where"/>
+        </where>
+        GROUP BY y.username
+    </sql>
+
+    <sql id="findTotalBonusAmount">
+
+        SELECT
+        t.accountId,
+        IFNULL(SUM(t.bonusAmount), 0) totalBonusAmount,
+        t.cagencyId cagencyId,
+        t.subcagencyid subcagencyid
+        from (
+	        -- 红利
+	        SELECT 	
+        		IF(ta.source = 3, -1 * ta.bonusamount, ta.bonusamount) bonusAmount,
+        		ta.accountId,m.cagencyId cagencyId,m.subcagencyid subcagencyid
+	        from opr_act_bonus ta
+	        LEFT JOIN mbr_account m ON ta.accountId = m.id
+	        LEFT JOIN agy_account ag ON ag.id = m.cagencyid
+	        WHERE ta.status = 1
+	        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+	            and DATE_ADD(ta.applicationTime, interval 7 DAY) >= now()
+	        </if>
+	        <if test="startTime != null and startTime != ''">
+	            AND ta.applicationTime <![CDATA[ >= ]]> #{startTime}
+	        </if>
+	        <if test="endTime != null and endTime != ''">
+	            AND ta.applicationTime <![CDATA[ <= ]]> #{endTime}
+	        </if>
+	
+	        union all
+	        -- 任务
+	        SELECT t.bonusAmount,t.accountId,m.cagencyId cagencyId,m.subcagencyid subcagencyid
+	        from task_bonus t
+	        LEFT JOIN mbr_account m ON t.accountId = m.id
+	        LEFT JOIN agy_account ag ON ag.id = m.cagencyid
+	        WHERE 1=1
+	        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+	            and DATE_ADD(t.time, interval 7 DAY) >= now()
+	        </if>
+	        <if test="startTime != null and startTime != ''">
+	            AND t.time <![CDATA[ >= ]]> #{startTime}
+	        </if>
+	        <if test="endTime != null and endTime != ''">
+	            AND t.time <![CDATA[ <= ]]> #{endTime}
+	        </if>
+        ) t
+        GROUP BY t.cagencyId
+
+    </sql>
+
+    <sql id="findTotalProfit">
+        SELECT (if(sign(SUM(totalPayout))=-1, abs(SUM(totalPayout)),
+        -1*SUM(totalPayout))-SUM(bonusamount)-SUM(taskBonusamount)) totalProfit,
+        loginname,accountid,validBet,cagencyId,subcagencyid
+        from (
+            SELECT IFNULL(SUM(totalPayout),0) totalPayout,IFNULL(SUM(validBet),0) validBet,
+            loginname,accountid,cagencyid,subcagencyid,SUM(bonusamount) bonusamount,
+            SUM(taskBonusamount) taskBonusamount
+            from (
+                SELECT IFNULL(SUM(y.payout),0) totalPayout,
+                IFNULL(SUM(validbet),0) validBet,t.loginname,t.id accountid,
+                t.cagencyId,t.subcagencyid,0 bonusamount,0 taskBonusamount
+                from rpt_bet_rcd_day y
+                LEFT JOIN mbr_account t ON y.username = t.loginname
+                LEFT JOIN agy_account t2 ON t2.id = t.cagencyid
+                <where>
+                    <if test="startTime != null and startTime != ''">
+                        AND y.startday <![CDATA[ >= ]]> str_to_date(#{startTime}, '%Y-%m-%d')
+                    </if>
+                    <if test="endTime != null and endTime != ''">
+                        AND y.startday <![CDATA[ <= ]]> str_to_date(#{endTime}, '%Y-%m-%d')
+                    </if>
+                    <include refid="find_cagencyId_where"/>
+                </where>
+                GROUP BY y.username
+
+                union all
+
+                SELECT 0 totalPayout,0 validBet,t.loginname,t.id accountid,
+                t.cagencyId,t.subcagencyid,IFNULL(SUM(s.bonusamount),0) bonusamount,
+                0 taskBonusamount
+                from opr_act_bonus s
+                LEFT JOIN mbr_account t ON s.accountid = t.id
+                LEFT JOIN agy_account t2 ON t2.id = t.cagencyid
+                WHERE s.status =1
+                <if test="startTime != null and startTime != ''">
+                    AND s.applicationTime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND s.applicationTime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                <include refid="find_cagencyId_where"/>
+                GROUP BY s.accountid
+
+                union all
+
+                SELECT 0 totalPayout,0 validBet,t.loginname,t.id accountid,
+                t.cagencyId,t.subcagencyid,0 bonusamount,
+                IFNULL(SUM(s.bonusamount),0) taskBonusamount
+                from task_bonus  s
+                LEFT JOIN mbr_account t ON s.accountid = t.id
+                LEFT JOIN agy_account t2 ON t2.id = t.cagencyid
+                <where>
+                    <if test="startTime != null and startTime != ''">
+                        AND s.time <![CDATA[ >= ]]> #{startTime}
+                    </if>
+                    <if test="endTime != null and endTime != ''">
+                        AND s.time <![CDATA[ <= ]]> #{endTime}
+                    </if>
+                    <include refid="find_cagencyId_where"/>
+                </where>
+                GROUP BY s.accountid
+
+            ) b GROUP BY accountid
+        ) a GROUP BY accountid
+    </sql>
+
+    <select id="findBonusAmount" resultType="java.math.BigDecimal">
+        SELECT SUM(bonusamount) FROM opr_act_bonus
+        WHERE loginname=#{loginname} and `status`=1
+    </select>
+
+    <select id="findValidbet" resultType="java.math.BigDecimal">
+        SELECT SUM(validbet) FROM rpt_bet_rcd_day
+        WHERE username=#{loginname}
+    </select>
+
+    <select id="subAgentList" resultType="com.wsdy.saasops.agapi.modules.dto.SubAgentListDto"
+        parameterType="com.wsdy.saasops.agapi.modules.dto.DirectMemberParamDto">
+    SELECT 
+    	a.*,
+    	a.payout - a.cost - a.totalBonusAmount - a.serviceCost - a.calculateProfit totalProfit,
+    	(a.depositBalance - a.drawAmount) ctDiffer
+   	FROM (
+        SELECT a.*,
+	        CASE WHEN (a.feemodel = 2 OR a.feemodel = 3) THEN TRUNCATE(IFNULL(c.serviceCost,0), 2) ELSE 0 END serviceCost,
+	        CASE WHEN (a.feemodel = 1 OR a.feemodel = 3) THEN TRUNCATE(IFNULL(SUM(b.cost) + SUM(b.cost) * b.additionalServicerate / 100,0), 2) ELSE 0 END cost
+        FROM (
+	        SELECT * FROM (
+		        SELECT
+			        t.agyAccount,IFNULL(ar.subAgentNum,0) subAgentNum,
+			        IFNULL(ac.accountNum,0) accountNum,t.createtime registerTime,
+			        IFNULL(SUM(tp.validBet),0) validBet,
+			        IFNULL(SUM(tp.bet),0) betTotal,
+			        IFNULL(SUM(tp.payout),0) payout,
+			        IFNULL(f.actualarrival,0) depositBalance,IFNULL(w.actualarrival,0) drawAmount,
+			        IFNULL(ca.calculateProfit,0) calculateProfit,
+			        IFNULL((SELECT totalBonusAmount from (<include refid="findTotalBonusAmount"/>) tb WHERE
+			        tb.cagencyId = t.id),0) totalBonusAmount,
+			        (SELECT SUM(commission) FROM agy_commission WHERE agentid =t.id AND issuestatus =1 AND time=#{time}) commission,
+			        t.id,
+			        IFNULL(um.activeAccountNum,0) activeAccountNum,
+			        IFNULL(act.commissioncap,0) commissioncap,
+			        IFNULL(newde.totalNewDepositAmount, 0) totalNewDepositAmount,
+			        IFNULL(newde.totalNewDeposits, 0) totalNewDeposits,
+			        t.feemodel feeModel,
+			        IFNULL(audit.auditAmAmount,0) auditAmAmount
+	        FROM agy_account t
+	        LEFT JOIN (<include refid="findRptBetRcdDay"/>) tp ON tp.cagencyId = t.id
+	
+	        LEFT JOIN (
+		        SELECT d.accountid,SUM(d.actualarrival) actualarrival ,t.cagencyId FROM fund_deposit d
+		        LEFT JOIN mbr_account t on d.accountid = t.id
+		        WHERE d.status=1
+		        <if test="startTime != null and startTime != ''">
+		            AND d.audittime <![CDATA[ >= ]]>#{startTime}
+		        </if>
+		        <if test="endTime != null and endTime != ''">
+		            AND d.audittime <![CDATA[ <= ]]>#{endTime}
+		        </if>
+		        GROUP BY t.cagencyId
+	        ) f ON f.cagencyId = t.id
+	
+	        LEFT JOIN (
+		        SELECT  d.accountid,SUM(d.actualarrival) actualarrival,t.cagencyId from fund_acc_withdraw d
+		        		LEFT JOIN mbr_account t on d.accountid = t.id
+		        WHERE d.status=1
+		        <if test="startTime != null and startTime != ''">
+		            AND d.passtime <![CDATA[ >= ]]>#{startTime}
+		        </if>
+		        <if test="endTime != null and endTime != ''">
+		            AND d.passtime <![CDATA[ <= ]]>#{endTime}
+		        </if>
+		        GROUP BY t.cagencyId
+	        ) w ON w.cagencyId = t.id
+	
+            LEFT JOIN (
+                SELECT 
+                	t.id accountid,SUM(IF(audit.financialCode = 'AM', -1 * audit.amount, audit.amount)) calculateProfit, t.cagencyId
+                FROM fund_audit audit
+                LEFT JOIN mbr_account t ON audit.accountid = t.id
+                WHERE audit.status = 1 AND audit.isCalculateProfit = 1
+                <if test="startTime != null and startTime != ''">
+                    AND audit.createTime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND audit.createTime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                GROUP BY t.cagencyId
+             ) ca ON ca.cagencyId = t.id
+	
+            LEFT JOIN (
+                SELECT 
+                	t.id accountid,IFNULL(SUM(audit.amount),0) auditAmAmount, t.cagencyId
+                FROM fund_audit audit
+                LEFT JOIN mbr_account t ON audit.accountid = t.id
+                WHERE audit.status = 1 AND audit.financialcode = 'AM'
+                <if test="startTime != null and startTime != ''">
+                    AND audit.audittime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND audit.audittime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                GROUP BY t.cagencyId
+             ) audit ON audit.cagencyId = t.id
+	
+	        LEFT JOIN (
+	        	SELECT COUNT(*) subAgentNum,parentid from agy_tree WHERE depth=1 GROUP BY parentid
+	        ) ar ON ar.parentid = t.id
+	        LEFT JOIN (
+	        	SELECT COUNT(*) accountNum,cagencyId from mbr_account GROUP BY cagencyId
+	        ) ac ON ac.cagencyId = t.id
+	        LEFT JOIN (
+	        	SELECT t.cagencyId, COUNT(DISTINCT t.id) activeAccountNum FROM (
+			        SELECT account.id,cagencyId,SUM(ry.bet) bet
+				        FROM rpt_bet_rcd_day ry
+				        INNER JOIN mbr_account account ON ry.username=account.loginName
+			        <where>
+				        <if test="startTime != null and startTime != ''">
+				            AND ry.startday  <![CDATA[ >= ]]> str_to_date(#{startTime}, '%Y-%m-%d')
+				        </if>
+				        <if test="endTime != null and endTime != ''">
+				            and ry.startday  <![CDATA[ <= ]]> str_to_date(#{endTime}, '%Y-%m-%d')
+				        </if>
+			        </where>
+			        GROUP BY account.id HAVING bet >= 100
+		        ) t GROUP BY cagencyId
+	        ) um ON um.cagencyId = t.id
+	        LEFT JOIN  agy_contract act ON act.id= t.contractid
+	        LEFT JOIN (
+		        SELECT
+			        COUNT(DISTINCT d.id) totalNewDeposits,
+			        SUM(d.actualarrival) totalNewDepositAmount,
+			        agy.agyaccount
+			        FROM fund_deposit t
+		        INNER JOIN(
+		        	SELECT accountid,  MIN(id) id, actualarrival
+			        	FROM fund_deposit
+			        WHERE status = 1 AND actualarrival > 0 GROUP BY accountid
+					) d ON t.id = d.id
+		        LEFT JOIN mbr_account mbr ON mbr.id = d.accountId
+		        LEFT JOIN agy_account agy ON agy.id = mbr.cagencyid
+		        <where>
+		            <if test="startTime != null and startTime != ''">
+		                AND t.auditTime  <![CDATA[ >= ]]> #{startTime}
+		            </if>
+		            <if test="endTime != null and endTime != ''">
+		                AND t.auditTime  <![CDATA[ < ]]> #{endTime}
+		            </if>
+		        </where>
+		        GROUP BY agy.agyaccount
+	        ) newde ON newde.agyaccount = t.agyaccount
+	
+	        <where>
+	            <if test="subAgentId != null">
+	                AND EXISTS(
+	                SELECT e1.childNodeId FROM agy_tree e1
+	                	INNER JOIN agy_account t1 ON e1.parentId = t1.id
+	                WHERE t1.id =#{subAgentId}
+	                AND e1.depth=1 AND t.id = e1.childNodeId
+	                )
+	            </if>
+	            <if test="agyAccount != null and agyAccount != ''">
+	                AND t.agyaccount =#{agyAccount}
+	            </if>
+	        </where>
+	        GROUP BY t.id
+	        ) a
+	        <choose>
+	            <when test="orderBy != null and orderBy !='' and orderBy != 'ctDiffer DESC' and orderBy != 'ctDiffer asc'">
+	                ORDER BY ${orderBy}
+	            </when>
+	            <otherwise>
+	                ORDER BY registerTime DESC
+	            </otherwise>
+	        </choose>
+	        )a
+	        LEFT JOIN (<include refid="com.wsdy.saasops.modules.agent.mapper.AgentCommMapper.depotCostList_Detail"/>) b
+	        	ON a.agyAccount = b.agyaccount
+	        LEFT JOIN (<include refid="com.wsdy.saasops.modules.agent.mapper.AgentCommMapper.serviceCostList_Detail"/>) c
+	        	ON a.agyAccount = c.agyaccount
+	        GROUP BY a.agyAccount
+	        <if test="orderBy != null and orderBy !='' and orderBy != 'ctDiffer DESC' and orderBy != 'ctDiffer asc'">
+	            ORDER BY ${orderBy}
+	        </if>
+       )a
+       <if test="orderBy == 'ctDiffer DESC' or orderBy == 'ctDiffer asc'">
+           ORDER BY ${orderBy}
+       </if>
+    </select>
+
+    <select id="superiorCloneList" resultType="com.wsdy.saasops.agapi.modules.dto.SubAgentListDto"
+        parameterType="com.wsdy.saasops.agapi.modules.dto.DirectMemberParamDto">
+        SELECT * FROM (
+	            SELECT a.agyaccount,a.createtime registerTime,IFNULL(ac.accountNum,0) accountNum,
+		            IFNULL(SUM(tp.validBet),0) validBet,
+		            IFNULL(SUM(tp.bet),0) betTotal,
+		            IFNULL(SUM(tp.payout),0) payout,a.id,
+		            IFNULL(um.activeAccountNum,0) activeAccountNum,
+		            IFNULL(newde.totalNewDeposits, 0) totalNewDeposits,
+		            IFNULL(f.actualarrival,0) depositBalance,IFNULL(w.actualarrival,0) drawAmount,
+		            (IFNULL(f.actualarrival,0)-IFNULL(w.actualarrival,0)) ctDiffer,
+		        	IFNULL((SELECT totalBonusAmount FROM (<include refid="findTotalBonusAmount"/>) tb WHERE
+		        	tb.subcagencyid = a.id),0) totalBonusAmount,
+		           	IFNULL(newde.totalNewDepositAmount, 0) totalNewDepositAmount,
+		           	IFNULL(SUM(audit.auditAmAmount),0) auditAmAmount,
+		           	IFNULL(SUM(ca.calculateProfit),0) calculateProfit
+            FROM agy_account a
+	        LEFT JOIN (<include refid="findRptBetRcdDay"/>) tp ON tp.subcagencyid = a.id
+	       	LEFT JOIN (
+			        SELECT d.accountid,SUM(d.actualarrival) actualarrival ,t.subcagencyid from fund_deposit d
+			        LEFT JOIN mbr_account t on d.accountid = t.id
+			        WHERE d.status=1
+			        <if test="startTime != null and startTime != ''">
+			            AND d.audittime <![CDATA[ >= ]]>#{startTime}
+			        </if>
+			        <if test="endTime != null and endTime != ''">
+			            AND d.audittime <![CDATA[ <= ]]>#{endTime}
+			        </if>
+			        GROUP BY t.subcagencyid
+	        	) f ON f.subcagencyid = a.id
+	        LEFT JOIN (
+		        SELECT d.accountid,SUM(d.actualarrival) actualarrival,t.subcagencyid from fund_acc_withdraw d
+		        LEFT JOIN mbr_account t on d.accountid = t.id
+		        WHERE d.status=1
+		        <if test="startTime != null and startTime != ''">
+		            AND d.passtime <![CDATA[ >= ]]>#{startTime}
+		        </if>
+		        <if test="endTime != null and endTime != ''">
+		            AND d.passtime <![CDATA[ <= ]]>#{endTime}
+		        </if>
+		        GROUP BY t.subcagencyid
+	        ) w ON w.subcagencyid = a.id
+
+         	LEFT JOIN (
+                SELECT COUNT(*) accountNum,subcagencyid from mbr_account GROUP BY subcagencyid
+            ) ac ON ac.subcagencyid = a.id
+            LEFT JOIN (
+                SELECT COUNT(DISTINCT account.id) activeAccountNum,subcagencyid
+                FROM rpt_bet_rcd_day ry
+                INNER JOIN mbr_account account ON ry.username=account.loginName
+                WHERE account.subcagencyid is not null and ry.bet<![CDATA[ >= ]]>100
+                <if test="startTime != null and startTime != ''">
+                    AND ry.startday  <![CDATA[ >= ]]> str_to_date(#{startTime}, '%Y-%m-%d')
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    and ry.startday  <![CDATA[ <= ]]> str_to_date(#{endTime}, '%Y-%m-%d')
+                </if>
+                GROUP BY account.subcagencyid
+            ) um ON um.subcagencyid = a.id
+            
+	        LEFT JOIN (
+                SELECT 
+                	t.id accountid,SUM(IF(audit.financialCode = 'AM', -1 * audit.amount, audit.amount)) calculateProfit, t.subcagencyid
+                FROM fund_audit audit
+                LEFT JOIN mbr_account t ON audit.accountid = t.id
+                WHERE audit.status = 1 AND audit.isCalculateProfit = 1
+                <if test="startTime != null and startTime != ''">
+                    AND audit.audittime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND audit.audittime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                GROUP BY t.subcagencyid
+             ) ca ON ca.subcagencyid = a.id
+             
+            LEFT JOIN (
+                SELECT 
+                	t.id accountid,IFNULL(SUM(audit.amount),0) auditAmAmount, t.subcagencyid
+                FROM fund_audit audit
+                LEFT JOIN mbr_account t ON audit.accountid = t.id
+                WHERE audit.status = 1 AND audit.financialcode = 'AM'
+                <if test="startTime != null and startTime != ''">
+                    AND audit.audittime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND audit.audittime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                GROUP BY t.subcagencyid
+             ) audit ON audit.subcagencyid = a.id
+            
+            LEFT JOIN (
+				SELECT
+					 COUNT(DISTINCT d.id) totalNewDeposits,
+					 SUM(d.actualarrival) totalNewDepositAmount,
+					 agy.agyaccount
+				FROM fund_deposit t
+					INNER JOIN(
+						SELECT 	
+							accountid,
+							MIN(id) id,
+							actualarrival
+						FROM fund_deposit
+						WHERE status = 1 AND actualarrival > 0 GROUP BY accountid
+					) d ON t.id = d.id
+				 LEFT JOIN mbr_account mbr ON mbr.id = d.accountId
+				 LEFT JOIN agy_account agy ON agy.id = mbr.subcagencyid 
+				 <where> 
+					  <if test="startTime != null and startTime != ''">
+		              	AND t.createtime  <![CDATA[ >= ]]> #{startTime}
+		          	 </if>
+		          	 <if test="endTime != null and endTime != ''">
+		              	AND t.createtime  <![CDATA[ < ]]> #{endTime}
+		         	 </if>
+				</where> 			         	 
+				 GROUP BY agy.agyaccount
+			) newde ON newde.agyaccount = a.agyaccount
+            WHERE a.parentid = #{cagencyId} and a.attributes=1
+             <if test="agyAccount != null and agyAccount != ''">
+                AND a.agyaccount =#{agyAccount}
+             </if>
+            GROUP BY a.agyaccount
+        ) a
+        <choose>
+            <when test="orderBy != null and orderBy !=''">
+                ORDER BY ${orderBy}
+            </when>
+            <otherwise>
+                ORDER BY registertime desc
+            </otherwise>
+        </choose>
+    </select>
+</mapper>

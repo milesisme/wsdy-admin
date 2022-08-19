@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.system.systemsetting.dao.SmsConfigMapper">
+	<select id="querySmsConfig" resultType="com.wsdy.saasops.modules.system.systemsetting.entity.SmsConfig"
+			parameterType="com.wsdy.saasops.modules.system.systemsetting.entity.SmsConfig">
+		select * from sms_config s
+		<where>
+			<if test="available != null">
+				AND s.available =#{available}
+			</if>
+			<if test="mobileAreaCode != null  and mobileAreaCode != ''">
+				AND s.mobileareacode LIKE CONCAT('%',#{mobileAreaCode}, '%')
+			</if>
+		</where>
+		order by ISNULL(sort) ASC, sort , platformid;
+	</select>
+</mapper>

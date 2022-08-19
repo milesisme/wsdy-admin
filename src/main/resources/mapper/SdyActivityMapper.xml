@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.mapper.SdyActivityMapper">
+
+  <select id="findAcocountActivityLevel" resultType="com.wsdy.saasops.api.modules.user.dto.SdyActivity.ActivityLevelDto">
+      SELECT e.tiername,e.id,
+      e.accountLevel,e.promoteSign,e.validbetMin,e.depositMin,e.downgradeBet,e.feeAvailable,e.withDrawalTimes,e.withDrawalQuota
+      FROM mbr_activity_level e
+      where e.available=1
+      <if test="id!=null">
+          and e.id =#{id}
+      </if>
+      ORDER BY e.accountlevel
+  </select>
+
+    <select id="findAccountLevelList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT t.* FROM mbr_account t
+        LEFT JOIN mbr_activity_level a ON t.actlevelid = a.id
+        WHERE a.accountlevel >0 and t.available=1 and t.id>#{lastId}
+        ORDER BY t.id ASC LIMIT 1000
+    </select>
+
+    <select id="findBankOne" resultType="com.wsdy.saasops.modules.base.entity.BaseBank">
+        SELECT * from t_bs_bank WHERE wdenable=1
+        and bankname like concat('%',#{bankname},'%')
+    </select>
+
+    <select id="findLotterFundDeposit" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT * FROM fund_deposit
+        WHERE accountId = #{accountId} and `status`=1
+        <if test="startTime != null">
+            AND audittime <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null">
+            AND audittime <![CDATA[ < ]]>#{endTime}
+        </if>
+        LIMIT 1
+    </select>
+
+    <select id="countLotteryByAccountId" resultType="java.lang.Integer">
+        SELECT count(*) FROM opr_act_lottery
+        WHERE accountId = #{accountId} and prizeArea=#{prizeArea}
+        <if test="startTime != null">
+            AND updatetime <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null">
+            AND updatetime <![CDATA[ < ]]>#{endTime}
+        </if>
+    </select>
+
+    <select id="findLotteryList" resultType="com.wsdy.saasops.modules.lottery.entity.OprActLottery">
+        SELECT * from opr_act_lottery WHERE accountid is null
+        and prizeArea =#{prizeArea}
+        ORDER BY random
+    </select>
+
+    <select id="findLotteryMax" resultType="java.lang.Integer">
+       SELECT IFNULL( max(batchnumber),0) from opr_act_lottery where prizeArea =#{prizeArea}
+    </select>
+
+</mapper>

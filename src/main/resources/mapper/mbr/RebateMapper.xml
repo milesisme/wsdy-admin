@@ -1,0 +1,217 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.mapper.RebateMapper">
+
+    <select id="queryListAll" resultType="com.wsdy.saasops.modules.operate.entity.RebateInfo"
+            parameterType="com.wsdy.saasops.modules.operate.entity.RebateInfo">
+        select dt.accountId,
+            mbr.loginName,
+            mbr.tagencyId,
+            mg.groupName,
+            dt.financialCode,
+            dt.amount rebateAmount,
+            c.count,
+            c.auditid,
+            DATE_FORMAT(DATE_SUB(dt.auditTime,INTERVAL 1 day), '%Y-%m-%d') startday,
+            dt.auditTime createTime,
+            dt.status
+        from fund_audit dt
+        left join mbr_account mbr on dt.accountId = mbr.id
+        left join mbr_group mg on mbr.groupId = mg.id
+        LEFT JOIN (<include refid="rebate_mbr_count"/>) c on c.accountid = dt.accountid and dt.id = c.auditid
+        <include refid="rebate_where"/>
+        order by dt.auditTime desc
+    </select>
+
+    <sql id="rebate_mbr_count">
+        select count(distinct re.subaccountid) count,re.accountid,re.reporttime,re.auditid
+        from mbr_rebate_report_new re
+        where re.amount > 0
+        <if test="startTime != null and startTime !=''">
+            AND DATE_FORMAT(re.reporttime,'%Y-%m-%d') <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d')
+        </if>
+        <if test="endTime != null and endTime !=''">
+            AND DATE_FORMAT(re.reporttime,'%Y-%m-%d')  <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+        </if>
+        GROUP BY re.accountid,re.auditid
+    </sql>
+
+    <sql id="rebate_where">
+        where dt.status = 1
+          and dt.financialCode = 'FA'
+            <if test="startTime != null and startTime !=''">
+                AND dt.auditTime <![CDATA[ >= ]]>  #{startTime}
+            </if>
+            <if test="endTime != null and endTime !=''">
+                AND dt.auditTime <![CDATA[ <= ]]> #{endTime}
+            </if>
+            <if test="loginName != null and loginName !='' ">
+                AND mbr.loginName = #{loginName}
+            </if>
+            <if test="groupId != null">
+                AND mg.id = #{groupId}
+            </if>
+            <if test="referrer != null and referrer !=''">
+                and dt.accountId in (SELECT childNodeId FROM mbr_tree tr, mbr_account t WHERE tr.parentId = t.id and t.loginName=#{referrer} AND depth = 1)
+            </if>
+    </sql>
+
+    <resultMap id="refferListMap" type="com.wsdy.saasops.modules.operate.entity.RebateInfo">
+        <id column="id" property="id"/>
+        <result column="accountId" property="accountId"/>
+        <result column="loginName" property="loginName"/>
+        <result column="tagencyId" property="tagencyId"/>
+        <result column="groupName" property="groupName"/>
+        <result column="referrer" property="referrer"/>
+        <result column="totalResult" property="totalResult"/>
+        <result column="contributeAmount" property="contributeAmount"/>
+        <result column="startday" property="startday"/>
+        <result column="createTime" property="createTime"/>
+        <result column="catIds" property="catIds"/>
+        <result column="catId" property="catId"/>
+        <result column="validbets" property="validbets"/>
+        <result column="validbet" property="validbet"/>
+        <result column="depth" property="depth"/>
+
+        <collection property="rebateCatList" ofType="com.wsdy.saasops.modules.operate.entity.RebateCat">
+            <id column="id" property="id"/>
+            <result column="catId" property="catId"/>
+            <result column="validbet" property="validBet"/>
+        </collection>
+    </resultMap>
+
+    <select id="refferList" resultMap="refferListMap" parameterType="com.wsdy.saasops.modules.operate.entity.RebateInfo">
+
+        select loginName,accountId,groupName,referrer,tagencyId ,
+        GROUP_CONCAT(validbet) validbets,GROUP_CONCAT(catId) catIds,contributeAmount,depth, sum(totalResult) totalResult,
+        startday ,createTime
+        from(
+            select rbt.loginname ,rbt.accountid ,rbt.groupName,rbt.referrer ,rbt.tagencyId ,
+            sum(rpt.validbet) validbet,g.catid catId,rbt.contributeAmount,rbt.depth, sum(rpt.payout) totalResult,
+            rbt.startday ,rbt.createTime
+            from (
+                select mrr.subloginname loginName,mrr.subaccountid accountId,mg.groupName,mrr.loginname referrer,ma.tagencyId ,
+                sum(mrr.amount) contributeAmount,mrr.depth,
+                DATE_FORMAT(DATE_SUB(mrr.reportTime,INTERVAL 1 day), '%Y-%m-%d') startday ,mrr.reportTime createTime
+                from mbr_rebate_report_new mrr
+                LEFT JOIN mbr_account ma on ma.id = mrr.subaccountid
+                left join mbr_group mg on ma.groupid = mg.id
+                <include refid="reffer_rebate_where"/>
+                GROUP BY mrr.subaccountid
+            ) rbt
+            LEFT JOIN  rpt_bet_rcd_day rpt on rpt.username = rbt.loginName
+            left JOIN t_gm_game g ON (rpt.gametype = g.gameCode or rpt.gametype = g.mbGameCode
+            or rpt.gametype = g.adGameCode or rpt.gametype = g.downGameCode
+            or rpt.gametype = g.embeddedCode or rpt.gametype = g.embeddedCode1) and  rpt.platform = g.depotName
+            <include refid="totalResult_where"/>
+            GROUP BY loginname,g.catid
+        ) t
+        GROUP BY loginname
+        ORDER BY depth
+    </select>
+
+    <select id="refferListEgSanGong" parameterType="com.wsdy.saasops.modules.operate.entity.RebateInfo"
+            resultMap="refferListMap" >
+        select loginName,accountId,groupName,referrer,tagencyId ,validbet,
+                GROUP_CONCAT(validbet) validbets,catId,GROUP_CONCAT(catId) catIds,contributeAmount,depth,
+                startday ,createTime
+        from(
+            select rbt.*
+            from (
+                select mrr.subloginname loginName,mrr.subaccountid accountId,mg.groupName, mrr.depth,ma.tagencyId ,mrr.catid,
+                             mrr.loginname referrer,
+                             sum(mrr.amount) contributeAmount,
+                            sum(mrr.validbet) validbet,
+                                DATE_FORMAT(mrr.reportTime, '%Y-%m-%d') startday ,mrr.reportTime createTime
+                from mbr_rebate_report_new mrr
+                LEFT JOIN mbr_account ma on ma.id = mrr.subaccountid
+                left join mbr_group mg on ma.groupid = mg.id
+                <include refid="reffer_rebate_where_egSanGong"/>
+                GROUP BY mrr.subaccountid
+            ) rbt
+            GROUP BY loginname,rbt.catid
+        )t
+        group by loginname
+        order by depth
+    </select>
+
+    <sql id="reffer_rebate_where">
+        <where>
+            <if test="startTime != null and startTime !=''">
+                AND str_to_date(mrr.reportTime, '%Y-%m-%d') <![CDATA[ >= ]]> str_to_date(#{startTime}, '%Y-%m-%d')
+            </if>
+            <if test="endTime != null and endTime !=''">
+                AND str_to_date(mrr.reportTime, '%Y-%m-%d') <![CDATA[ <= ]]> str_to_date(#{endTime}, '%Y-%m-%d')
+            </if>
+            <if test="loginName != null and loginName !='' ">
+                AND ma.loginName = #{loginName}
+            </if>
+            <if test="groupId != null">
+                AND mg.id = #{groupId}
+            </if>
+            <if test="referrer != null and referrer !='' ">
+                AND mrr.loginName = #{referrer}
+            </if>
+        </where>
+    </sql>
+    <sql id="reffer_rebate_where_egSanGong">
+        <where>
+            mrr.auditid = #{auditId}
+            <if test="startTime != null and startTime !=''">
+                AND str_to_date(mrr.reportTime, '%Y-%m-%d') <![CDATA[ >= ]]> str_to_date(#{startTime}, '%Y-%m-%d')
+            </if>
+            <if test="endTime != null and endTime !=''">
+                AND str_to_date(mrr.reportTime, '%Y-%m-%d') <![CDATA[ <= ]]> str_to_date(#{endTime}, '%Y-%m-%d')
+            </if>
+            <if test="loginName != null and loginName !='' ">
+                AND ma.loginName = #{loginName}
+            </if>
+            <if test="groupId != null">
+                AND mg.id = #{groupId}
+            </if>
+            <if test="referrer != null and referrer !='' ">
+                AND mrr.loginName = #{referrer}
+            </if>
+        </where>
+    </sql>
+
+    <sql id="totalResult_where">
+        <where>
+            <if test="startTime != null and startTime !=''">
+                AND rpt.startday <![CDATA[ >= ]]> DATE_SUB(str_to_date(#{startTime}, '%Y-%m-%d'), interval 1 day)
+            </if>
+            <if test="endTime != null and endTime !=''">
+                AND rpt.startday <![CDATA[ <= ]]> DATE_SUB(str_to_date(#{endTime}, '%Y-%m-%d'), interval 1 day)
+            </if>
+        </where>
+    </sql>
+
+    <select id="findTotalAmount" parameterType="com.wsdy.saasops.modules.operate.entity.RebateInfo" resultType="java.math.BigDecimal">
+        select sum(dt.amount) rebateAmount
+        from fund_audit dt
+        left join mbr_account mbr on dt.accountId = mbr.id
+        left join mbr_group mg on mbr.groupId = mg.id
+        <include refid="rebate_where"/>
+    </select>
+
+    <select id="findCatValidbetList" resultType="com.wsdy.saasops.modules.operate.entity.RebateCat" parameterType="com.wsdy.saasops.modules.operate.entity.RebateInfo">
+
+        select sum(rpt.validbet) validbet,g.catid catId
+        from (
+        select mrr.subloginname loginName
+        from mbr_rebate_report_new mrr
+        LEFT JOIN mbr_account ma on ma.id = mrr.subaccountid
+        left join mbr_group mg on ma.groupid = mg.id
+        <include refid="reffer_rebate_where"/>
+        GROUP BY mrr.subaccountid
+        ) rbt
+        LEFT JOIN rpt_bet_rcd_day rpt on rpt.username = rbt.loginName
+        left JOIN t_gm_game g ON (rpt.gametype = g.gameCode or rpt.gametype = g.mbGameCode
+        or rpt.gametype = g.adGameCode or rpt.gametype = g.downGameCode
+        or rpt.gametype = g.embeddedCode or rpt.gametype = g.embeddedCode1) and  rpt.platform = g.depotName
+        <include refid="totalResult_where"/>
+        GROUP BY g.catid
+    </select>
+
+</mapper>

@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.system.pay.dao.SysQrCodeMapper">
+
+    <select id="queryList" resultType="com.wsdy.saasops.modules.system.pay.entity.SysQrCode"
+            parameterType="com.wsdy.saasops.modules.system.pay.entity.SysQrCode">
+        SELECT sq.*,group_concat(bb.bankname SEPARATOR '/') as bankNamesStr FROM set_basic_sys_qrcode sq
+        INNER JOIN set_basic_qrcode_bank qb on sq.id = qb.qrcodeid
+        INNER JOIN t_bs_bank bb on qb.bankid = bb.id
+        WHERE sq.isdelete = #{isDelete}
+        GROUP BY sq.id
+        ORDER BY
+        <choose>
+            <when test="'1'.toString() == sortItem">
+                sq.id
+            </when>
+            <when test="'4'.toString() == sortItem">
+                sq.modifytime
+            </when>
+            <when test="'3'.toString() == sortItem">
+                sq.dayMaxAmout
+            </when>
+            <when test="'5'.toString() == sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        sq.available ASC,
+                        sq.createTime ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        sq.available DESC,
+                        sq.createTime DESC
+                    </when>
+                </choose>
+            </when>
+            <otherwise>
+                sq.id
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="'5'.toString() != sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        DESC
+                    </when>
+                    <otherwise>
+                        DESC
+                    </otherwise>
+                </choose>
+            </when>
+        </choose>
+    </select>
+
+    <insert id="batchInsertQrCodeBank">
+        insert into set_basic_qrcode_bank (qrcodeid,bankid) VALUES
+        <foreach collection="qrCodeBanks" item="item" index="index" separator="," >
+            (#{item.qrCodeId}, #{item.bankId})
+        </foreach>
+    </insert>
+    <delete id="deleteQrCodeBank">
+        delete from set_basic_qrcode_bank where qrcodeid = #{qrCodeId}
+    </delete>
+    <insert id="batchInsertQrCodeGroup">
+        insert into set_basic_qrcode_group (qrcodeid,groupid) VALUES
+        <foreach collection="qrCodeGroups" item="item" index="index" separator="," >
+            (#{item.qrCodeId}, #{item.groupId})
+        </foreach>
+    </insert>
+    <delete id="deleteQrCodeGroup" parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBasicQrCodeGroup">
+        delete from set_basic_qrcode_group
+        <where>
+            <if test="qrCodeId != null">
+                qrcodeid = #{qrCodeId}
+            </if>
+            <if test="groupId != null">
+                groupid = #{groupId}
+            </if>
+        </where>
+    </delete>
+
+    <select id="getQrCodeGroupIsQueue" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicQrCodeGroup">
+        select sbp.groupid,sbp.isqueue from set_basic_qrcode_group sbp
+        INNER JOIN set_basic_sys_qrcode sq on sbp.qrcodeid = sq.id
+        group by sbp.groupid
+    </select>
+
+    <select id="findQrCodeList" resultType="com.wsdy.saasops.modules.system.pay.entity.SysQrCode">
+        select 
+	        sq.id,sq.name,sq.showname,sq.minamout,sq.maxamout,sq.amounttype,
+	        sq.fixedamount,group_concat(bb.bankname SEPARATOR '/') as bankNamesStr,
+	        t.paymenttype,t.banklogo,t.ewmlogo,t.disablelogo ,sbp.isqueue, sq.isHot, sq.isRecommend
+        FROM set_basic_qrcode_group sbp
+	        INNER JOIN set_basic_sys_qrcode sq on sbp.qrcodeid = sq.id
+	        INNER JOIN set_basic_qrcode_bank qb on sq.id = qb.qrcodeid
+	        INNER JOIN t_bs_bank bb on qb.bankid = bb.id
+	        INNER JOIN (select * from t_pay_logo where paymenttype = 12) t
+        WHERE sbp.groupid = #{groupId}
+        AND sq.available = 1
+        AND sq.isdelete = 0
+        GROUP BY sq.id
+        ORDER BY sbp.sort asc,sq.id desc
+    </select>
+
+    <select id="findBankList" resultType="com.wsdy.saasops.modules.base.entity.BaseBank">
+        select b.* from t_bs_bank b
+        INNER JOIN set_basic_qrcode_bank sqb on sqb.bankid = b.id
+        INNER JOIN set_basic_sys_qrcode sq on sqb.qrcodeid = sq.id
+        WHERE sq.id = #{qrCodeId}
+        and sq.available = 1
+        and sq.isdelete = 0
+    </select>
+
+    <select id="getQrCodeGroup" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicQrCodeGroup">
+        SELECT sbp.* FROM set_basic_qrcode_group sbp
+        INNER JOIN set_basic_sys_qrcode sq on sbp.qrcodeid = sq.id
+        <where>
+            <if test="qrCodeId != null">
+                qrcodeid = #{qrCodeId}
+            </if>
+            <if test="groupId != null">
+                groupid = #{groupId}
+            </if>
+        </where>
+    </select>
+
+    <select id="findQrCodeListWithSelected" resultType="com.wsdy.saasops.modules.system.pay.entity.SysQrCode"
+        parameterType="com.wsdy.saasops.modules.system.pay.entity.SysQrCode">
+        SELECT sq.*,IF(qg.groupid is null,0,1) as selected,qg.isqueue,qg.sort FROM set_basic_sys_qrcode sq
+        LEFT JOIN (select * from set_basic_qrcode_group where groupid = #{groupId}) qg on sq.id = qg.qrcodeid
+        where
+            sq.available = 1
+            and sq.isdelete = 0
+    </select>
+
+    <select id="findGroupById" resultType="com.wsdy.saasops.modules.member.entity.MbrGroup">
+        SELECT gp.* FROM set_basic_qrcode_group qg
+        INNER JOIN mbr_group gp ON qg.groupId = gp.id
+        WHERE qg.qrcodeid = #{qrCodeId}
+    </select>
+
+</mapper>

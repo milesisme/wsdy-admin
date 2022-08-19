@@ -1,0 +1,1089 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.mapper.MbrMapper">
+
+    <select id="queryMbrList"
+            resultType="java.util.Map"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+    >
+        SELECT mbr.id,mbr.loginname loginName,mbr.cagencyid cagencyId,mbr.tagencyid tagencyId,mbr.groupid groupId
+        FROM mbr_account mbr
+        <include refid="mbr_where"/>
+    </select>
+
+    <sql id="mbr_where">
+        <where>
+            <if test="loginName != null and loginName != ''">
+                AND mbr.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="groupIds!=null">
+                AND mbr.groupId in
+                <foreach collection="groupIds" item="groupId" open="(" close=")" separator=",">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="tagencyIds!=null">
+                AND mbr.tagencyId in
+                <foreach collection="tagencyIds" item="tagencyId" open="(" close=")" separator=",">
+                    #{tagencyId}
+                </foreach>
+            </if>
+            <if test="cagencyIds!=null">
+                AND mbr.cagencyId in
+                <foreach collection="cagencyIds" item="cagencyId" open="(" close=")" separator=",">
+                    #{cagencyId}
+                </foreach>
+            </if>
+        </where>
+    </sql>
+
+    <select id="findMbrAccount" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT acc.*, reg.registersource
+        FROM mbr_account acc
+        LEFT JOIN log_mbrregister reg on acc.id = reg.accountid
+        WHERE acc.id =#{accountId}
+        <if test="registerStartTime != null and registerStartTime != ''">
+            AND acc.registerTime <![CDATA[ >= ]]> #{registerStartTime}
+        </if>
+        <if test="registerStartEnd != null and registerStartEnd != ''">
+            AND acc.registerTime <![CDATA[ <= ]]> #{registerStartEnd}
+        </if>
+        LIMIT 1
+    </select>
+
+    <select id="findAccountContact" resultType="java.lang.String">
+		SELECT GROUP_CONCAT(m.perms) FROM sys_user_role ur
+		LEFT JOIN sys_role_menu rm ON ur.role_id = rm.role_id
+		LEFT JOIN sys_menu m ON rm.menu_id = m.menu_id
+		WHERE ur.user_id =#{userId} AND m.perms like CONCAT('%',#{perms}, '%')
+	</select>
+
+    <select id="findUserMenuId" resultType="java.lang.Integer">
+		SELECT COUNT(*) FROM sys_user_role ur
+		LEFT JOIN sys_role_menu rm ON ur.role_id = rm.role_id
+		LEFT JOIN sys_menu m ON rm.menu_id = m.menu_id
+		WHERE ur.user_id =#{userId} AND rm.menu_id=#{menuId}
+	</select>
+
+    <update id="updateBankCardNameByAccId">
+		update mbr_bankcard set realName=#{realName} where accountId=#{accountId}
+	</update>
+
+    <select id="findAccountMenuByRoleId" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		SELECT * FROM sys_menu where menu_id in (SELECT menu_id FROM sys_role_menu where role_id=#{roleId}) AND type = 1
+	</select>
+
+    <select id="findCollectList" resultType="com.wsdy.saasops.modules.member.entity.MbrCollect">
+		SELECT ct.*,su.name,su.url FROM mbr_collect ct LEFT JOIN sys_menu su ON ct.menuId=su.menu_id
+		WHERE ct.userId = #{userId}  AND ct.menuId in (SELECT menu_id FROM sys_role_menu where role_id=#{roleId})
+	</select>
+    <select id="findFreeWalletSwitchStatus" resultType="java.lang.Integer">
+		select IFNULL(ma.freeWalletSwitch,0) from mbr_account ma where ma.id=#{accountId}
+	</select>
+
+    <insert id="addMbrNode">
+        CALL addMbrNode(#{parentId},#{childNodeId})
+    </insert>
+
+    <update id="updatePromotion">
+        UPDATE mbr_promotion SET `isClick` = 1
+    </update>
+
+    <select id="findPromotionCountByAccountId" resultType="java.lang.Integer">
+        SELECT count(*) FROM mbr_tree WHERE parentId=#{accountId} AND depth = 1
+    </select>
+
+    <select id="findsubAccountParentid" resultType="java.lang.Integer">
+        SELECT parentid FROM mbr_tree WHERE childnodeid=#{childnodeid} AND depth = 1
+    </select>
+    
+    <select id="getSubAccountId" resultType="java.lang.Integer">
+        SELECT
+            ma2.id
+        FROM
+            mbr_account ma
+            INNER JOIN mbr_tree mt ON ma.id = mt.parentid
+            INNER JOIN mbr_account ma2 ON ma2.id = mt.childnodeid
+        WHERE
+            ma.id = #{accountId}
+            AND mt.depth = 1
+            AND ma2.loginname = #{subLoginName}
+    </select>
+
+    <update id="updateSubCagency">
+        UPDATE mbr_account SET subcagencyid=null WHERE id = #{id}
+    </update>
+
+    <delete id="deleteMbrTreeAccountId">
+        delete FROM mbr_tree WHERE childnodeid=#{childnodeid}
+    </delete>
+
+    <select id="findRebateReportList" resultType="com.wsdy.saasops.modules.member.entity.MbrRebateReport"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrRebateReportNew">
+        SELECT sum(IFNULL(amount,0)) rebateAmount,catId FROM mbr_rebate_report_new
+        WHERE accountId = #{accountId}
+        AND reportTime <![CDATA[ >= ]]> #{startTime}
+        AND reportTime <![CDATA[ <= ]]> #{endTime}
+        group by catId
+    </select>
+
+    <select id="rebateContributeReport" resultType="com.wsdy.saasops.modules.member.entity.MbrRebateReport"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrRebateReportNew">
+        SELECT sum(IFNULL(amount,0)) rebateAmount,catId FROM mbr_rebate_report_new
+        WHERE subaccountid = #{subAccountId}
+        AND accountId = #{accountId}
+        AND reportTime <![CDATA[ >= ]]> #{startTime}
+        AND reportTime <![CDATA[ <= ]]> #{endTime}
+        group by catId
+    </select>
+
+    <select id="findAccountRebate" resultType="com.wsdy.saasops.modules.member.entity.MbrRebate">
+        SELECT t.id accountId,t.loginName,r.* FROM mbr_account t
+        LEFT JOIN mbr_rebate r ON t.groupId = r.groupId
+        WHERE t.available=1 AND r.isCast =1
+        <if test="startday != null and startday != ''">
+            AND EXISTS (
+                SELECT d.username FROM rpt_bet_rcd_day d
+                WHERE t.loginName=d.username AND d.startday = #{startday}
+            )
+        </if>
+    </select>
+
+    <select id="getRebateMbrList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select distinct ma.id,ma.loginname from mbr_account ma
+        inner join mbr_activity_level ml on ma.actlevelid = ml.id
+        inner join mbr_tree mt on mt.parentid = ma.id
+        inner join mbr_account ma1 on ma1.id = mt.childnodeid
+        inner join rpt_bet_rcd_day rbrd on ma1.loginname = rbrd.username
+        where mt.depth between #{lowDepth} and #{highDepth}
+        and rbrd.startday =#{startDay}
+        and ml.accountlevel = #{accountLevel}
+
+    </select>
+
+
+    <select id="getSubMbrRptRebateList" resultType="com.wsdy.saasops.modules.member.entity.MbrRebateReportNew">
+        SELECT IFNULL(sum(validbet),0) validbet,g.catId,rpt.username subLoginName,ma.id subAccountId,mt.depth
+        FROM rpt_bet_rcd_day rpt
+        INNER JOIN mbr_account ma on ma.loginname = rpt.username
+        INNER JOIN mbr_tree mt on mt.childnodeid = ma.id
+		INNER JOIN t_gm_game g ON (rpt.gametype = g.gameCode or rpt.gametype = g.mbGameCode
+          or rpt.gametype = g.adGameCode or rpt.gametype = g.downGameCode
+          or rpt.gametype = g.embeddedCode or rpt.gametype = g.embeddedCode1) and  rpt.platform = g.depotName
+        WHERE rpt.startday =#{startDay} and mt.parentid = #{supAccountId}
+        and mt.depth between #{lowDepth} and #{highDepth}
+        GROUP BY g.catId,rpt.username
+    </select>
+
+    <select id="findMbrMessageList" resultType="com.wsdy.saasops.modules.member.entity.MbrMessage"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrMessage">
+        SELECT m.id,m.accountid,m.loginname,m.isrevert,m.time lastTime,
+        g.groupName,IFNULL(info.textContent,'图') textContent, t.tagencyId,
+        info.createtime as time,info.id infoId
+        <if test="isRealName !=null and isRealName ==1">
+            ,t.realName
+        </if>
+        FROM (
+            select o.* from mbr_message_info o
+                <if test="textContent == null or textContent == ''">
+                    INNER JOIN (
+                        select max(id) id from mbr_message_info
+                        <where>
+                            <if test="msgType == 1">
+                                AND isSign in (0,1)
+                            </if>
+                            <if test="msgType == 2">
+                                AND isSign = 2
+                            </if>
+                        </where>
+                        group by messageId
+                    ) a on a.id = o.id
+                </if>
+        ) info
+        LEFT JOIN  mbr_message m ON info.messageId = m.id
+        LEFT JOIN mbr_account t ON m.accountId = t.id
+        LEFT JOIN mbr_group g ON t.groupId = g.id
+        <where>
+            <if test="accountId != null">
+                AND m.accountId =#{accountId}
+            </if>
+            <if test="groupId != null">
+                AND t.groupId =#{groupId}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND m.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="textContent != null and textContent != ''">
+                AND info.textContent LIKE CONCAT('%',#{textContent}, '%')
+            </if>
+            <if test="isRevert != null">
+                AND m.isRevert =#{isRevert}
+            </if>
+            <if test="msgType == 1">
+                AND info.isSign in (0,1)
+            </if>
+            <if test="msgType == 2">
+                AND info.isSign = 2
+            </if>
+        </where>
+        ORDER BY info.createtime DESC
+    </select>
+
+    <select id="findMbrListByName" resultType="com.wsdy.saasops.modules.member.entity.MbrMessage" parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        select t.id as accountId, t.loginName, age.id as id, IFNULL(age.isRevert,1) as isRevert
+        from mbr_account t
+        left join mbr_message age on t.id = age.accountId
+        <where>
+            (t.available = 1 or t.available = 2)  and t.islock = 0
+            <if test="loginNameList!=null">
+                AND t.loginName in
+                <foreach collection="loginNameList" item="loginName" open="(" close=")" separator=",">
+                    #{loginName}
+                </foreach>
+            </if>
+            <if test="agyList!=null">
+                AND t.cagencyId in
+                <foreach collection="agyList" item="agyId" open="(" close=")" separator=",">
+                    #{agyId}
+                </foreach>
+            </if>
+            <if test="groupList!=null">
+                AND t.groupId in
+                <foreach collection="groupList" item="groupId" open="(" close=")" separator=",">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="messageId != null">
+                AND age.id = #{messageId}
+            </if>
+        </where>
+    </select>
+
+    <select id="findMbrListByNameAll" resultType="com.wsdy.saasops.modules.member.entity.MbrMessage" parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        select t.id as accountId, t.loginName, age.id as id, IFNULL(age.isRevert,1) as isRevert
+        from mbr_account t
+        left join mbr_message age on t.id = age.accountId
+        <where>
+            t.islock = 0
+            <if test="loginNameList!=null">
+                AND t.loginName in
+                <foreach collection="loginNameList" item="loginName" open="(" close=")" separator=",">
+                    #{loginName}
+                </foreach>
+            </if>
+            <if test="agyList!=null">
+                AND t.cagencyId in
+                <foreach collection="agyList" item="agyId" open="(" close=")" separator=",">
+                    #{agyId}
+                </foreach>
+            </if>
+            <if test="groupList!=null">
+                AND t.groupId in
+                <foreach collection="groupList" item="groupId" open="(" close=")" separator=",">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="messageId != null">
+                AND age.id = #{messageId}
+            </if>
+        </where>
+    </select>
+    <select id="findPushMbrListByName" resultType="com.wsdy.saasops.modules.member.entity.MbrMessage" parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        select t.id as accountId, t.loginName, age.id as id, IFNULL(age.isRevert,1) as isRevert
+        from mbr_account t
+        left join mbr_message age on t.id = age.accountId
+        <where>
+            (t.available = 1 or t.available = 2) and t.islock = 0
+            and t.id in(
+                select DISTINCT(accountid) from mbr_account_device where devicetype in ('android','ios')
+            )
+            <if test="loginNameList!=null">
+                AND t.loginName in
+                <foreach collection="loginNameList" item="loginName" open="(" close=")" separator=",">
+                    #{loginName}
+                </foreach>
+            </if>
+            <if test="agyList!=null">
+                AND t.cagencyId in
+                <foreach collection="agyList" item="agyId" open="(" close=")" separator=",">
+                    #{agyId}
+                </foreach>
+            </if>
+            <if test="groupList!=null">
+                AND t.groupId in
+                <foreach collection="groupList" item="groupId" open="(" close=")" separator=",">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="messageId != null">
+                AND age.id = #{messageId}
+            </if>
+        </where>
+    </select>
+
+    <select id="findMbrList" resultType="java.lang.String"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        select t.loginName
+        from mbr_account t
+        <where>
+            t.available = 1 and islock = 0
+            <if test="loginNameList!=null">
+                AND t.loginName in
+                <foreach collection="loginNameList" item="loginName" open="(" close=")" separator=",">
+                    #{loginName}
+                </foreach>
+            </if>
+            <if test="groupList!=null">
+                AND t.groupId in
+                <foreach collection="groupList" item="groupId" open="(" close=")" separator=",">
+                    #{groupId}
+                </foreach>
+            </if>
+        </where>
+    </select>
+
+    <select id="findMessageCountByAccountId" resultType="java.lang.Integer">
+        select count(1)
+        from mbr_message_info t, mbr_message m
+        where t.messageId = m.id and m.accountId = #{accountId} and t.isRead = #{isRead}
+        and (t.expirationtime is null or t.expirationtime <![CDATA[ >= ]]> NOW())
+        <if test="msgType == 1">
+            AND isSign in (0,1)
+        </if>
+        <if test="msgType == 2">
+            AND isSign = 2
+        </if>
+        <if test="createTime!=null">
+            AND t.createTime <![CDATA[ >= ]]> #{createTime}
+        </if>
+    </select>
+
+    <select id="getAccountMaxId" resultType="java.lang.Integer">
+        select MAX(id) from mbr_account t
+    </select>
+
+    <update id="updateMessageList" parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        update mbr_message_info set isRead = #{isRead}
+        where messageId = #{messageId}
+        <if test="msgType == 1">
+            AND isSign in (0,1)
+        </if>
+        <if test="msgType == 2">
+            AND isSign = 2
+        </if>
+    </update>
+
+    <select id="getTagencyIdByName" parameterType="java.lang.String" resultType="java.lang.Integer">
+        select t.tagencyId from mbr_account t where t.loginName = #{loginName}
+    </select>
+
+    <!-- 2019.5.14-->
+    <sql id="select_where">
+        <where>
+            loginName in
+            <foreach collection="loginNames" open="(" close=")" separator="," item="loginName">
+                #{loginName}
+            </foreach>
+        </where>
+    </sql>
+
+    <select id="getTagencyIdByNames" parameterType="java.util.Map" resultType="java.util.Map">
+        select t.loginName as loginName,t.tagencyId as tagencyId,m.agyaccount
+        from mbr_account t
+        LEFT JOIN agy_account m ON m.id =t.cagencyid
+        <include refid="select_where"/>
+    </select>
+
+    <select id="getTagencyNameByName" parameterType="java.lang.String" resultType="java.lang.String">
+        select GROUP_CONCAT(agy.agyAccount) from mbr_account t, agy_account agy where (t.cagencyId = agy.id or t.tagencyId = agy.id) and t.loginName = #{loginName}
+    </select>
+
+
+    <select id="messageCountByIsRevert" parameterType="com.wsdy.saasops.modules.member.entity.MbrMessage"
+            resultType="com.wsdy.saasops.modules.fund.dto.CountEntity">
+        SELECT m.isRevert conditions,count(m.isRevert) counts
+            FROM mbr_message m
+            LEFT JOIN mbr_account t ON m.accountId = t.id
+        <where>
+            <if test="accountId != null">
+                AND m.accountId =#{accountId}
+            </if>
+            <if test="groupId != null">
+                AND t.groupId =#{groupId}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND m.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="isRevert != null">
+                AND m.isRevert =#{isRevert}
+            </if>
+        </where>
+        group by m.isRevert
+    </select>
+
+    <select id="findActivityLevelList" resultType="com.wsdy.saasops.modules.member.entity.MbrActivityLevel">
+        SELECT al.*,a.accountCount,ak.accountLockCount FROM mbr_activity_level al
+        LEFT JOIN (SELECT count(*) accountCount,actLevelId FROM mbr_account GROUP BY actLevelId) a ON a.actLevelId = al.id
+        LEFT JOIN (SELECT count(*) accountLockCount,actLevelId FROM mbr_account WHERE isActivityLock = 1  GROUP BY actLevelId) ak
+        ON ak.actLevelId = al.id ORDER BY accountLevel
+    </select>
+
+    <select id="findAccountAndValidbetList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT DISTINCT t.* FROM mbr_account t INNER JOIN rpt_bet_rcd_day dy ON t.loginName = dy.username
+        WHERE dy.startday <![CDATA[ >= ]]> #{startTime} AND dy.startday <![CDATA[ <= ]]> #{endTime}
+    </select>
+
+    <select id="findAccountAndLevelList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT DISTINCT t.*,IFNULL(l.accountLevel,0) accountLevel,l.tiername FROM mbr_account t
+        LEFT JOIN mbr_activity_level l on t.actLevelId = l.id
+        WHERE t.isActivityLock = 0 and date_sub(curdate(), interval 30 day) <![CDATA[ <= ]]> date(t.loginTime)
+    </select>
+
+    <select id="findMbrLevelAndAgyInfoById" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT DISTINCT ma.id,ma.groupid,ma.cagencyid,ma.logintime,ma.logintime,ma.realname,ma.registertime,ma.tagencyid,
+        IFNULL(l.accountLevel,0) accountLevel,l.tiername,aa.agyaccount FROM mbr_account ma
+        LEFT JOIN mbr_activity_level l on ma.actLevelId = l.id
+        LEFT JOIN agy_account aa on ma.cagencyid = aa.id
+        WHERE ma.id = #{accountId}
+    </select>
+
+    <select id="findMbrLevelAndAgyInfoByIds" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT DISTINCT ma.id,ma.groupid,ma.cagencyid,ma.logintime,ma.logintime,ma.realname,ma.registertime,ma.tagencyid,
+                        IFNULL(l.accountLevel,0) accountLevel,l.tiername,aa.agyaccount, ma.loginname
+        FROM mbr_account ma
+        LEFT JOIN mbr_activity_level l on ma.actLevelId = l.id
+        LEFT JOIN agy_account aa on ma.cagencyid = aa.id
+        <where>
+            <if test="accountIds != null and accountIds.size()>0">
+                and ma.id in
+                <foreach collection="accountIds" item="accountId" open="(" close=")" separator=",">
+                    #{accountId}
+                </foreach>
+            </if>
+        </where>
+    </select>
+
+    <select id="findAccountByActLevelLock" resultType="java.util.Map">
+        SELECT DISTINCT t.id,t.loginname loginName,IFNULL(l.accountLevel,0) accountLevel FROM mbr_account t
+        LEFT JOIN mbr_activity_level l on t.actLevelId = l.id
+        WHERE t.isActivityLock = #{isLevelLock}
+    </select>
+
+    <update id="batchUpdateMbrActLevel">
+        UPDATE mbr_account mbr set mbr.actLevelId = #{newLevel}
+        <where>
+            mbr.isActivityLock = 0
+            <if test="oldLevels != null and oldLevels.size()>0">
+                and mbr.actlevelid in
+                <foreach collection="oldLevels" item="oldLevel" open="(" close=")" separator=",">
+                    #{oldLevel}
+                </foreach>
+            </if>
+            <if test="accountIds != null and accountIds.size()>0">
+                and mbr.id in
+                <foreach collection="accountIds" item="accountId" open="(" close=")" separator=",">
+                    #{accountId}
+                </foreach>
+            </if>
+        </where>
+
+    </update>
+
+    <update id="batchUpdateMbrActLevelContainLock">
+        UPDATE mbr_account mbr set mbr.actLevelId = #{newLevel}
+        <where>
+            1=1
+            <if test="oldLevels != null and oldLevels.size()>0">
+                and mbr.actlevelid in
+                <foreach collection="oldLevels" item="oldLevel" open="(" close=")" separator=",">
+                    #{oldLevel}
+                </foreach>
+            </if>
+            <if test="accountIds != null and accountIds.size()>0">
+                and mbr.id in
+                <foreach collection="accountIds" item="accountId" open="(" close=")" separator=",">
+                    #{accountId}
+                </foreach>
+            </if>
+        </where>
+
+    </update>
+
+    <select id="findAccountByLevelIds" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from mbr_account mbr
+        LEFT JOIN mbr_activity_level lv on mbr.actlevelid = lv.id
+        <where>
+            mbr.isActivityLock = 0
+            <if test="oldLevels != null and oldLevels.size()>0">
+                and mbr.actlevelid in
+                <foreach collection="oldLevels" item="oldLevel" open="(" close=")" separator=",">
+                    #{oldLevel}
+                </foreach>
+            </if>
+        </where>
+    </select>
+
+    <select id="findAccountByAccIds" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from mbr_account mbr
+        LEFT JOIN mbr_activity_level lv on mbr.actlevelid = lv.id
+        <where>
+            mbr.isActivityLock = 0
+            <if test="accountIds != null and accountIds.size()>0">
+                and mbr.id in
+                <foreach collection="accountIds" item="accountId" open="(" close=")" separator=",">
+                    #{accountId}
+                </foreach>
+            </if>
+        </where>
+    </select>
+    <select id="findAccountByAccIdsContainLock" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from mbr_account mbr
+        LEFT JOIN mbr_activity_level lv on mbr.actlevelid = lv.id
+        <where>
+            1=1
+            <if test="accountIds != null and accountIds.size()>0">
+                and mbr.id in
+                <foreach collection="accountIds" item="accountId" open="(" close=")" separator=",">
+                    #{accountId}
+                </foreach>
+            </if>
+        </where>
+    </select>
+
+    <select id="getMbrListByLoginNames" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from mbr_account
+        where  loginname in
+        <foreach collection="loginNames" open="(" close=")" separator="," item="loginName">
+            #{loginName}
+        </foreach>
+        order by id
+    </select>
+
+    <select id="getMbrByLoginName" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from mbr_account
+        where loginname is not null AND loginname = #{loginName} limit 1
+    </select>
+
+    <select id="getRegisterListByLoginNames" resultType="com.wsdy.saasops.modules.log.entity.LogMbrRegister">
+        select * from log_mbrregister
+        where  loginname in
+        <foreach collection="loginNames" open="(" close=")" separator="," item="loginName">
+            #{loginName}
+        </foreach>
+        order by accountId
+    </select>
+    <insert id="addMbrNodeEx">
+        INSERT INTO mbr_tree ( parentid, childnodeid, depth ) VALUES ( #{parentId},#{childNodeId}, 0 );
+    </insert>
+    <select id="getBandcardListByLoginNames" resultType="com.wsdy.saasops.modules.member.entity.MbrBankcard">
+        select * from mbr_bankcard
+        where accountid in(
+            select id from mbr_account
+            where  loginname in
+            <foreach collection="loginNames" open="(" close=")" separator="," item="loginName">
+                #{loginName}
+            </foreach>
+            order by id
+        )
+        and isdel = 0
+        order by accountid
+    </select>
+
+    <select id="accountMobileList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccountMobile">
+        select * from mbr_account_mobile
+        where accountid =#{accountId}
+        ORDER BY createtime desc
+    </select>
+
+    <select id="queryLastOneByAccount" resultType="com.wsdy.saasops.modules.member.entity.MbrAccountMobile">
+        select * from mbr_account_mobile
+        where accountid =#{accountId}
+          and updatetime is NULL
+        order by id desc
+            LIMIT 1
+    </select>
+
+    <select id="queryByAccountAndUpdateIsNull" resultType="com.wsdy.saasops.modules.member.entity.MbrAccountMobile">
+        select * from mbr_account_mobile
+        where accountid =#{accountId}
+          and mobile=#{mobile}
+          and updatetime is NULL
+
+        order by id desc
+            LIMIT 1
+    </select>
+
+    <select id="getIpAccNum" resultType="java.lang.Integer">
+        select  count(1) from log_mbrregister where registerip=#{ip}
+    </select>
+
+
+    <select id="getRealNameNum" resultType="java.lang.Integer">
+        select  count(1) from mbr_account where realname=#{realName}
+    </select>
+
+    <select id="getDeviceByAccountIds" resultType="com.wsdy.saasops.modules.member.entity.MbrAccountDevice">
+        select b.accountid, b.deviceuuid,min(createtime) createtime from mbr_account_device b
+        where b.accountid in
+        <foreach collection="accountIds" open="(" close=")" separator="," item="accountId">
+            #{accountId}
+        </foreach>
+        GROUP BY  b.accountid
+    </select>
+    <select id="getAccountIdsByDevice" resultType="java.lang.String">
+        select DISTINCT accountid from mbr_account_device where deviceuuid = #{device}
+    </select>
+    
+    <select id="selectAccountIdsForGroupJob" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+   		SELECT t.accountid id,t.loginname FROM(
+			SELECT 
+				final.accountid,
+				final.totalProfit companyWinLoseTotal,
+				final.groupid,
+				IFNULL(final.validbetTotal, 0) validbetTotal,
+				IFNULL(SUM(dep.depositAmount), 0) depositAmountTotal,
+				COUNT(dep.id) depositAmountTimes,
+				final.loginname
+			FROM ( 
+				SELECT parm.accountid,
+					   (IF(SIGN(IFNULL(SUM(parm.payout),0))=-1, ABS(IFNULL(SUM(parm.payout),0)), -1*(IFNULL(SUM(parm.payout),0))
+						-IFNULL(SUM(bon.bonusAmount), 0) 
+						-IFNULL(SUM(rebate.rebateTotal), 0) 
+						-IFNULL(SUM(task.bonusamount), 0))
+						) totalProfit,
+						parm.groupid,
+						parm.validbetTotal,
+						parm.loginname
+				 FROM  (
+						SELECT
+							acc.id accountid,
+							acc.loginname,
+							SUM(bet.validbet) validbetTotal,
+							SUM(bet.payout) payout,
+							acc.groupid groupid 
+						FROM 
+							mbr_account acc 
+							LEFT JOIN rpt_bet_rcd_day bet ON bet.username = acc.loginname 
+							LEFT JOIN mbr_group grp ON grp.id = acc.groupid
+						WHERE grp.isLockUpgrade = 0 
+							<if test="queryRecent != null and queryRecent == true">
+								AND acc.logintime >= DATE_SUB(CURDATE(), INTERVAL 10 DAY)
+							</if>
+							AND acc.groupid != #{thisGroup.id}
+							AND acc.islock = 0 AND acc.depositlock = 0 AND acc.available = 1  
+							GROUP BY acc.id 
+						) parm
+							LEFT JOIN opr_act_bonus bon ON parm.accountid = bon.accountid AND bon.status = 1
+							LEFT JOIN task_bonus task ON task.accountid = parm.accountid  
+							LEFT JOIN mbr_rebate_agent_bonus rebate ON rebate.accountid = parm.accountid AND rebate.status = 1 
+							GROUP BY parm.accountid
+					) final
+				LEFT JOIN fund_deposit dep ON dep.accountid = final.accountid AND dep.`status` = 1 
+				GROUP BY final.accountid
+			) t
+		<where>
+			<if test="thisGroup.deposit != null and thisGroup.deposit > 0">
+				AND t.depositAmountTotal >= #{thisGroup.deposit}
+			</if>
+			<if test="thisGroup.validBet != null and thisGroup.validBet > 0">
+				AND t.validbetTotal >= #{thisGroup.validBet} 
+			</if>
+			<if test="thisGroup.depositTimes != null and thisGroup.depositTimes > 0">
+				AND t.depositAmountTimes >= #{thisGroup.depositTimes} 
+			</if>
+			<if test="thisGroup.companyWinLose != null and thisGroup.companyWinLose > 0">
+				AND t.companyWinLoseTotal &lt;= -1 * #{thisGroup.companyWinLose} 
+			</if>
+		
+			<if test="nextGroup != null">
+				AND ( 1 = 0
+					<if test="nextGroup.validBet != null and nextGroup.validBet > 0">
+						OR t.validbetTotal &lt;= #{nextGroup.validBet} 
+					</if>
+					<if test="nextGroup.depositTimes != null and nextGroup.depositTimes > 0">
+						OR t.depositAmountTimes &lt;= #{nextGroup.depositTimes} 
+					</if>
+					<if test="nextGroup.deposit != null and nextGroup.deposit > 0">
+						OR t.depositAmountTotal &lt;= #{nextGroup.deposit} 
+					</if>
+					<if test="nextGroup.companyWinLose != null and nextGroup.companyWinLose > 0">
+						OR t.companyWinLoseTotal >= -1 * #{nextGroup.companyWinLose} 
+					</if>
+				)
+			</if>
+		</where>
+   </select>
+    
+    <update id="updateManyGroupidForJob" >
+      UPDATE mbr_account  SET groupid =  #{groupId} where id in
+      	<foreach collection="ids" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+   	</update>
+
+    <select id="findFriendsRebateFirstCharge" resultType="com.wsdy.saasops.modules.member.dto.CalcRebateFirstChargeDto">
+        SELECT
+            ma.id as subAccountId,
+            ma.loginname as subLoginName,
+            fd.depositamount as firstCharge,
+            fd.audittime as firstChargeTime,
+            ma2.id as accountId,
+            ma2.loginname as loginName
+        FROM
+            fund_deposit fd
+            INNER JOIN mbr_account ma ON fd.accountid = ma.id
+            INNER JOIN mbr_tree mt ON mt.childnodeid = fd.accountid
+            INNER JOIN mbr_account ma2 ON ma2.id = mt.parentid
+        WHERE
+            TO_DAYS( DATE_FORMAT( #{calcDay}, '%Y-%m-%d %H:%i:%s' )) - TO_DAYS( fd.audittime )  =  0
+            AND fd.STATUS = 1
+            AND mt.depth = 1
+            AND ma.registertime <![CDATA[ >= ]]> DATE_FORMAT( #{actStartDay}, '%Y-%m-%d %H:%i:%s' )
+            AND ma.registertime <![CDATA[ <= ]]> DATE_FORMAT(  #{actEndDay}, '%Y-%m-%d %H:%i:%s' )
+            AND ( SELECT count(*) FROM fund_deposit fd2  WHERE  fd2.audittime  <![CDATA[ < ]]> fd.audittime AND fd2.accountid = fd.accountid AND fd2.STATUS =1)   =  0
+
+    </select>
+
+
+    <select id = "findFriendsRebateValidBet" resultType="com.wsdy.saasops.modules.member.dto.CalcRebateValidBetDto">
+        SELECT
+            IFNULL( sum( validbet ), 0 )  as validBet,
+            rpt.gamecategory,
+            rpt.username subLoginName,
+            ma.id subAccountId,
+            ma2.id as accountId,
+            ma2.loginname as loginName
+        FROM
+            rpt_bet_rcd_day rpt
+            INNER JOIN mbr_account ma ON ma.loginname = rpt.username
+            INNER JOIN mbr_tree mt ON mt.childnodeid = ma.id
+            INNER JOIN mbr_account ma2 ON mt.parentid = ma2.id
+
+        WHERE
+            mt.depth = 1
+            AND ma.registertime <![CDATA[ >= ]]> DATE_FORMAT( #{actStartDay}, '%Y-%m-%d %H:%i:%s' )
+            AND ma.registertime <![CDATA[ <= ]]> DATE_FORMAT( #{actEndDay}, '%Y-%m-%d %H:%i:%s' )
+            AND rpt.startday = #{calcDay}
+        GROUP BY
+            rpt.gamecategory,
+            rpt.username
+    </select>
+
+    <select id="findFriendsRebateUpgradeVip" resultType="com.wsdy.saasops.modules.member.dto.CalcRebateUpgradeVipDto">
+        SELECT
+            ml.content AS vipUpgradeInfo,
+            ma.id AS subAccountId,
+            ma.loginname AS subLoginName,
+            ma2.id AS accountId,
+            ma2.loginname AS loginName,
+            ml.modulename
+        FROM
+            mbr_account_log ml
+            INNER JOIN mbr_account ma ON ml.accountid = ma.id
+            INNER JOIN mbr_tree mt ON mt.childnodeid = ma.id
+            INNER JOIN mbr_account ma2 ON ma2.id = mt.parentid
+        WHERE
+            (ml.modulename = "自动升级" OR ml.modulename = "会员列表")
+            AND mt.depth = 1
+            AND ma.registertime <![CDATA[ >= ]]> DATE_FORMAT(#{actStartDay}, '%Y-%m-%d %H:%i:%s' )
+            AND ma.registertime <![CDATA[ <= ]]> DATE_FORMAT(#{actEndDay}, '%Y-%m-%d %H:%i:%s' )
+            AND TO_DAYS( DATE_FORMAT( #{calcDay}, '%Y-%m-%d %H:%i:%s' )) - TO_DAYS( ml.createtime )  =  0
+    </select>
+
+    <select id="findFriendsRebateCharge" resultType="com.wsdy.saasops.modules.member.dto.CalcRebateChargeDto">
+        SELECT
+            ma.id as subaccountid,
+            ma.loginname as subloginname,
+            ma2.id as accountid,
+            ma2.loginname as  loginname,
+            sum(fd.depositamount) as totalDeposit
+        FROM
+            fund_deposit fd
+            INNER JOIN mbr_account ma ON fd.accountid = ma.id
+            INNER JOIN mbr_tree mt ON ma.id = mt.childnodeid
+            INNER JOIN mbr_account ma2 ON mt.parentid = ma2.id
+        WHERE
+            TO_DAYS( DATE_FORMAT( #{calcDay}, '%Y-%m-%d %H:%i:%s' )) - TO_DAYS( fd.audittime )  =  0
+            AND mt.depth = 1
+            AND ma.registertime <![CDATA[ >= ]]> DATE_FORMAT( #{actStartDay}, '%Y-%m-%d %H:%i:%s' )
+            AND ma.registertime <![CDATA[ <= ]]> DATE_FORMAT( #{actEndDay}, '%Y-%m-%d %H:%i:%s' )
+            AND fd.`status` = 1
+        GROUP BY
+            ma.id
+    </select>
+
+    <select id="findFriendRebateCount" resultType="java.util.Map">
+        SELECT
+            ma.loginname as loginName,
+            ma.id,
+            count(*) AS num
+        FROM
+            mbr_account ma
+            LEFT JOIN mbr_tree mt ON ma.id = mt.parentid
+            INNER JOIN mbr_account ma2 ON ma2.id = mt.childnodeid
+        WHERE
+            ma2.registertime <![CDATA[ < ]]> DATE_FORMAT( #{calcDay}, '%Y-%m-%d')
+            AND ma.id = #{accountId}
+            AND mt.depth = 1
+
+    </select>
+
+
+    <select id="findFriendRebateChargeCount" resultType="java.util.Map">
+        SELECT
+            mt.parentid accountId,
+            ma2.loginname  loginName
+            <foreach collection="rebateChargeDtoList"  item="rebateChargeDto" >
+                ,count( DISTINCT CASE WHEN fd.depositamount <![CDATA[ >= ]]> #{rebateChargeDto.minCharge} THEN fd.accountid END ) AS  #{rebateChargeDto.name}
+            </foreach>
+        FROM
+            mbr_tree mt
+            INNER JOIN fund_deposit fd ON  mt.childnodeid = fd.accountid
+            INNER JOIN mbr_account ma ON ma.id = fd.accountid
+            INNER JOIN mbr_account ma2 ON ma2.id = mt.parentid
+        WHERE
+            mt.parentid = #{accountId}
+            AND mt.depth = 1
+            AND fd.`status` = 1
+            AND fd.mark = 3
+            AND fd.audittime  <![CDATA[ <= ]]>   DATE_FORMAT( #{chargeDay}, '%Y-%m-%d %H:%i:%s' )
+            AND ma.registertime <![CDATA[ >= ]]> DATE_FORMAT( #{actStartDay}, '%Y-%m-%d %H:%i:%s' )
+            AND ma.registertime <![CDATA[ < ]]> DATE_FORMAT( #{actEndDay}, '%Y-%m-%d %H:%i:%s' )
+            GROUP BY
+        mt.parentid
+    </select>
+
+
+    <select id="getFriendRebateAccountIdList" resultType="java.lang.Integer">
+        SELECT DISTINCT
+            mt.parentid accountId
+        FROM
+            fund_deposit fd
+            INNER JOIN mbr_tree mt  ON mt.childnodeid = fd.accountid
+            INNER JOIN mbr_account ma ON ma.id = fd.accountid
+        WHERE
+            mt.depth = 1
+            AND fd.`status` = 1
+            AND fd.mark = 3
+            AND TO_DAYS(DATE_FORMAT( #{calcDay}, '%Y-%m-%d %H:%i:%s' )) - TO_DAYS( fd.audittime ) = 0
+            AND ma.registertime <![CDATA[ >= ]]> DATE_FORMAT(#{actStartDay}, '%Y-%m-%d %H:%i:%s' )
+            AND ma.registertime <![CDATA[ <= ]]> DATE_FORMAT(#{actEndDay}, '%Y-%m-%d %H:%i:%s' )
+    </select>
+
+
+    <select id="findAccountLevel" resultType="java.lang.Integer">
+        SELECT al.accountlevel FROM mbr_account l
+        LEFT JOIN mbr_activity_level al ON l.actlevelid = al.id
+        where l.id =#{accountId}
+    </select>
+
+
+    <select id="getMbrRebateFriendsReward" resultType="com.wsdy.saasops.modules.member.entity.MbrRebateFriendsReward">
+        select * from mbr_rebate_friends_reward where accountId = #{accountId} and type = #{type} and activityId = #{activityId} and operationtype = 0
+    </select>
+
+
+    <select id="isCastFriendRebate" resultType="java.lang.Integer">
+            select count(*) from mbr_rebate_friends_reward where date_format(incometime, '%Y-%m-%d') = #{calcDay} and activityId = #{activityId} and operationtype = 0
+    </select>
+
+    <select id="getMbrRebateFriendsMaxVip" resultType="java.lang.Integer">
+        SELECT MAX(toVip) FROM mbr_rebate_friends where accountid = #{accountId}  and subaccountid = #{subAccountId} and activityId = #{activityId} and type = 5 and operationType = 0
+    </select>
+
+
+    <select id="deleteMbrRebateFriends" resultType="java.lang.Integer">
+        delete from mbr_rebate_friends   where 1=1
+        <if test="deleteDay != null and deleteDay != ''">
+            AND DATE_FORMAT(incomeTime, '%Y-%m-%d') = #{deleteDay}
+        </if>
+    </select>
+
+
+    <select id="deleteMbrRebateFriendsReward" resultType="java.lang.Integer">
+        delete from mbr_rebate_friends_reward  where 1=1
+        <if test="deleteDay != null and deleteDay != ''">
+           AND  DATE_FORMAT(incomeTime, '%Y-%m-%d') = #{deleteDay}
+        </if>
+    </select>
+
+
+    <select id="procCharge"  statementType="CALLABLE">
+        call  proc_charge(#{amount, mode=IN}, #{accountId, mode=IN}, #{chargeTime, mode=IN})
+    </select>
+
+    <select id="procUpgrade" statementType="CALLABLE">
+        call  proc_upgrade(#{accountId, mode=IN}, #{createTime, mode=IN}, #{cont, mode=IN})
+    </select>
+
+    <select id="procValidbet" statementType="CALLABLE">
+       call  proc_validbet(#{userName, mode=IN}, #{validbet, mode=IN}, #{createTime, mode=IN}, #{startDay, mode=IN})
+    </select>
+    
+    <update id="updateGroupIdByCagencyid">
+		UPDATE mbr_account SET groupid = #{setGroupId} where cagencyid = #{cagencyid}
+	</update>
+
+    <update id="updateFreeWalletSwitch">
+        UPDATE mbr_account SET freewalletswitch=#{freeWalletSwitch} WHERE id = #{accountId}
+    </update>
+
+
+
+    <select id="selectWarningMbrAccount" resultType="java.lang.String">
+        select  rbrd.username from rpt_bet_rcd_day rbrd where TO_DAYS(#{calcDay}) - TO_DAYS(rbrd.startday) = 0  GROUP BY rbrd.username
+    </select>
+
+
+    <select id="selectWarningMbrAccountWithIn" resultType="java.lang.String">
+        select  rbrd.username from rpt_bet_rcd_day rbrd where TO_DAYS(#{calcDay}) - TO_DAYS(rbrd.startday) >= 0 AND  TO_DAYS(#{calcDay}) - TO_DAYS(rbrd.startday) <![CDATA[ < ]]> #{days}  GROUP BY rbrd.username
+    </select>
+
+    <select id="selectWarningMbrBetInfo" resultType="com.wsdy.saasops.modules.member.dto.MbrWarningBetInfoDto">
+        select rbrd.username, sum(rbrd.payout) payout, sum(rbrd.bet) bet , rbrd.startday  from rpt_bet_rcd_day rbrd where (TO_DAYS(#{calcDay}) - TO_DAYS(rbrd.startday)) <![CDATA[ <  ]]> #{days} and (TO_DAYS(#{calcDay}) - TO_DAYS(rbrd.startday)) <![CDATA[ >= ]]> 0 and username in
+        <foreach collection="userNames" item="username" open="(" close=")" separator=",">
+            #{username}
+        </foreach>
+        GROUP BY rbrd.username ,rbrd.startday
+    </select>
+
+
+
+    <select id="selectWarningBigBetInfo" resultType="com.wsdy.saasops.modules.member.dto.MbrWarningBetInfoDto">
+        select rbrd.username, sum(rbrd.payout) payout, sum(rbrd.bet) bet from rpt_bet_rcd_day rbrd where (TO_DAYS(#{calcDay}) - TO_DAYS(rbrd.startday)) <![CDATA[ <  ]]> #{days} and (TO_DAYS(#{calcDay}) - TO_DAYS(rbrd.startday)) <![CDATA[ >= ]]> 0 and username in
+        <foreach collection="userNames" item="username" open="(" close=")" separator=",">
+            #{username}
+        </foreach>
+        GROUP BY rbrd.username
+    </select>
+
+
+    <select id="selectWarningDepositMbrAccount" resultType="java.lang.Integer">
+        select fd.accountid from fund_deposit fd where (TO_DAYS(#{calcDay}) - TO_DAYS(fd.audittime) >= 0) and (TO_DAYS(#{calcDay}) - TO_DAYS(fd.audittime) <![CDATA[ <  ]]> #{days}) AND fd.status = 1
+    </select>
+
+    <select id="selectWarningDeposit" resultType="com.wsdy.saasops.modules.member.dto.MbrWarningDiscountInfoDto">
+        select ma.loginname username, sum(fd.depositamount) deposit from fund_deposit fd inner join mbr_account ma on fd.accountid = ma.id where (TO_DAYS(#{calcDay}) - TO_DAYS(fd.audittime)) <![CDATA[ <  ]]> #{days} and (TO_DAYS(#{calcDay}) - TO_DAYS(fd.audittime)) <![CDATA[ >= ]]> 0  and fd.status = 1 and fd.accountId in
+        <foreach collection="accountIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        GROUP BY fd.accountid
+    </select>
+
+
+    <select id="selectWarningDiscount" resultType="com.wsdy.saasops.modules.member.dto.MbrWarningDiscountInfoDto">
+        select oab.loginname username, sum(oab.bonusamount) discount from opr_act_bonus  oab  where (TO_DAYS(#{calcDay}) - TO_DAYS(oab.audittime)) <![CDATA[ <  ]]> #{days}   and (TO_DAYS(#{calcDay}) - TO_DAYS(oab.audittime)) <![CDATA[ >= ]]> 0 and oab.status = 1 and oab.accountId in
+        <foreach collection="accountIds" item="id" open="(" close=")" separator=",">
+            #{id}
+        </foreach>
+        GROUP BY oab.accountid
+    </select>
+
+    <select id="selectLoginByIp" resultType="com.wsdy.saasops.modules.member.dto.MbrLoginWarningInfoDto">
+        SELECT GROUP_CONCAT(t.loginname) as loginname, t.loginip excontent from
+        (select accountid,loginname, loginip   from log_mbrlogin lm where  (TO_DAYS(#{calcDay}) - TO_DAYS(lm.logintime)) <![CDATA[ <  ]]> #{days} and (TO_DAYS(#{calcDay}) - TO_DAYS(lm.logintime)) <![CDATA[ >= ]]> 0 and lm.loginip is not null GROUP BY  accountid, loginip  order by loginname asc  )  t
+        where (select count(*) from fund_deposit fd  where fd.status = 1 and  (TO_DAYS(#{calcDay}) - TO_DAYS(fd.audittime)) <![CDATA[ < ]]> #{days} and (TO_DAYS(#{calcDay}) - TO_DAYS(fd.audittime)) <![CDATA[  >= ]]> 0  and t.accountid = fd.accountid) <![CDATA[ > ]]>  0
+
+        GROUP BY loginip HAVING count(*) <![CDATA[ >= ]]> #{times}
+
+    </select>
+
+    <select id="selectLoginByDeviceuuid" resultType="com.wsdy.saasops.modules.member.dto.MbrLoginWarningInfoDto">
+        SELECT GROUP_CONCAT(t.loginname) as loginname, t.deviceuuid  excontent from
+        (select accountid,loginname, deviceuuid   from log_mbrlogin lm where  (TO_DAYS(#{calcDay}) - TO_DAYS(lm.logintime)) <![CDATA[ < ]]> #{days} and (TO_DAYS(#{calcDay}) - TO_DAYS(lm.logintime)) <![CDATA[ >= ]]> 0  and lm.deviceuuid is not null GROUP BY  accountid, deviceuuid  order by loginname asc  )  t
+        where (select count(*) from fund_deposit fd  where fd.status = 1 and  (TO_DAYS(#{calcDay}) - TO_DAYS(fd.audittime)) <![CDATA[ < ]]> #{days} and (TO_DAYS(#{calcDay}) - TO_DAYS(fd.audittime)) <![CDATA[  >= ]]> 0  and t.accountid = fd.accountid) <![CDATA[ > ]]>  0
+
+        GROUP BY deviceuuid HAVING count(*) <![CDATA[ >= ]]>  #{times}
+    </select>
+
+    <update id="updateCagencyIdByAccountId">
+        update mbr_account set cagencyid = #{cagencyId} where id = #{accountId}
+    </update>
+
+
+    <select id="findParentMbrAccount" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT
+            ma2.*
+        FROM
+            mbr_account ma
+                INNER JOIN mbr_tree mt ON ma.id = mt.childnodeid
+                INNER JOIN mbr_account ma2 ON mt.parentid = ma2.id
+        WHERE
+            mt.depth = 1
+            AND ma.id = #{accountId}
+    </select>
+    <select id="getCodeNum" resultType="java.lang.Integer">
+        select  count(1) from mbr_account where domaincode=#{codeId}
+    </select>
+    <select id="findAccountByLoginName" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+       select * from mbr_account  where loginname = #{loginName}
+    </select>
+    <select id="checkRelation" resultType="com.wsdy.saasops.sysapi.dto.RelationDto">
+        SELECT
+            ma.loginname subUserName,
+            ma2.loginname userName
+        FROM
+            mbr_account ma
+                INNER JOIN mbr_tree mt ON mt.childnodeid = ma.id
+                INNER JOIN mbr_account ma2 ON mt.parentid = ma2.id
+        WHERE
+            mt.depth = 1
+          AND ma2.loginname = #{userName}
+          AND ma.loginname IN
+              <foreach collection="subUserNames" item="subUserName" open="(" close=")" separator=",">
+                  #{subUserName}
+              </foreach>
+    </select>
+
+
+    <update id="updateAdjustment">
+        update mbr_wallet set adjustment = #{adjustment} where accountid = #{accountId}
+    </update>
+
+    <update id="updateMbrLabel">
+        UPDATE mbr_account SET labelid = #{defaultId} WHERE labelid = #{id}
+    </update>
+
+    <select id="getFirstBetDay" resultType="java.lang.String">
+        SELECT
+            startday
+        FROM
+            rpt_bet_rcd_day
+        WHERE
+            username = #{userName}
+        ORDER BY
+            startday ASC
+            LIMIT 1
+    </select>
+
+    <select id="getLoginLastIp" resultType="java.lang.String">
+        select loginip from log_mbrlogin where accountid = #{accountId} order by logintime desc limit 1
+    </select>
+
+    <select id="findSubUserByParentId" resultType="com.wsdy.saasops.sysapi.dto.SubUserDto">
+        select loginname subUserName, registerTime from mbr_account ma INNER JOIN mbr_tree mt on mt.childnodeid = ma.id where mt.parentid = #{accountId} and mt.depth = 1
+        <if test="startTime != null and startTime != ''">
+            AND ma.registerTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND ma.registerTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+
+        <if test="subUserName != null and subUserName != ''">
+            AND ma.loginname =#{subUserName}
+        </if>
+
+    </select>
+
+
+    <select id="findWalletForUpdate" resultType="com.wsdy.saasops.modules.member.entity.MbrWallet">
+        SELECT * FROM mbr_wallet WHERE accountid = #{accountId} FOR UPDATE
+    </select>
+
+
+    <select id="countOnline" resultType="java.lang.Integer">
+        select count(1) from mbr_account where  isOnline = 1
+    </select>
+
+</mapper>

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.dao.SetGmGameMapper">
+
+    <select id="selectByGmDepotIds" resultType="com.wsdy.saasops.modules.operate.entity.SetGmGame">
+        SELECT depotid, depotname, gamelogoid FROM set_gm_game
+         <where>
+            depotid IN
+            <foreach collection="depotIds" open="(" close=")" separator="," item="depotId">
+                #{depotId}
+            </foreach>
+        </where>
+    </select>
+    
+    <select id="selectSetDepotname" resultType="com.wsdy.saasops.modules.operate.dto.GameDepotNameDto">
+		SELECT 
+			IFNULL(game.depotname, lo.titleTag) depotname,
+			depotcode,
+			catcode
+			FROM t_game_logo lo
+		LEFT JOIN set_gm_game game ON game.gamelogoid = lo.id
+		LEFT JOIN t_gm_depot depot ON lo.depotid = depot.id
+		LEFT JOIN t_gm_cat cat ON cat.id = lo.catid
+    </select>
+    
+    <select id="selectSportSetDepotname" resultType="com.wsdy.saasops.modules.operate.dto.GameDepotNameDto">
+		SELECT 
+			IFNULL(game.depotname, lo.titleTag) depotname,
+			depotcode,
+			catcode
+			FROM t_game_logo lo
+		LEFT JOIN set_gm_game game ON game.gamelogoid = lo.id
+		LEFT JOIN t_gm_depot depot ON lo.depotid = depot.id
+		LEFT JOIN t_gm_cat cat ON cat.id = lo.catid
+			WHERE cat.id = 1 
+    </select>
+
+</mapper>

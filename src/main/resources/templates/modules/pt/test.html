@@ -1,0 +1,102 @@
+<html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<style>
+    div.img {
+        margin: 2px;
+        border: 0px solid #0000ff;
+        height: auto;
+        width: auto;
+        float: left;
+        text-align: center;
+    }
+
+        div.img img {
+            display: inline;
+            margin: 1px;
+            border: 1px solid #ffffff;
+        }
+
+        div.img a:hover img {
+            border: 1px solid #000000;
+        }
+
+    div.desc {
+        text-align: center;
+        font-weight: normal;
+        width: 200px;
+        margin: 1px;
+    }
+</style>
+
+<script type="text/javascript" src="http://cache.download.banner.greatfortune88.com/integrationjs.php"></script>
+
+<script type="text/javascript">
+    iapiSetCallout('Logout', calloutLogout);
+    iapiSetCallout('Login', calloutLogin);
+
+    function login(realMode) {
+        iapiLogin(document.getElementById("loginform").username.value.toUpperCase(), document.getElementById("loginform").password.value, realMode, "zh-cn");
+    }
+
+    function logout(allSessions, realMode) {
+        iapiLogout(allSessions, realMode);
+    }
+
+    function calloutLogin(response) {
+
+        // errorCode=6错误在登录时可能会发生，但游戏可以正常进入。可以忽略
+        var code = response.errorCode;
+        if (code && code != 6) {
+
+            alert("Login failed, " + response.errorText);
+        }
+        else {
+        	alert('登陆成功');
+        	//location.href="http://cache.download.banner.greatfortune88.com/casinoclient.html?language=zh-cn&game=titimama&nolobby=4";
+        }
+    }
+
+    function calloutLogout(response) {
+        if (response.errorCode) {
+            alert("Logout failed, " + response.errorCode);
+        }
+        else {
+            delete_cookie();
+        }
+    }
+</script>
+
+</head>
+<body>
+
+<div class="img">
+  <a target="_self" href="index.html">
+  <img src="uk.jpg" alt="English" width="57" height="30">
+  </a>
+  <div class="desc">English</div>
+</div>
+
+<div class="img">
+  <a target="_self" href="ch.html">
+  <img src="ch.jpg" alt="Chinese" width="57" height="30">
+  </a>
+  <div class="desc">Chinese</div>
+</div>
+
+<form id="loginform">
+Username: <input type="text" name="username">
+Password: <input type="password" name="password">
+</form>
+<input type="submit" value="Login" onclick="login(1)">
+<button onclick="logout(1,1)">Logout</button>
+
+<br></br>
+
+<div class="img"> <a href="http://cache.download.banner.greatfortune88.com/casinoclient.html?game=titimama&language=zh-cn&nolobby=4" onclick="window.open(this.href, 'mywin','width=800,height=600,toolbar=0,resizable=0,location=no'); return false;""> <img src="atw.jpg" width=120 height="179"></a><div class="desc">Around the World</div></div>
+<div class="img"> <a href="http://cache.download.banner.greatfortune88.com/casinoclient.html?game=chl&language=zh-cn&nolobby=4" onclick="window.open(this.href, 'mywin','width=800,height=600,toolbar=0,resizable=0,location=no'); return false;""> <img src="bowl.jpg" width=120 height="179"></a><div class="desc">Bonus Bowling</div></div>
+<div class="img"> <a href="http://cache.download.banner.greatfortune88.com/casinoclient.html?game=cm&language=zh-cn&nolobby=4" onclick="window.open(this.href, 'mywin','width=800,height=600,toolbar=0,resizable=0,location=no'); return false;""> <img src="qbd.jpg" width=120 height="179"></a><div class="desc">Darts</div></div>
+
+</body>
+</html> 

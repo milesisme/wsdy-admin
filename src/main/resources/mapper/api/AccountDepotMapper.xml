@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.api.modules.transfer.mapper.AccountDepotMapper">
+
+    <select id="findAccountBalance" resultType="java.lang.Integer">
+		select count(1) from  mbr_wallet where accountId = #{accountId} and balance + #{bonusAmount} <![CDATA[ >= ]]> #{balance}
+	</select>
+
+    <select id="findTransferList" resultType="com.wsdy.saasops.api.modules.user.dto.TransferResponseDto"
+            parameterType="com.wsdy.saasops.api.modules.user.dto.TransferRequestDto">
+        SELECT depot.depotName,manage.amount,manage.opType,manage.createTime transferTime,manage.status
+        FROM mbr_bill_manage manage
+        LEFT JOIN t_gm_depot depot ON manage.depotId = depot.id
+        <include refid="transferList_where"/>
+        order by manage.createTime desc
+    </select>
+
+    <sql id="transferList_where">
+        <where>
+            <if test="startTime != null and startTime!=''">
+                AND manage.createTime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="entTime != null and entTime!=''">
+                AND manage.createTime <![CDATA[ <= ]]> #{entTime}
+            </if>
+            <if test="depotId != null">
+                AND manage.depotId = #{depotId}
+            </if>
+            <if test="opType != null">
+                AND manage.opType = #{opType}
+            </if>
+            <if test="accountId != null">
+                AND manage.accountId = #{accountId}
+            </if>
+        </where>
+    </sql>
+
+</mapper>

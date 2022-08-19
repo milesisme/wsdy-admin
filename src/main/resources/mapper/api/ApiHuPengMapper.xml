@@ -1,0 +1,427 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.api.modules.activity.mapper.ApiHuPengMapper">
+
+	<select id="getApiHuPengRebateDtoList" resultType="com.wsdy.saasops.modules.activity.dto.HuPengRewardDto">
+
+		SELECT
+			ma.id accountid,
+			ma.loginname loginname,
+			t.childnodeid  subAccountId,
+			ma2.loginname subLoginName,
+			SUM(t.amount) amount,
+			SUM(t.betnum) betnum,
+			SUM(t.reward) reward,
+			MAX(t.rate) rate,
+			SUM(t.drawingamount) withdrawal,
+			SUM(t.depositamount) deposit,
+			SUM(t.bonusamount) discount,
+			SUM(t.adjustedamount) fundAdjust
+		FROM
+
+			(SELECT
+			mt.childnodeid childnodeid,
+			mf.amount amount,
+			mf.rewardnum betnum,
+			mf.reward reward,
+			mf.rate  rate,
+			0 drawingamount,
+			0 depositamount,
+			0 bonusamount,
+			0 adjustedamount
+			FROM
+			mbr_tree mt
+			LEFT JOIN mbr_rebate_hupeng mf ON (mf.subaccountid = mt.childnodeid  and  mf.accountid = mt.parentid)
+			WHERE
+			mt.depth > 0
+			AND mt.parentid = #{accountId}
+			<if test="startTime != null and startTime != ''">
+				AND mf.incomeTime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND mf.incomeTime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+
+			UNION ALL
+			SELECT
+			mt.childnodeid childnodeid,
+			0 amount,
+			0 betnum,
+			0 reward,
+			0 rate,
+			faw.actualarrival drawingamount,
+			0 depositamount,
+			0 bonusamount,
+			0 adjustedamount
+			FROM
+			mbr_tree mt
+			LEFT JOIN fund_acc_withdraw faw ON faw.accountid = mt.childnodeid
+			WHERE
+			mt.depth > 0
+			AND mt.parentid = #{accountId}
+			AND faw.status = 1
+			<if test="startTime != null and startTime != ''">
+				AND faw.audittime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND faw.audittime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+			UNION ALL
+			SELECT
+			mt.childnodeid childnodeid,
+			0 amount,
+			0 betnum,
+			0 reward,
+			0 rate,
+			0 drawingamount,
+			fd.depositamount,
+			0 bonusamount,
+			0 adjustedamount
+			FROM
+			mbr_tree mt
+			LEFT JOIN fund_deposit  fd ON fd.accountid = mt.childnodeid
+			WHERE
+			mt.depth > 0
+			AND mt.parentid = #{accountId}
+			AND fd.status = 1
+			<if test="startTime != null and startTime != ''">
+				AND fd.audittime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND fd.audittime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+
+			UNION ALL
+			SELECT
+			mt.childnodeid childnodeid,
+			0 amount,
+			0 betnum,
+			0 reward,
+			0 rate,
+			0 drawingamount,
+			0 depositamount,
+			oab.bonusamount,
+			0 adjustedamount
+			FROM
+			mbr_tree mt
+			LEFT JOIN opr_act_bonus oab ON oab.accountid = mt.childnodeid
+			WHERE
+			mt.depth > 0
+			AND oab.status = 1
+			AND mt.parentid = #{accountId}
+			<if test="startTime != null and startTime != ''">
+				AND oab.audittime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND oab.audittime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+
+			UNION ALL
+			SELECT
+			mt.childnodeid childnodeid,
+			0 amount,
+			0 betnum,
+			0 reward,
+			0 rate,
+			0 drawingamount,
+			0 depositamount,
+			0 bonusamount,
+			fa.amount adjustedamount
+			FROM
+			mbr_tree mt
+			LEFT JOIN fund_audit fa ON fa.accountid = mt.childnodeid
+			WHERE
+			mt.depth > 0
+			AND mt.parentid = #{accountId}
+			AND fa.status = 1
+			<if test="startTime != null and startTime != ''">
+				AND fa.audittime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND fa.audittime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+			) t
+
+		INNER JOIN mbr_account ma2 ON ma2.id = t.childnodeid
+		INNER JOIN mbr_tree mt2  ON mt2.childnodeid = t.childnodeid
+		INNER JOIN mbr_account ma ON ma.id = mt2.parentid
+		WHERE mt2.depth = 1
+
+
+		<if test="subLoginName != null and subLoginName != ''">
+			AND ma2.loginname = #{subLoginName}
+		</if>
+
+		GROUP BY
+			t.childnodeid
+		ORDER BY  reward DESC
+
+	</select>
+
+	<select id="getHuPengRebateRewardReportForDay"
+			resultType="com.wsdy.saasops.api.modules.activity.dto.HuPengRebateRewardDto">
+		SELECT
+		DATE_FORMAT(mf.incometime,'%Y-%m-%d') time,
+		(select count(*) from mbr_tree mt where mt.parentid = mf.accountid and mt.depth > 0) num,
+		SUM(mf.amount) betAmount,
+		SUM(mf.rewardnum) betnum,
+		SUM(mf.reward) reward
+		FROM
+		mbr_rebate_hupeng_reward mf
+		WHERE mf.accountid = #{accountId}
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		GROUP BY DATE_FORMAT(mf.incometime,'%Y-%m-%d')
+	</select>
+
+	<select id="getHuPengRebateRewardReportForMonth"
+			resultType="com.wsdy.saasops.api.modules.activity.dto.HuPengRebateRewardDto">
+		SELECT
+		DATE_FORMAT(mf.incometime,'%Y-%m') time,
+		(select count(*) from mbr_tree mt where mt.parentid = mf.accountid and mt.depth > 0)  num,
+		SUM(mf.amount) betAmount,
+		SUM(mf.rewardnum) betnum,
+		SUM(mf.reward) reward
+		FROM
+		mbr_rebate_hupeng_reward mf
+		WHERE mf.accountid = #{accountId}
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		GROUP BY DATE_FORMAT(mf.incometime,'%Y-%m')
+
+	</select>
+	<select id="getHupengRebateRewardSummary"
+			resultType="com.wsdy.saasops.api.modules.activity.dto.HuPengFriendRewardSummaryDto">
+
+		SELECT
+		SUM(t.amount) amount,
+		SUM(t.betnum) betnum,
+		SUM(t.reward) reward,
+		SUM(t.drawingamount) withdrawal,
+		SUM(t.depositamount) deposit,
+		SUM(t.bonusamount) discount,
+		SUM(t.adjustedamount) fundAdjust
+		FROM
+
+		(SELECT
+		mt.parentid parentid,
+		mt.childnodeid childnodeid,
+		mf.amount amount,
+		mf.rewardnum betnum,
+		mf.reward reward,
+		mf.rate  rate,
+		0 drawingamount,
+		0 depositamount,
+		0 bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_tree mt
+		LEFT JOIN mbr_rebate_hupeng mf ON (mf.subaccountid = mt.childnodeid  and  mf.accountid = mt.parentid)
+		WHERE
+		mt.depth > 0
+		AND mt.parentid = #{accountId}
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+
+		UNION ALL
+		SELECT
+		mt.parentid parentid,
+		mt.childnodeid childnodeid,
+		0 amount,
+		0 betnum,
+		0 reward,
+		0 rate,
+		faw.actualarrival drawingamount,
+		0 depositamount,
+		0 bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_tree mt
+		LEFT JOIN fund_acc_withdraw faw ON faw.accountid = mt.childnodeid
+		WHERE
+		mt.depth > 0
+		AND mt.parentid = #{accountId}
+		AND faw.status = 1
+		<if test="startTime != null and startTime != ''">
+			AND faw.audittime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND faw.audittime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		UNION ALL
+		SELECT
+		mt.parentid parentid,
+		mt.childnodeid childnodeid,
+		0 amount,
+		0 betnum,
+		0 reward,
+		0 rate,
+		0 drawingamount,
+		fd.depositamount,
+		0 bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_tree mt
+		LEFT JOIN fund_deposit  fd ON fd.accountid = mt.childnodeid
+		WHERE
+		mt.depth > 0
+		AND mt.parentid = #{accountId}
+		AND fd.status = 1
+		<if test="startTime != null and startTime != ''">
+			AND fd.audittime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND fd.audittime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+
+		UNION ALL
+		SELECT
+		mt.parentid parentid,
+		mt.childnodeid childnodeid,
+		0 amount,
+		0 betnum,
+		0 reward,
+		0 rate,
+		0 drawingamount,
+		0 depositamount,
+		oab.bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_tree mt
+		LEFT JOIN opr_act_bonus oab ON oab.accountid = mt.childnodeid
+		WHERE
+		mt.depth > 0
+		AND oab.status = 1
+		AND mt.parentid = #{accountId}
+		<if test="startTime != null and startTime != ''">
+			AND oab.audittime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND oab.audittime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+
+		UNION ALL
+		SELECT
+		mt.parentid parentid,
+		mt.childnodeid childnodeid,
+		0 amount,
+		0 betnum,
+		0 reward,
+		0 rate,
+		0 drawingamount,
+		0 depositamount,
+		0 bonusamount,
+		fa.amount adjustedamount
+		FROM
+		mbr_tree mt
+		LEFT JOIN fund_audit fa ON fa.accountid = mt.childnodeid
+		WHERE
+		mt.depth > 0
+		AND mt.parentid = #{accountId}
+		AND fa.status = 1
+		<if test="startTime != null and startTime != ''">
+			AND fa.audittime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND fa.audittime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		) t
+
+		INNER JOIN mbr_account ma ON ma.id = parentid
+		INNER JOIN mbr_account ma2 ON ma2.id = childnodeid
+
+		<where>
+			<if test="subLoginName != null and subLoginName != ''">
+				AND ma2.loginname = #{subLoginName}
+			</if>
+		</where>
+
+	</select>
+	<select id="rewardList" resultType="com.wsdy.saasops.api.modules.activity.dto.HuPengRebateRewardListDto">
+
+		SELECT
+			mf.giveouttime time,
+			mf.reward,
+			mf.STATUS
+		FROM
+		mbr_rebate_hupeng_reward mf
+		WHERE
+		mf.accountid = #{accountId}
+		<if test="startTime != null and startTime != ''">
+			AND mf.giveouttime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND mf.giveouttime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+		</if>
+
+
+	</select>
+
+	<select id="getHuPengSummary" resultType="com.wsdy.saasops.api.modules.activity.dto.HuPengSummaryDto">
+		SELECT
+		sum( yDReward ) yDReward,
+		sum( yDBetnum ) yDBetnum,
+		sum( totalReward ) totalReward,
+		sum( balance ) balance,
+		sum( num ) num
+		FROM
+		(
+			SELECT
+			reward yDReward,
+			rewardnum yDBetnum,
+			0 totalReward,
+			0 balance,
+			0 num
+			FROM
+			mbr_rebate_hupeng_reward mrhr
+			WHERE
+			mrhr.accountid = #{accountId}
+			AND TO_DAYS( NOW( ) ) - TO_DAYS( mrhr.incomeTime ) = 1 UNION
+			SELECT
+			0 yDReward,
+			0 yDBetnum,
+			IFNULL( sum( reward ), 0 ) totalReward,
+			0 balance,
+			0 num
+			FROM
+			mbr_rebate_hupeng_reward mrhr
+			WHERE
+			mrhr.accountid = #{accountId} UNION
+			SELECT
+			0 yDReward,
+			0 yDBetnum,
+			0 totalReward,
+			mw.hupengbalance balance,
+			0 num
+			FROM
+			mbr_wallet mw
+			WHERE
+			mw.accountid = #{accountId} UNION
+			SELECT
+			0 yDReward,
+			0 yDBetnum,
+			0 totalReward,
+			0 balance,
+			count(*) num
+			FROM
+			mbr_tree
+			WHERE
+			depth > 0
+			AND parentid = #{accountId}
+		) t
+	</select>
+
+</mapper>

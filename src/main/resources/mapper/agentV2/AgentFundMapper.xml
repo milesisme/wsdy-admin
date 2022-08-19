@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modulesV2.mapper.AgentFundMapper">
+
+    <select id="agentFundList" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentFundDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentFundDto">
+        SELECT a.agyaccount loginName,a.id accountId,a.realName,
+        w.balance balance,t.accountNum,e1.agentNum
+        from agy_account a
+        LEFT JOIN agy_tree e on a.id = e.childnodeid
+        LEFT JOIN agy_wallet w on a.id = w.accountid
+        LEFT JOIN (SELECT count(*) accountNum,cagencyId from mbr_account GROUP BY cagencyId) t ON t.cagencyId = e.childnodeid
+        LEFT JOIN (SELECT count(*) agentNum,parentid from agy_tree WHERE depth = 1 GROUP BY parentid) e1
+        on e1.parentid = e.childnodeid
+        WHERE e.depth =1
+        <if test="agentId != null">
+            and e.parentid = #{agentId}
+        </if>
+        <if test="loginName != null and loginName != ''">
+            AND a.agyaccount =#{loginName}
+        </if>
+        order by a.createTime DESC
+    </select>
+
+    <select id="accountFundList" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentFundDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentFundDto">
+        SELECT t.loginname,t.id accountId,t.realName,w.balance balance
+        FROM mbr_account t
+        LEFT JOIN mbr_wallet w ON t.id = w.accountid
+        <where>
+            <if test="agentId != null">
+                and t.cagencyId =#{agentId}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                and t.loginname =#{loginName}
+            </if>
+        </where>
+    </select>
+
+    <select id="findMbrBillManageList"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrBillManage"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrBillManage">
+        SELECT
+        manage.*,agt.agyAccount,act.realName,aga.agyAccount AS topAgyAccount,depot.depotName,act.tagencyId
+        FROM mbr_bill_manage manage
+        LEFT JOIN mbr_account act ON manage.accountId = act.id
+        LEFT JOIN agy_account agt ON act.cagencyId = agt.id
+        LEFT JOIN agy_account aga ON act.tagencyId = aga.id
+        LEFT JOIN t_gm_depot depot ON depot.id = manage.depotId
+        <include refid="billManage_where"/>
+        ORDER BY manage.createTime DESC,manage.id DESC
+    </select>
+
+    <sql id="billManage_where">
+        <where>
+            <if test="cagencyId != null">
+                AND act.cagencyId in (SELECT childnodeid from mbr_tree WHERE parentid = #{cagencyId})
+            </if>
+            <if test="accountId != null and accountId != ''">
+                AND manage.accountId =#{accountId}
+            </if>
+            <if test="orderNo != null and orderNo != ''">
+                AND manage.orderNo =#{orderNo}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND manage.loginName =#{loginName}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND manage.createTime <![CDATA[ >= ]]> #{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND manage.createTime <![CDATA[ <= ]]> #{createTimeTo}
+            </if>
+            <if test="statuss != null and statuss.size()>0">
+                AND manage.status in
+                <foreach collection="statuss" open="(" close=")" separator="," item="status">
+                    #{status}
+                </foreach>
+            </if>
+        </where>
+    </sql>
+
+    <select id="findChildnodeid" resultType="java.lang.String">
+        SELECT group_concat(childnodeid) FROM agy_tree WHERE parentid =#{parentId}
+    </select>
+
+    <select id="findAgyAccount" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT * FROM agy_account WHERE agyaccount =#{agyAccount}
+        and EXISTS (SELECT childnodeid id FROM agy_tree WHERE parentid=#{parentId})
+    </select>
+
+    <select id="billRecordList" resultType="com.wsdy.saasops.agapi.modulesV2.dto.BillRecordListDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.BillRecordListDto">
+        SELECT DATE_FORMAT(a.ordertime,'%Y-%m-%d %H:%i:%s') ordertime,a.orderno,
+        a.loginname,a.realname,a.codename,a.amount,a.optype,a.afterBalance,
+        a.financialcode,a.createuser
+        FROM (
+            SELECT m.orderno,m.ordertime,m.loginname loginname,t.realname,
+            c.codename,m.amount,m.optype,m.afterBalance,m.financialcode,m.createuser
+            from mbr_bill_detail m
+            LEFT JOIN mbr_account t ON m.accountid = t.id
+            LEFT JOIN t_bs_financialcode c ON c.`code` = m.financialcode
+            LEFT JOIN agy_account ac ON ac.id = t.cagencyid
+            <where>
+                <if test="agyAccount != null and agyAccount != ''">
+                    AND t.cagencyid in (
+                    SELECT childnodeid FROM agy_tree
+                    WHERE  parentid =(SELECT id from agy_account WHERE agyaccount=#{agyAccount}))
+                </if>
+                <if test="loginName != null and loginName != ''">
+                    AND t.loginName =#{loginName}
+                </if>
+            </where>
+            UNION
+            SELECT a.orderno,a.ordertime,a.agyaccount loginname,y.realname,
+            c.codename,a.amount,a.optype,a.afterBalance,a.financialcode,a.createuser
+            from agy_bill_detail a
+            LEFT JOIN agy_account y ON a.accountid = y.id
+            LEFT JOIN mbr_account t ON y.id = t.cagencyid
+            LEFT JOIN t_bs_financialcode c ON c.`code` = a.financialcode
+            <where>
+                <if test="loginName != null and loginName != ''">
+                    AND t.loginName =#{loginName}
+                </if>
+                <if test="agyAccount != null and agyAccount != ''">
+                    AND y.id in (
+                    SELECT childnodeid FROM agy_tree
+                    WHERE parentid =(SELECT id from agy_account WHERE agyaccount=#{agyAccount}))
+                </if>
+            </where>
+        ) a
+        <where>
+            <if test="financialcode != null and financialcode != ''">
+                AND a.financialcode =#{financialcode}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND a.loginname =#{loginName}
+            </if>
+            <if test="agentId != null">
+                AND EXISTS (
+                    SELECT t.agyaccount loginname FROM agy_tree e
+                    LEFT JOIN agy_account t ON e.childnodeid = t.id
+                    WHERE e.parentid =#{agentId}
+                    UNION
+                    SELECT m.loginname loginname FROM agy_tree e
+                    LEFT JOIN mbr_account m ON e.childnodeid = m.cagencyid
+                    WHERE e.parentid =#{agentId}
+                )
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND a.ordertime <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND a.ordertime <![CDATA[ <= ]]>#{endTime}
+            </if>
+        </where>
+        ORDER BY a.ordertime desc
+    </select>
+
+
+    <select id="egGameNameList" resultType="com.wsdy.saasops.modules.operate.entity.TGmGame">
+        SELECT DISTINCT gamename FROM t_gm_game WHERE depotname =#{depotName}
+        and gamecode !='' and gamecode is not NULL
+    </select>
+
+</mapper>

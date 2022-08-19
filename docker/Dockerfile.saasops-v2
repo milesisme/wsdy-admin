@@ -1,0 +1,10 @@
+FROM openjdk:8-jdk-alpine
+RUN apk add bash
+RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime
+RUN echo "Asia/Shanghai" > /etc/timezone
+
+ADD ./target/saasops-v2-0.2.jar /saasops-v2-0.2.jar
+
+ENTRYPOINT ["java", "-jar", "saasops-v2-0.2.jar"]
+
+CMD []

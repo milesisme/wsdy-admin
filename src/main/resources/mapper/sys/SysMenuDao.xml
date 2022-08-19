@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.sys.dao.SysMenuDao">
+
+	<select id="queryObject" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		select * from sys_menu where menu_id = #{value}
+	</select>
+	
+	<insert id="save" parameterType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		insert into sys_menu
+		(
+			`menu_id`, 
+			`parent_id`, 
+			`name`, 
+			`ml`, 
+			`perms`, 
+			`type`, 
+			`icon`, 
+			`order_num`
+		)
+		values
+		(
+			#{menuId}, 
+			#{parentId}, 
+			#{name}, 
+			#{ml}, 
+			#{perms}, 
+			#{type}, 
+			#{icon}, 
+			#{orderNum}
+		)
+	</insert>
+	
+	<select id="queryListParentId" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		select * from sys_menu where parent_id = #{parentId} order by order_num asc 
+	</select>
+	
+	<select id="queryNotButtonList" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		select * from sys_menu where type != 2 order by order_num asc 
+	</select>
+	
+	<select id="getChildMenuList" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		select menu_id menuId,
+			 name,
+			 perms,
+			 type from sys_menu where parent_id = #{menuId}
+	</select>
+	
+	<select id="queryList" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		select m.*,(select p.name from sys_menu p where p.menu_id = m.parent_id) as parentName,(SELECT count(*) from sys_role_menu rm
+		where rm.menu_id = m.menu_id) userCount
+			from sys_menu m 
+		<choose>
+			<when test="sidx != null and sidx.trim() != ''">
+				order by m.${sidx} ${order}
+			</when>
+			<otherwise>
+				order by m.order_num asc
+			</otherwise>
+		</choose>
+		<if test="offset != null and limit != null">
+			limit #{offset}, #{limit}
+		</if>
+	</select>
+	
+	<!-- 查询用户的权限列表 --> 
+	<select id="queryUserList" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		select distinct m.*,(select p.name from sys_menu p where p.menu_id = m.parent_id) as parentName
+			from sys_user_role m 
+			LEFT JOIN sys_role_menu rm on m.role_id = rm.role_id 
+			LEFT JOIN sys_menu m on rm.menu_id = m.menu_id 
+		where m.user_id = #{userId} order by m.order_num asc
+	</select>
+	
+	<select id="queryTotal" resultType="int">
+		select count(*) from sys_menu
+	</select>
+	 
+	<update id="update" parameterType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		update sys_menu 
+		<set> 
+			<if test="parentId != null">`parent_id` = #{parentId}, </if>
+			<if test="name != null">`name` = #{name}, </if>
+			<if test="ml != null">`ml` = #{ml}, </if>
+			<if test="perms != null">`perms` = #{perms}, </if>
+			<if test="type != null">`type` = #{type}, </if>
+			<if test="icon != null">`icon` = #{icon}, </if>
+			<if test="orderNum != null">`order_num` = #{orderNum}</if>
+		</set>
+		where menu_id = #{menuId}
+	</update>
+	
+	<delete id="deleteBatch">
+		delete from sys_menu where menu_id in 
+		<foreach item="menuId" collection="array" open="(" separator="," close=")">
+			#{menuId}
+		</foreach>
+		;
+		delete from sys_role_menu where menu_id in 
+		<foreach item="menuId" collection="array" open="(" separator="," close=")">
+			#{menuId}
+		</foreach>
+	</delete>
+
+	<resultMap id="menuTree" type="com.wsdy.saasops.modules.sys.entity.SysMenuTree" >
+		<id property="menuId" column="TId"/>
+		<result property="icon" column="TIcon" />
+		<result property="name" column="TName"/>
+		<result property="type" column="Ttype" />
+		<result property="orderNum" column="TOrderNum" />
+		<collection property="children" ofType="com.wsdy.saasops.modules.sys.entity.SysMenuTree" >
+			<id property="menuId" column="MId"/>
+			<result property="parentId" column="MPid" />
+			<result property="icon" column="MIcon" />
+			<result property="name" column="MName"/>
+			<result property="url" column="MUrl" />
+			<result property="perms" column="MPerms" />
+			<result property="type" column="Mtype" />
+			<result property="orderNum" column="MOrderNum" />
+			<collection property="children" ofType="com.wsdy.saasops.modules.sys.entity.SysMenuTree" >
+				<id property="menuId" column="LId"/>
+				<result property="parentId" column="LPid" />
+				<result property="icon" column="LIcon" />
+				<result property="name" column="LName"/>
+				<result property="url" column="LUrl" />
+				<result property="perms" column="LPerms" />
+				<result property="type" column="Ltype" />
+				<result property="orderNum" column="LOrderNum" />
+			</collection>
+		</collection>
+	</resultMap>
+	<select id="selectTree" resultMap="menuTree" parameterType="java.lang.String">
+		select m.menu_id TId,m.name TName,m.type TType,m.icon TIcon ,m.order_num TOrderNum,
+		m2.menu_id MId,m2.name MName,m2.icon MIcon ,m2.order_num MOrderNum,m2.parent_id MPid,m2.url MUrl,m2.perms MPerms,m2.type Mtype,
+		m3.menu_id LId,m3.name LName,m3.icon LIcon ,m3.order_num LOrderNum,m3.parent_id LPid,m3.url LUrl,m3.perms LPerms,m3.type Ltype
+		from (select m.* from sys_menu  m
+			inner JOIN sys_role_menu rm on rm.menu_id = m.menu_id  and rm.role_id in (${roleIds})
+		where  parent_id = 0 ORDER BY m.order_num ASC )m
+			LEFT JOIN sys_menu m2 on m.menu_id = m2.parent_id
+			inner JOIN sys_role_menu rm1 on rm1.menu_id = m2.menu_id and rm1.role_id in (${roleIds})
+			LEFT JOIN sys_menu m3 on m2.menu_id = m3.parent_id
+			inner JOIN sys_role_menu rm2 on rm2.menu_id = m3.menu_id and rm2.role_id in (${roleIds})
+		ORDER BY TOrderNum,MOrderNum ASC
+	</select>
+
+
+	<select id="selectRoleMenuTree" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuTree" parameterType="java.lang.String">
+		select DISTINCT m.* from  sys_menu m inner join sys_role_menu sm on sm.menu_id = m.menu_id and sm.role_id in (${roleIds}) ORDER BY m.order_num ASC
+	</select>
+
+	<resultMap id="queryMenuListAll" type="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2">
+		<id property="id" column="FId"/>
+		<result property="label" column="FName"/>
+		<result property="type" column="FType"/>
+		<collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+			<id property="id" column="SId"/>
+			<result property="label" column="SName"/>
+			<result property="type" column="SType"/>
+				<collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+					<id property="id" column="TId"/>
+					<result property="label" column="TName"/>
+					<result property="type" column="TType"/>
+					<!--<collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+						<id property="id" column="LId"/>
+						<result property="label" column="LName"/>
+						<result property="type" column="LType"/>
+					</collection>-->
+				</collection>
+		</collection>
+	</resultMap>
+
+	<select id="queryMenuList" resultMap="queryMenuListAll" parameterType="java.lang.Integer">
+		select F.menu_id FId,F.name FName,F.type FType, F.parent_id,F.order_num, S.menu_id SId,S.name SName, S.type SType, T.menu_id TId,T.name TName, T.type TType from (
+		select sm.* from sys_role_menu srm left join sys_menu sm on srm.menu_id=sm.menu_id where parent_id = 0 and srm.role_id=#{roleId}) F
+		LEFT JOIN (select sm.* from sys_role_menu srm left join sys_menu sm on srm.menu_id=sm.menu_id
+		where sm.parent_id != 0 and sm.type in (0,1) and srm.role_id=#{roleId}
+		<if test="roleId !=1">
+			and sm.menu_id !=65
+		</if>
+		) S on S.parent_id = F.menu_id
+		LEFT JOIN (select sm.* from sys_role_menu srm left join sys_menu sm on srm.menu_id=sm.menu_id where sm.type = 1 and srm.role_id=#{roleId}) T on T.parent_id = S.menu_id
+		order by F.parent_id,F.order_num,S.parent_id,S.order_num asc
+	</select>
+
+
+	<resultMap id="queryMenuListAllNew" type="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2">
+		<id property="id" column="FId"/>
+		<result property="label" column="FName"/>
+		<result property="type" column="FType"/>
+		<collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+			<id property="id" column="SId"/>
+			<result property="label" column="SName"/>
+			<result property="type" column="SType"/>
+			<collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+				<id property="id" column="TId"/>
+				<result property="label" column="TName"/>
+				<result property="type" column="TType"/>
+				<collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" resultMap="innerResult">
+				</collection>
+			</collection>
+		</collection>
+	</resultMap>
+
+	<resultMap id="innerResult" type="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2">
+		<id property="id" column="GId"/>
+		<result property="label" column="GName"/>
+		<result property="type" column="GType"/>
+		<collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+			<id property="id" column="LId"/>
+			<result property="label" column="LName"/>
+			<result property="type" column="LType"/>
+			<collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+				<id property="id" column="MId"/>
+				<result property="label" column="MName"/>
+				<result property="type" column="MType"/>
+			</collection>
+		</collection>
+	</resultMap>
+
+	<select id="queryMenuListNew" resultMap="queryMenuListAllNew" parameterType="java.lang.Integer">
+		select F.menu_id FId,F.name FName,F.type FType, F.parent_id FParentId, S.menu_id SId,S.name SName, S.type SType, S.parent_id SParentId,T.menu_id TId,T.name TName, T.type TType, T.parent_id TParentId
+		,G.menu_id GId,G.name GName, G.type Gtype, G.parent_id GParentId
+		,L.menu_id LId,L.name LName, L.type Ltype, L.parent_id LParentId
+		,M.menu_id MId,M.name MName, M.type Mtype , M.parent_id MParentId
+		from (
+		select sm.* from sys_role_menu srm left join sys_menu sm on srm.menu_id=sm.menu_id where parent_id = 0 and srm.role_id=#{roleId}) F
+		LEFT JOIN (select sm.* from sys_role_menu srm left join sys_menu sm on srm.menu_id=sm.menu_id where sm.parent_id != 0 and sm.type in (0,1) and srm.role_id=#{roleId}
+		<if test="roleId !=1">
+			and sm.menu_id !=65
+		</if>
+		) S on S.parent_id = F.menu_id
+		LEFT JOIN (select sm.* from sys_role_menu srm left join sys_menu sm on srm.menu_id=sm.menu_id where sm.type in (1,2,3) and srm.role_id=#{roleId}) T on T.parent_id = S.menu_id
+
+		LEFT JOIN (select sm.* from sys_role_menu srm left join sys_menu sm on srm.menu_id=sm.menu_id where srm.role_id=#{roleId}) G ON G.parent_id = T.menu_id
+		LEFT JOIN (select sm.* from sys_role_menu srm left join sys_menu sm on srm.menu_id=sm.menu_id where sm.type = 3 and srm.role_id=#{roleId}) 	L ON L.parent_id = G.menu_id
+		LEFT JOIN (select sm.* from sys_role_menu srm left join sys_menu sm on srm.menu_id=sm.menu_id where  srm.role_id=#{roleId}) M ON M.parent_id = L.menu_id
+		order by F.parent_id,F.order_num,S.parent_id,S.order_num
+		,T.parent_id,T.order_num
+		,G.parent_id,G.order_num
+		,L.parent_id,L.order_num
+		,M.parent_id,M.order_num
+		asc
+	</select>
+
+	<select id="queryAllMenu" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		select * from sys_menu where type != 2 order by parent_id asc , order_num asc
+	</select>
+
+    <select id="queryAll" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+        select * from sys_menu
+    </select>
+
+	<resultMap id="queryMenuAuth" type="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2">
+		<id property="id" column="pId"/>
+		<result property="label" column="pName"/>
+		<collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+			<id property="id" column="cId"/>
+			<result property="label" column="cName"/>
+            <collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+                <id property="id" column="lId"/>
+                <result property="label" column="lName"/>
+                <collection property="children" ofType="com.wsdy.saasops.modules.sys.dto.TreeMenuDto2" >
+                    <id property="id" column="nId"/>
+                    <result property="label" column="nName"/>
+                </collection>
+            </collection>
+		</collection>
+	</resultMap>
+
+	<select id="queryMenuAuth" resultMap="queryMenuListAll">
+		select p.menu_id pId ,p.name pName ,c.menu_id cId ,c.name cName,l.menu_id lId ,l.name lName,n.menu_id nId ,n.name nName from sys_menu p
+		left join sys_menu c on p.menu_id = c.parent_id
+		left join sys_menu l on c.menu_id = l.parent_id
+		left join sys_menu n on l.menu_id = n.parent_id
+		 where
+		 p.menu_id = #{menuId}
+	</select>
+
+
+	<select id="findMenuByColumn" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleMenuEntity" parameterType="java.util.Set">
+		SELECT menu_id 
+          FROM sys_menu 
+         where columnName in (
+			  select columnName 
+			    from sys_menu 
+		 	    <where>
+  		  	        <if test="paramList != null and paramList.size()>0">
+  		  	   	        menu_id in 
+	                    <foreach collection="paramList" open="(" close=")" separator="," item="param">
+	                        #{param}
+	                    </foreach>
+                    </if>
+                    and columnName is not null
+  		        </where>
+		) and type!=3
+	</select>
+
+    <select id="queryMenuAuthListByMbrAccount" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity" >
+		SELECT t1.menu_id,t1.columnname,m.menu_id parent_id from (SELECT t.* FROM sys_menu t WHERE t.parent_id = 106 AND type in(4,5)) t1
+		INNER JOIN (select * from sys_menu where type = 3) m on t1.columnname = m.columnname
+	</select>
+
+	<select id="querySearchMenuAuthList" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity" >
+		SELECT t.* FROM sys_menu t WHERE t.parent_id = 106 AND t.type in(5)
+	</select>
+
+
+	<select id="querySetCuiCount" resultType="java.lang.Integer">
+		select count(*) from sys_user_role ur
+								LEFT JOIN sys_role_menu rm on ur.role_id = rm.role_id
+								LEFT JOIN sys_menu m on rm.menu_id = m.menu_id
+		where ur.user_id = #{userId}  and  m.navperms = 'setting:syssetting:queryCuiDanSet'
+	</select>
+</mapper>

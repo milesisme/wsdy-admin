@@ -1,0 +1,1613 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.mapper.MbrMapper">
+
+    <select id="selectMbrGroupById" parameterType="java.lang.Long"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrGroup">
+        select t.* from mbr_group t where t.id = #{groupId}
+    </select>
+
+    <select id="findGroupList" resultType="com.wsdy.saasops.modules.member.entity.MbrGroup"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrGroup">
+        SELECT t1.id,t1.id groupId,t1.groupName,ifnull(t4.mbrNums,0),t1.isBlackGroup,
+	        mbrNums,t1.available,t1.memo,t1.isDef,t2.lowQuota,t2.topQuota,
+	        CASE WHEN
+	        t2.feeAvailable=1 then IFNULL(concat(t2.feeScale,'%'),null) END
+	        depositFee,t2.feeHours,
+	        t2.feeTimes,t3.lowQuota
+	        wLowQuota,t3.topQuota wTopQuota,
+	        t3.lowusdt wLowUsdt,
+	        t3.topusdt wTopUsdt,
+	        t3.lowalipayquota wLowAlipayQuota,
+	        t3.topalipayquota wTopAlipayQuota,
+	        CASE WHEN t3.feeway=0 THEN
+	        IFNULL(concat(t3.feeScale,'%'),null) else t3.feeFixed end
+	        withdrawalFee,
+	        t3.feeHours
+	        wfeeHours,t3.feeTimes wfeeTimes,t2.id
+	        did,t3.id wid,case when t2.id is not null and t3.id IS NOT NULL THEN 1
+	        ELSE 0 END groupDone ,
+	        t3.chargefeeavailable as chargeFeeAvailable,
+	        t1.isLockUpgrade,t1.validBet,t1.companyWinLose,
+	        t1.depositTimes,t1.deposit
+        FROM mbr_group t1
+	        LEFT JOIN mbr_deposit_cond t2 ON
+	        t1.id=t2.groupId
+	        LEFT JOIN
+	        mbr_withdrawal_cond t3 ON t1.id=t3.groupId
+	        LEFT JOIN (select count(1)
+	        mbrNums,groupId from mbr_account GROUP BY
+	        groupId) t4 on
+	        t1.id=t4.groupId
+	        <include refid="group_where"/>
+	        ORDER BY t1.id DESC
+    </select>
+
+    <select id="queryAgentMbrListPage" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select t.id,
+            t.loginName,
+            t.realName,
+            IFNULL(a.promotionNum,0) promotionNum,
+            t.cagencyId,
+            t.tagencyId,
+            t.registerTime,
+            agy.agyAccount
+        from mbr_account t LEFT JOIN agy_account agy on t.cagencyId=agy.id
+        LEFT JOIN (select count(1) promotionNum,tr.parentId from mbr_tree tr where tr.depth = 1 GROUP BY tr.parentId) a on a.parentId = t.id
+        <where>
+            <if test="cagencyId != null">
+                t.cagencyId = #{cagencyId}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND t.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="realName != null and realName != ''">
+                AND t.realName LIKE CONCAT('%',#{realName}, '%')
+            </if>
+        </where>
+    </select>
+
+    <select id="findAccountLastLogin" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT loginarea,logintype FROM log_mbrlogin WHERE accountid=#{id} ORDER BY logintime DESC LIMIT 1
+    </select>
+
+    <select id="findAccountList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select
+        <if test="columnSets != null and columnSets.size()>0">
+            <foreach item="columnName" collection="columnSets" separator=",">
+                <if test="columnName == 'promotionNum'">
+                    tt.promotionNum
+                </if>
+                <if test="columnName != 'promotionNum' and columnName !='isOnline'">
+                    tt.${columnName}
+                </if>
+            </foreach>
+            ,tt.isOnline,tt.isVerifyMoblie,tt.domaincode,tt.departmentid, tt.offlinetime, tt.betPoint
+        </if>
+        from (
+	        SELECT DISTINCT
+		        t1.id,t1.loginName,t1.realName,t1.cagencyId,t1.tagencyId,t1.groupId,t1.registerTime,t1.loginTime,t1.available,t1.actLevelId,t1.isActivityLock,
+		        t1.isOnline,t1.isVerifyMoblie,t1.domaincode,t1.agyflag,t1.agyLevelId,t1.offlinetime,
+		        wa.balance totalBalance,
+		        mal.tierName,
+		        t0.agyAccount,t0.id agyAccountId,t0.departmentid,
+		        t4.registerIp,t4.registerUrl,t4.registerSource,
+		        t5.groupName,
+		        -- (SELECT createTime FROM fund_deposit WHERE accountId=t1.id AND`status`=1 LIMIT 1 ) AS depositTime,
+		        -- (select loginarea from log_mbrlogin where accountId=t1.id order by logintime desc limit 1) AS loginArea,
+		        null loginArea, null loginType,
+                -- (select logintype from log_mbrlogin where accountId=t1.id order by logintime desc limit 1) AS loginType,
+		        IFNULL(a.promotionNum,0) promotionNum,
+		        pma.loginname parentLoginName,
+		        fe.createTime depositTime,
+		        t1.labelid, mao.betPoint
+        FROM mbr_account t1
+	        LEFT JOIN agy_account t0 on t1.cagencyId = t0.id
+	        LEFT JOIN mbr_wallet wa on t1.loginName = wa.loginName
+	        LEFT JOIN log_mbrregister t4 on t1.loginName=t4.loginName
+	        LEFT JOIN mbr_group t5 on t1.groupId=t5.id
+	        LEFT JOIN mbr_activity_level mal on t1.actLevelId = mal.id
+	        LEFT JOIN (select count(1) promotionNum,tr.parentId from mbr_tree tr where tr.depth = 1 GROUP BY tr.parentId) a ON a.parentId = t1.id
+	        LEFT JOIN mbr_tree mt on mt.childnodeid = t1.id and mt.depth = 1
+	        LEFT JOIN mbr_account pma on mt.parentid = pma.id
+	        LEFT JOIN mbr_account_mobile mb on mb.accountid = t1.id
+	        LEFT JOIN mbr_bankcard_history mbh on mbh.accountid = t1.id
+        	LEFT JOIN (SELECT MIN(id),accountId, createTime from fund_deposit where status = 1 GROUP BY accountid) fe ON fe.accountId  = t1.id
+        	LEFT JOIN mbr_account_other mao ON mao.accountid = t1.id
+        <include refid="accountList_where"/>
+        )tt
+        <where>
+            <if test="minPromotionNum != null">
+                AND tt.promotionNum&gt;=#{minPromotionNum}
+            </if>
+            <if test="maxPromotionNum != null">
+                AND tt.promotionNum&lt;=#{maxPromotionNum}
+            </if>
+            <if test="loginType != null and loginType!=''">
+                AND tt.loginType=#{loginType}
+            </if>
+        </where>
+    </select>
+
+
+    <sql id="wind_where">
+        <where>
+            <if test="loginName != null and loginName !='' ">
+                AND t1.loginname =#{loginName}
+            </if>
+            <if test="agyAccount != null and agyAccount !='' ">
+                AND t1.agyaccount =#{agyAccount}
+            </if>
+            <if test="realName != null and realName !='' ">
+                AND  t1.realname=#{realName}
+            </if>
+            <if test="registerSource != null and registerSource !='' ">
+                AND  t1.registersource =#{registerSource}
+            </if>
+            <if test="loginIp != null and loginIp !='' ">
+                AND t1.loginip =#{loginIp}
+            </if>
+            <if test="groupName != null and groupName !='' ">
+                AND t1.groupname =#{groupName}
+            </if>
+            <if test="registerTime != null and registerTime!=''">
+                AND t1.registerTime&gt;=#{registerTime}
+            </if>
+            <if test="registerTimeEnd != null and registerTimeEnd!=''">
+                AND t1.registerTime&lt;=#{registerTimeEnd}
+            </if>
+        </where>
+    </sql>
+
+    <select id="lastBetDate" resultType="com.wsdy.saasops.modules.member.dto.MbrAccountLastBetDate">
+    	SELECT 
+   			t.username loginName,
+   			MAX(t.startday) betDate 
+ 		FROM (
+			SELECT username, SUM(validbet) validbetTotal, startday FROM rpt_bet_rcd_day 
+			WHERE username IN
+			    <foreach collection="loginNames" item="item" open="(" close=")" separator=",">
+		            #{item}
+		        </foreach>
+				GROUP BY username, startday HAVING validbetTotal >= 100
+		) t GROUP BY t.username
+    </select>
+
+    <select id="findAccountOnlineList"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrAccountOnline"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccountOnline">
+        SELECT
+            t4.*,
+            IFNULL( t5.onlineTime, 0 ) onlineTime,
+            IFNULL( t5.selectOnlineTime, 0 ) selectOnlineTime,
+            t6.loginTime,
+            t6.loginIp,
+            t6.loginArea,
+            t6.loginUrl,
+            t6.logoutTime
+        FROM
+        (
+            SELECT
+                t1.id,
+                t1.groupId,
+                t1.loginName,
+                t1.isOnline,
+                t1.tagencyId,
+                t1.cagencyId,
+                t1.loginSource,
+                t2.groupName,
+                t3.agyAccount,
+                t3.id agyAccountId,
+                0 totalBalance
+            FROM
+                mbr_account t1,
+                mbr_group t2,
+                agy_account t3
+            WHERE
+                t1.groupId = t2.id
+                AND t1.cagencyId = t3.id
+            ) t4
+            LEFT JOIN ( SELECT sum( ifnull( onlineTime, 0 )) onlineTime  ,
+                                <choose>
+                                    <when test="startTime != null and startTime !=''and endTime != null and endTime !=''">
+                                        sum( ifnull(CASE WHEN  loginTime between  #{startTime}   and #{endTime} THEN  onlineTime END, 0 )) selectOnlineTime,
+                                    </when>
+                                    <otherwise>
+                                        sum( ifnull( onlineTime, 0 )) onlineTime  ,
+                                    </otherwise>
+                                </choose>
+                loginName FROM log_mbrlogin GROUP BY loginName ) t5 ON t4.loginName = t5.loginName
+            LEFT JOIN (
+                    SELECT
+                        log1.*
+                    FROM
+                    log_mbrlogin log1,(
+                            SELECT
+                    max( id ) id,
+                    loginName
+                    FROM
+                    log_mbrlogin
+                    GROUP BY
+                    loginName
+            ) log2
+         WHERE
+            log1.id = log2.id
+        ) t6 ON t4.loginName = t6.loginName
+        <if test="(cagencyIdList != null and cagencyIdList !='') or (tagencyIdList != null and tagencyIdList !='')">
+            INNER JOIN agy_tree  agt On agt.childnodeid = t4.cagencyid
+        </if>
+
+        <include refid="accountOnline_where"/>
+    </select>
+
+
+    <select id="viewOtherAccount" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="java.lang.Integer">
+        select
+        <if test="columnSets != null and columnSets.size()>0">
+            <foreach item="columnName" collection="columnSets" separator=",">
+                tt.${columnName}
+            </foreach>
+        </if>
+        from (
+        select t.id,
+        t.available,
+        t.groupId,
+        t.actLevelId,
+        t.isActivityLock,
+        mal.tiername,
+        t.tagencyId,
+        t.cagencyId,
+        w.balance as totalBalance,
+        t2.loginName referrer
+        from mbr_account t
+        LEFT JOIN mbr_wallet w ON t.id = w.accountId
+        LEFT JOIN mbr_tree tree ON t.id = tree.childNodeId AND tree.childNodeId = t.id AND tree.depth =1
+        LEFT JOIN mbr_account t2 ON tree.parentId = t2.id
+        LEFT JOIN mbr_activity_level mal on t.actLevelId = mal.id
+        where t.id = #{id}
+        )tt
+    </select>
+
+    <update id="changeMbrGroup" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        update mbr_account set groupId=#{groupId}
+        <where>
+            <if test="accountIds != null and accountIds.size()>0">
+                id in
+                <foreach collection="accountIds" open="(" close=")" separator="," item="id">
+                    #{id}
+                </foreach>
+            </if>
+        </where>
+    </update>
+
+    <select id="findMbrAccountList" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select t.* from mbr_account t
+        <where>
+            <if test="accountIds != null and accountIds.size()>0">
+                id in
+                <foreach collection="accountIds" open="(" close=")" separator="," item="id">
+                    #{id}
+                </foreach>
+            </if>
+        </where>
+    </select>
+
+
+    <select id="viewAccount" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="java.lang.Integer">
+        select
+        <if test="columnSets != null and columnSets.size()>0">
+            <foreach item="columnName" collection="columnSets" separator=",">
+                <if test="columnName == 'promotionNum'">
+                    (select count(1) from mbr_tree tr where tr.parentId=tt.id and tr.depth = 1) as promotionNum
+                </if>
+                <if test="columnName != 'promotionNum'">
+                    <if test="columnName == 'mobile'">
+                        tt.mobile,tt.mobileAreaCode
+                    </if>
+                    <if test="columnName != 'mobile'">
+                        tt.${columnName}
+                    </if>
+                </if>
+            </foreach>
+        </if>
+        from (
+        SELECT
+        t1.birthday,t1.gender,t1.id,t1.email, t1.realName,t1.nickName,t1.mobile, t1.mobileAreaCode,
+        t1.qq,t1.isOnline, t1.weChat,t1.loginName,t1.domainCode,t1.depositLock,t1.agyflag,t1.agyLevelId,t1.offlinetime,
+        logr.registerTime,logr.registerSource,logr.registerUrl,
+        (select mbr.loginName referrer from mbr_tree tr LEFT JOIN mbr_account mbr on tr.parentId=mbr.id where tr.childNodeId = t1.id and tr.depth = 1) referrer,
+        ( SELECT CONCAT(logr.registerIp,'(',regArea,')') registerIp FROM log_mbrregister  WHERE accountId = t1.id ) registerIp,
+        ( SELECT loginTime FROM log_mbrlogin WHERE accountId = t1.id ORDER BY loginTime DESC LIMIT 1 ) loginTime,
+        ( SELECT CONCAT(loginIp,'(',loginArea,')') loginIp FROM log_mbrlogin WHERE accountId = t1.id ORDER BY loginTime DESC LIMIT 1 ) loginIp
+        FROM mbr_account t1
+        LEFT JOIN log_mbrregister logr on t1.id = logr.accountId
+        WHERE t1.id =#{id}
+        )tt
+    </select>
+
+    <select id="findAccountWallet"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrDepotWallet"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrDepotWallet">
+        select t.id,
+        t.accountId,
+        t.loginName,
+        t.pwd,
+        t.depotId,
+        t.balance,
+        t.isLogin,
+        t.isTransfer,
+        t.time,
+        t.uuid,
+        t.loginId,
+        dp.depotName
+        from mbr_depot_wallet t LEFT JOIN t_gm_depot dp on t.depotId = dp.id where accountId = #{accountId}
+        <if test="depotIds != null">
+            and t.depotId in
+            <foreach item="depotId" index="index" collection="depotIds"
+                     open="(" separator="," close=")">
+                #{depotId}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="findDepots" resultType="com.wsdy.saasops.modules.member.entity.MbrDepotWallet">
+        select t.*,p.depotName lastDepotName from mbr_depot_wallet t
+		LEFT JOIN t_gm_depot p ON t.depotId = p.id
+		where t.accountId=#{accountId} AND p.available=1
+    </select>
+
+    <select id="findAccByDepotId" resultType="com.wsdy.saasops.modules.member.entity.MbrDepotWallet">
+        select * from mbr_depot_wallet w
+        where w.depotid = #{depotId}
+    </select>
+
+    <select id="findBankCardOne" resultType="com.wsdy.saasops.modules.member.entity.MbrBankcard"
+            parameterType="java.lang.Integer">
+		select * from mbr_bankcard where available=1 and isdel=0
+		and
+		accountId=#{id} limit 1
+	</select>
+
+    <select id="findAccountFirstBankcard" parameterType="java.lang.Integer" resultType="com.wsdy.saasops.modules.member.entity.MbrBankcard">
+        select *
+        from mbr_bankcard t
+        where t.accountId = #{accountId}
+        order by t.createTime asc
+        LIMIT 1
+    </select>
+
+    <select id="selectBankInfoById" resultType="com.wsdy.saasops.modules.member.entity.MbrBankcard" parameterType="java.lang.Integer">
+        select t.*,ma.loginName from mbr_bankcard t LEFT JOIN mbr_account ma on t.accountId=ma.id where t.id = #{id}
+    </select>
+
+    <select id="selectCryptoCurrenciesInfoById" resultType="com.wsdy.saasops.modules.member.entity.MbrCryptoCurrencies" parameterType="java.lang.Integer">
+        select t.*,ma.loginName from mbr_cryptocurrencies t LEFT JOIN mbr_account ma on t.accountId=ma.id where t.id = #{id}
+    </select>
+
+    <select id="selectBankInfoByCard" resultType="com.wsdy.saasops.modules.member.entity.MbrBankcard">
+        select t.*,ma.loginName from mbr_bankcard t LEFT JOIN mbr_account ma on t.accountId=ma.id where t.cardNo = #{cardNo}
+    </select>
+
+    <select id="selectBankDifferentNumber" resultType="java.lang.String">
+        select DISTINCT realname from mbr_bankcard where accountid = #{accountId};
+    </select>
+
+    <select id="selectCryptoCurrenciesByAddress" resultType="com.wsdy.saasops.modules.member.entity.MbrCryptoCurrencies">
+        select t.*,ma.loginName
+        from mbr_cryptocurrencies t
+        LEFT JOIN mbr_account ma on t.accountId=ma.id
+        where t.walletaddress = #{walletAddress}
+    </select>
+    <select id="selectGroupCount" resultType="java.lang.Integer">
+        select count(1) nums from mbr_account where groupId in
+        <foreach item="id" collection="array" open="(" separator=","
+                 close=")">
+            #{id}
+        </foreach>
+    </select>
+
+
+    <sql id="group_where">
+        <where>
+            <if test="groupIdList != null and groupIdList !='' ">
+                AND t1.Id in ( ${groupIdList} )
+            </if>
+            <if test="isLockUpgrade != null">
+                AND t1.isLockUpgrade = #{isLockUpgrade}
+            </if>
+            <if test="baseAuth != null">
+                <choose>
+                    <when test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                        AND t1.Id in ( ${baseAuth.groupIds} )
+                    </when>
+                    <otherwise>
+                        AND t1.Id = -1
+                    </otherwise>
+                </choose>
+            </if>
+            <if test="availableList != null and availableList !='' ">
+                AND t1.available in ( ${availableList} )
+            </if>
+        </where>
+    </sql>
+    <sql id="accountList_where">
+        <where>
+            AND t1.id is not null
+            AND t1.loginname is not null
+            AND t1.cagencyid is not null
+            <if test="groupIdList != null and groupIdList.size()>0">
+                AND t1.groupId in
+                <foreach item="groupId" collection="groupIdList" open="(" separator="," close=")">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="baseAuth != null">
+                <choose>
+                    <when test="baseAuth.groupIds != null and baseAuth.groupIds != '' and baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                        <if test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                            AND t1.groupId in ( ${baseAuth.groupIds} )
+                        </if>
+                        <if test="baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                            AND t0.agyAccountId in ( ${baseAuth.agyAccountIds} )
+                        </if>
+                    </when>
+                    <otherwise>
+                        AND t1.groupId = -1
+                    </otherwise>
+                </choose>
+            </if>
+            <if test="id != null">
+                AND t1.id = #{id}
+            </if>
+            <if test="cardNo != null">
+                AND mbh.cardno = #{cardNo}
+            </if>
+            <if test="labelid != null">
+                AND t1.labelid = #{labelid}
+            </if>
+            <if test="loginName != null and loginName!=''">
+                AND t1.loginName = #{loginName}
+            </if>
+            <if test="nickName != null and nickName!=''">
+                AND t1.nickName = #{nickName}
+            </if>
+            <if test="loginNameList != null and loginNameList.size()>1">
+                AND t1.loginName in
+                <foreach item="loginName" collection="loginNameList" open="(" separator="," close=")">
+                    #{loginName}
+                </foreach>
+            </if>
+
+            <if test="loginNameList != null and loginNameList.size()==1">
+                AND t1.loginName = #{loginNameList[0]}
+            </if>
+            <if test="registerTime != null and registerTime!=''">
+                AND t1.registerTime&gt;=#{registerTime}
+            </if>
+            <if test="registerTimeEnd != null and registerTimeEnd!=''">
+                AND t1.registerTime&lt;=#{registerTimeEnd}
+            </if>
+            <if test="loginTime != null and loginTime!=''">
+                AND t1.loginTime&gt;=#{loginTime}
+            </if>
+            <if test="loginTimeEnd != null and loginTimeEnd!=''">
+                AND t1.loginTime&lt;=#{loginTimeEnd}
+            </if>
+            <if test="depositTimeStart != null and depositTimeStart != ''">
+                AND fe.createTime &gt;= #{depositTimeStart}
+            </if>
+            <if test="depositTimeEnd != null and depositTimeEnd != ''">
+                AND fe.createTime &lt;= #{depositTimeEnd}
+            </if>
+            <if test="realName != null and realName!=''">
+                AND t1.realName like concat('%',#{realName},'%')
+            </if>
+            <if test="actLevelId != null">
+                AND t1.actLevelId = #{actLevelId}
+            </if>
+            <if test="actLevelIdList != null and actLevelIdList.size()>0">
+                AND t1.actLevelId  in
+                <foreach item="actLevelId" collection="actLevelIdList" open="(" separator="," close=")">
+                    #{actLevelId}
+                </foreach>
+            </if>
+            <if test="isActivityLock != null">
+                AND t1.isActivityLock = #{isActivityLock}
+            </if>
+            <if test="mobile != null and mobile!=''">
+                <if test="mobileEncrypt != null">
+                    and (
+                    t1.mobile =#{mobile}
+                    <foreach collection="mobileEncrypt" item="item">
+                        or t1.mobile LIKE concat('%',#{item},'%')
+                    </foreach>
+                    or mb.mobile =#{mobile}
+                    )
+                </if>
+                <if test="mobileEncrypt==null">
+                    and t1.mobile =#{mobile}
+                </if>
+            </if>
+            <if test="email != null and email!=''">
+                AND t1.email like concat('%',#{email},'%')
+            </if>
+            <if test="registerUrl != null and registerUrl!=''">
+                AND t4.registerUrl like concat('%',#{registerUrl},'%')
+            </if>
+            <if test="qq != null and qq!=''">
+                AND t1.qq like concat('%',#{qq},'%')
+            </if>
+            <if test="registerSourceList != null and registerSourceList !='' ">
+                AND t4.registerSource in ( ${registerSourceList} )
+            </if>
+            <if test="isOnlineList != null and isOnlineList !='' ">
+                AND t1.isOnline in ( ${isOnlineList} )
+            </if>
+            <if test="tagencyIdList != null and tagencyIdList !='' ">
+                AND t1.tagencyId in ( ${tagencyIdList} )
+            </if>
+            <if test="cagencyIdList != null and cagencyIdList !='' ">
+                AND t1.cagencyId in ( ${cagencyIdList} )
+            </if>
+            <if test="availableList != null and availableList !='' ">
+                AND t1.available in ( ${availableList} )
+            </if>
+            <if test="loginSourceList != null and loginSourceList !='' ">
+                AND t1.loginSource in ( ${loginSourceList} )
+            </if>
+            <if test="agyAccount != null and agyAccount !='' ">
+                AND t0.agyAccount =#{agyAccount}
+            </if>
+            <if test="registerIp != null and registerIp !='' ">
+                AND t4.registerIp like concat('%',#{registerIp},'%')
+            </if>
+            <if test="loginIp != null and loginIp !='' ">
+                AND t1.id in (select l.accountId from log_mbrlogin l where l.loginIp like concat('%', #{loginIp},'%') group by l.accountId)
+            </if>
+            <if test="minBalance != null">
+                AND wa.balance&gt;=#{minBalance}
+            </if>
+            <if test="maxBalance != null">
+                AND wa.balance&lt;=#{maxBalance}
+            </if>
+            <if test="agyflags != null and agyflags.size()>0">
+                AND t1.agyflag  in
+                <foreach item="agyflag" collection="agyflags" open="(" separator="," close=")">
+                    #{agyflag}
+                </foreach>
+            </if>
+            <if test="agyLevelIds != null and agyLevelIds.size()>0">
+                AND (t1.agyLevelId is null or t1.agyLevelId  in
+                <foreach item="agyLevelId" collection="agyLevelIds" open="(" separator="," close=")">
+                    #{agyLevelId})
+                </foreach>
+            </if>
+        </where>
+    </sql>
+
+    <sql id="account_where">
+        <where>
+            <if test="groupIdList != null and groupIdList.size()>0">
+                AND t1.groupId in
+                <foreach item="groupId" collection="groupIdList" open="(" separator="," close=")">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="baseAuth != null">
+                <choose>
+                    <when test="baseAuth.groupIds != null and baseAuth.groupIds != '' and baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                        <if test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                            AND t1.groupId in ( ${baseAuth.groupIds} )
+                        </if>
+                        <if test="baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                            AND t0.agyAccountId in ( ${baseAuth.agyAccountIds} )
+                        </if>
+                    </when>
+                    <otherwise>
+                        AND t1.groupId = -1
+                    </otherwise>
+                </choose>
+            </if>
+            <if test="id != null">
+                AND t1.id = #{id}
+            </if>
+            <if test="loginName != null and loginName!=''">
+                AND t1.loginName = #{loginName}
+            </if>
+            <if test="nickName != null and nickName!=''">
+                AND t1.nickName = #{nickName}
+            </if>
+            <if test="loginNameList != null and loginNameList.size()>1">
+                AND t1.loginName in
+                <foreach item="loginName" collection="loginNameList" open="(" separator="," close=")">
+                    #{loginName}
+                </foreach>
+            </if>
+
+            <if test="loginNameList != null and loginNameList.size()==1">
+                AND t1.loginName = #{loginNameList[0]}
+            </if>
+            <if test="registerTime != null and registerTime!=''">
+                AND t1.registerTime&gt;=#{registerTime}
+            </if>
+            <if test="registerTimeEnd != null and registerTimeEnd!=''">
+                AND t1.registerTime&lt;=#{registerTimeEnd}
+            </if>
+            <if test="loginTime != null and loginTime!=''">
+                AND t1.loginTime&gt;=#{loginTime}
+            </if>
+            <if test="loginTimeEnd != null and loginTimeEnd!=''">
+                AND t1.loginTime&lt;=#{loginTimeEnd}
+            </if>
+           	<if test="depositTimeStart != null and depositTimeStart != ''">
+                AND fe.createTime &gt;= #{depositTimeStart}
+            </if>
+            <if test="depositTimeEnd != null and depositTimeEnd != ''">
+                AND fe.createTime &lt;= #{depositTimeEnd}
+            </if>
+            <if test="realName != null and realName!=''">
+                AND t1.realName like concat('%',#{realName},'%')
+            </if>
+            <if test="actLevelId != null">
+                AND t1.actLevelId = #{actLevelId}
+            </if>
+            <if test="actLevelIdList != null and actLevelIdList.size()>0">
+                AND t1.actLevelId  in
+                <foreach item="actLevelId" collection="actLevelIdList" open="(" separator="," close=")">
+                    #{actLevelId}
+                </foreach>
+            </if>
+            <if test="isActivityLock != null">
+                AND t1.isActivityLock = #{isActivityLock}
+            </if>
+            <if test="mobile != null and mobile!=''">
+                <if test="mobileEncrypt != null">
+                    and (
+                    t1.mobile =#{mobile}
+                    <foreach collection="mobileEncrypt" item="item">
+                        or t1.mobile LIKE concat('%',#{item},'%')
+                    </foreach>
+                    )
+                </if>
+                <if test="mobileEncrypt==null">
+                    and t1.mobile =#{mobile}
+                </if>
+            </if>
+            <if test="email != null and email!=''">
+                AND t1.email like concat('%',#{email},'%')
+            </if>
+            <if test="registerUrl != null and registerUrl!=''">
+                AND t4.registerUrl like concat('%',#{registerUrl},'%')
+            </if>
+            <if test="qq != null and qq!=''">
+                AND t1.qq like concat('%',#{qq},'%')
+            </if>
+            <if test="registerSourceList != null and registerSourceList !='' ">
+                AND t4.registerSource in ( ${registerSourceList} )
+            </if>
+            <if test="isOnlineList != null and isOnlineList !='' ">
+                AND t1.isOnline in ( ${isOnlineList} )
+            </if>
+            <if test="tagencyIdList != null and tagencyIdList !='' ">
+                AND t1.tagencyId in ( ${tagencyIdList} )
+            </if>
+            <if test="cagencyIdList != null and cagencyIdList !='' ">
+                AND t1.cagencyId in ( ${cagencyIdList} )
+            </if>
+            <if test="availableList != null and availableList !='' ">
+                AND t1.available in ( ${availableList} )
+            </if>
+            <if test="loginSourceList != null and loginSourceList !='' ">
+                AND t1.loginSource in ( ${loginSourceList} )
+            </if>
+            <if test="agyAccount != null and agyAccount !='' ">
+                AND t0.agyAccount =#{agyAccount}
+            </if>
+            <if test="registerIp != null and registerIp !='' ">
+                AND t4.registerIp like concat('%',#{registerIp},'%')
+            </if>
+            <if test="loginIp != null and loginIp !='' ">
+                AND t1.id in (select l.accountId from log_mbrlogin l where l.loginIp like concat('%', #{loginIp},'%') group by l.accountId)
+            </if>
+            <if test="minBalance != null">
+                AND wa.balance&gt;=#{minBalance}
+            </if>
+            <if test="maxBalance != null">
+                AND wa.balance&lt;=#{maxBalance}
+            </if>
+            <if test="agyflags != null and agyflags.size()>0">
+                AND t1.agyflag  in
+                <foreach item="agyflag" collection="agyflags" open="(" separator="," close=")">
+                    #{agyflag}
+                </foreach>
+            </if>
+            <if test="agyLevelIds != null and agyLevelIds.size()>0">
+                AND (t1.agyLevelId is null or t1.agyLevelId  in
+                <foreach item="agyLevelId" collection="agyLevelIds" open="(" separator="," close=")">
+                    #{agyLevelId})
+                </foreach>
+            </if>
+        </where>
+    </sql>
+
+    <sql id="accountOnline_where">
+        <where>
+            <if test="isOnline != null">
+                AND t4.isOnline=#{isOnline}
+            </if>
+            <if test="groupIdList != null">
+                AND t4.groupId in
+                <foreach item="groupId" collection="groupIdList" open="(" separator="," close=")">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="loginName != null and loginName!=''">
+                AND t4.loginName like concat('%',#{loginName},'%')
+            </if>
+
+
+            <choose>
+                <when test="cagencyIdList != null and cagencyIdList !=''">
+                    AND agt.parentId in ( ${cagencyIdList})
+                </when>
+                <when test="tagencyIdList != null and tagencyIdList !=''">
+                    AND agt.parentId in ( ${tagencyIdList})
+                </when>
+            </choose>
+
+            <if test="loginTime != null and loginTime!=''">
+                AND t6.loginTime&gt;=#{loginTime}
+            </if>
+            <if test="loginTimeEnd != null and loginTimeEnd!=''">
+                AND t6.loginTime&lt;=#{loginTimeEnd}
+            </if>
+            <if test="loginSourceList != null and loginSourceList!=''">
+                AND t4.loginSource in (${loginSourceList})
+            </if>
+            <if test="baseAuth != null">
+                <choose>
+                    <when test="baseAuth.groupIds != null and baseAuth.groupIds != '' and baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                        <if test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                            AND t4.groupId in ( ${baseAuth.groupIds} )
+                        </if>
+                        <if test="baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                            AND t4.agyAccountId in ( ${baseAuth.agyAccountIds} )
+                        </if>
+                    </when>
+                    <otherwise>
+                        AND t4.groupId = -1
+                    </otherwise>
+                </choose>
+            </if>
+        </where>
+
+    </sql>
+
+    <select id="listAccName" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select loginName,id from mbr_account where id in
+        <foreach item="id" collection="array" open="(" separator=","
+                 close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <update id="updateGroupBatch">
+        update mbr_account set groupId=#{groupId} where id in
+        <foreach item="id" index="index" collection="idArr" open="("
+                 separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <update id="updateGroupAvil">
+		update mbr_group set available=#{available} where
+		id=#{id} and isDef=#{isDef}
+	</update>
+
+          <update id="walletSubtract" parameterType="com.wsdy.saasops.modules.member.entity.MbrWallet">
+		update mbr_wallet set
+		balance=balance+#{bonusAmount}-#{balance} where
+		accountId=#{accountId} AND
+		balance+#{bonusAmount}-#{balance}>=0 AND #{balance} > 0
+	</update>
+
+    <update id="walletAdd" parameterType="com.wsdy.saasops.modules.member.entity.MbrWallet">
+		update mbr_wallet set
+		balance=balance+#{balance} where
+		accountId=#{accountId} and
+		#{balance}>=0
+	</update>
+
+
+    <update id="hPWalletSubtract" parameterType="com.wsdy.saasops.modules.member.entity.MbrWallet">
+        update mbr_wallet set
+        hupengbalance=hupengbalance-#{huPengBalance} where
+        accountId=#{accountId} AND
+        hupengbalance-#{huPengBalance}>=0 AND #{huPengBalance} > 0
+    </update>
+
+
+    <update id="hPWalletAdd" parameterType="com.wsdy.saasops.modules.member.entity.MbrWallet">
+        update mbr_wallet set
+        hupengbalance=hupengbalance+#{huPengBalance} where
+        accountId=#{accountId} AND
+        hupengbalance >=0
+    </update>
+
+    <delete id="deleteGroupBatch">
+        delete
+        mbr_group,mbr_deposit_cond,mbr_withdrawal_cond from mbr_group
+        LEFT JOIN
+        mbr_deposit_cond ON mbr_group.id=mbr_deposit_cond.groupId
+        LEFT JOIN
+        mbr_withdrawal_cond ON
+        mbr_group.id=mbr_withdrawal_cond.groupId
+        where isDef=0 and
+        mbr_group.id
+        in
+        <foreach item="id" collection="array" open="(" separator=","
+                 close=")">
+            '${id}'
+        </foreach>
+    </delete>
+
+    <delete id="deleteMemoBatch">
+        delete from mbr_memo where id in
+        <foreach item="id" collection="ids" open="(" separator=","
+                 close=")">
+            #{id}
+        </foreach>
+    </delete>
+
+    <select id="getMemberAccountNames" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            resultType="java.lang.String">
+        SELECT ma.loginName from mbr_account ma
+        INNER JOIN agy_tree agt ON agt.childnodeid = ma.cagencyid
+        <where>
+            <choose>
+                <when test="cagencyIdList != null and cagencyIdList !='' ">
+                    AND agt.parentId in ( ${cagencyIdList} )
+                </when>
+                <when test="cagencyId != null">
+                    AND agt.parentId=#{cagencyId}
+                </when>
+                <when test="tagencyIdList != null and tagencyIdList !='' ">
+                    AND agt.parentId in ( ${tagencyIdList} )
+                </when>
+                <when test="tagencyId != null">
+                    AND agt.parentId=#{tagencyId}
+                </when>
+            </choose>
+            <if test="groupId != null">
+                AND groupId=#{groupId}
+            </if>
+            <if test="subCagencyId != null">
+                AND ma.subCagencyId = #{subCagencyId}
+            </if>
+        </where>
+        GROUP BY ma.loginName
+    </select>
+
+
+    <select id="getMemberAccountHuPengNames" resultType="java.lang.String">
+        select loginName from mbr_account ma where ma.registertime <![CDATA[ >= ]]> #{startTime} and ma.registertime <![CDATA[ <= ]]> #{endTime} and promoteType =1
+    </select>
+
+    <select id="getAccountNames" resultType="java.lang.String">
+        select loginName from mbr_account ma where ma.id in
+        <foreach collection="ids" open="(" close=")" separator="," item="id">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="getParentList" resultType="com.wsdy.saasops.modules.activity.dto.HuPengLevelDto">
+        SELECT
+            ma.id subaccountid,
+            ma.loginname subloginname,
+            mt.depth,
+            ma2.id accountid,
+            ma2.loginname loginname
+        FROM
+        mbr_account ma
+            INNER JOIN mbr_tree mt ON mt.childnodeid = ma.id
+            INNER JOIN mbr_account ma2 ON ma2.id = mt.parentid
+        WHERE
+            ma.loginname = #{subLoginName}
+            AND mt.depth > 0
+        ORDER BY
+        mt.depth DESC
+    </select>
+
+    <update id="updateBillManageStatus"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrBillManage">
+        update mbr_bill_manage
+        <set>
+            <if test="status != null">`status` = #{status},</if>
+            <if test="depotAfterBalance != null">`depotAfterBalance` = #{depotAfterBalance},</if>
+            <if test="afterBalance != null">`afterBalance` = #{afterBalance},</if>
+            <if test="beforeBalance != null">`beforeBalance` = #{beforeBalance},</if>
+        </set>
+        where id = #{id} and status=0
+    </update>
+
+    <select id="userBankCard" parameterType="com.wsdy.saasops.modules.member.entity.MbrBankcard"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrBankcard">
+        select t1.*,t2.bankLog ,t2.backBankImg, (select count(1) from fund_acc_withdraw t where t.accountId=t1.accountId and t.bankCardId=t1.id) as isDraw
+        from mbr_bankcard t1 LEFT JOIN t_bs_bank t2 on
+        t1.bankCardId=t2.id
+        <where>
+            <if test="accountId != null">
+                AND t1.accountId=#{accountId}
+            </if>
+            <if test="isDel != null">
+                AND t1.isDel=#{isDel}
+            </if>
+            <if test="available != null">
+                AND t1.available=#{available}
+            </if>
+            <if test="bankName != null and bankName != ''">
+                AND t1.bankName=#{bankName}
+            </if>
+            <if test="address != null and address != ''">
+                AND t1.address=#{address}
+            </if>
+        </where>
+    </select>
+
+    <select id="userCryptoCurrencies" parameterType="com.wsdy.saasops.modules.member.entity.MbrCryptoCurrencies"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrCryptoCurrencies">
+        select t1.*,logo.picpcpath bankLog,logo.walletbackimg,
+            (select count(1) from fund_acc_withdraw t where t.accountId=t1.accountId and t.cryptoCurrenciesId=t1.id) as isDraw
+        from mbr_cryptocurrencies t1
+        LEFT JOIN t_bs_bank t2 on  t1.bankCardId=t2.id
+        LEFT JOIN t_pay_cryptocurrencies_logo logo on t1.walletid = logo.id
+        <where>
+            <if test="accountId != null">
+                AND t1.accountId=#{accountId}
+            </if>
+            <if test="isDel != null">
+                AND t1.isDel=#{isDel}
+            </if>
+            <if test="available != null">
+                AND t1.available=#{available}
+            </if>
+        </where>
+        order by t1.currencyProtocol desc ,t1.createtime asc
+    </select>
+
+    <select id="queryAccWithdrawList" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw" parameterType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        select t.* from fund_acc_withdraw t where t.bankCardId=#{bankCardId}
+    </select>
+    <select id="queryAccWithdrawListByCryptoCurrencies" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw" parameterType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        select t.* from fund_acc_withdraw t where t.cryptocurrenciesid=#{cryptoCurrenciesId}
+    </select>
+
+    <select id="countSameBankNum" parameterType="com.wsdy.saasops.modules.member.entity.MbrBankcard"
+            resultType="java.lang.Integer">
+        select count(1) from mbr_bankcard where id!=#{id}
+        <if test="bankName != null and bankName!=''">
+            AND bankName=#{bankName}
+        </if>
+        <if test="cardNo != null and cardNo!=''">
+            AND cardNo=#{cardNo}
+        </if>
+        <if test="isDel != null">
+            AND isDel=#{isDel}
+        </if>
+        <if test="accountId != null">
+            AND accountId=#{accountId}
+        </if>
+    </select>
+
+    <select id="countSameCryptoCurrenciesNum" parameterType="com.wsdy.saasops.modules.member.entity.MbrCryptoCurrencies"
+            resultType="java.lang.Integer">
+        select count(1) from mbr_cryptocurrencies where id!=#{id}
+        <if test="walletAddress != null and walletAddress!=''">
+            AND walletaddress=#{walletAddress}
+        </if>
+        <if test="isDel != null">
+            AND isDel=#{isDel}
+        </if>
+        <if test="accountId != null">
+            AND accountId=#{accountId}
+        </if>
+    </select>
+
+    <update id="updateOffline" parameterType="java.lang.String">
+		update mbr_account set isOnline=0, offlinetime=now() where loginName=#{loginName} and isOnline=1
+	</update>
+
+
+    <update id="updateOfflineById" parameterType="java.lang.Integer">
+        update mbr_account set offlinetime=now(), isOnline = 1 where id = #{accountId}
+    </update>
+
+    <select id="getAllMbrGroupIds" resultType="java.lang.Integer">
+		SELECT id FROM mbr_group
+	</select>
+	
+    <select id="countGroupMem" resultType="java.lang.Integer">
+		select count(1) from mbr_account where groupId=#{groupId}
+	</select>
+	
+    <select id="findOrder" resultType="com.wsdy.saasops.modules.member.entity.MbrBillManage">
+		select *,case when DATE_ADD(createTime,INTERVAL #{minutes} MINUTE)<![CDATA[ <= ]]>NOW() then 1 else 0 end isTimeOut from mbr_bill_manage where orderNo=#{orderNo} and status=0
+	</select>
+	
+    <select id="mbrFundsTotal" resultType="com.wsdy.saasops.modules.member.entity.MbrFundTotal"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select
+        <if test="columnSets != null and columnSets.size()>0">
+            <foreach item="columnName" collection="columnSets" separator=",">
+                tt.${columnName}
+            </foreach>
+        </if>
+        from (
+            select tb1.*,tb2.*,tb3.*,tb4.*,tb5.*,tb6.*,tb7.*,tb8.*, tb9.*,tb10.*, tb11.*
+            from(
+                select
+                IFNULL(SUM(actualArrival),0.00) onlinedepositAmounts,
+                count(1) onlinedepositNum
+                from fund_deposit
+                where accountId=#{id} and mark=0 and `status`=1
+            ) tb1
+            LEFT JOIN(
+                select
+                IFNULL(sum(actualArrival),0.00) offlinedepositAmounts,
+                count(1) offlinedepositNum
+                from fund_deposit
+                where accountId=#{id} and mark in (1,2,3,4) and `status`=1
+            )tb2 on 1=1
+            LEFT JOIN (
+                select ifnull(sum(actualArrival),0.00) withdrawactualArrivals,IFNULL(sum(actualarrival),0.00) withdrawdrawingAmounts,count(1) withDrawNum
+                from fund_acc_withdraw
+                where accountId=#{id} and `status`=1
+            )tb3 on  1=1
+            LEFT JOIN (
+                SELECT IFNULL(SUM(IF(source = 3, -1 * bonusamount, bonusamount)),0.00) bonusAmounts,COUNT(1) bonusNum
+                FROM opr_act_bonus
+                WHERE accountId=#{id} AND `status`=1
+            )tb4 ON 1=1
+            LEFT JOIN(
+                SELECT COUNT(1) adjustNum
+                FROM fund_audit
+                WHERE accountId = #{id} AND `status`=1 AND financialCode IN ('AA','AM') AND isCalculateProfit = 1
+            )tb5 on 1=1
+            LEFT JOIN(
+                SELECT SUM(a)- SUM(b) amounts
+                FROM(
+                    SELECT IFNULL(SUM(amount),0) a,0 b
+                    FROM fund_audit
+                    WHERE accountId=#{id} AND `status`=1 AND financialCode='AA' AND isCalculateProfit = 1
+                    UNION
+                    SELECT 0,IFNULL(SUM(amount),0)
+                    FROM fund_audit
+                    WHERE accountId=#{id} AND `status`=1 AND financialCode='AM' AND isCalculateProfit = 1
+                ) tb
+            ) tb6 ON 1=1
+            LEFT JOIN(
+                select IFNULL(sum(bonusAmount),0.00) bonusAmountTotal,count(1) bonusAmountNum
+                from task_bonus
+                where accountId=#{id}
+            ) tb7 on 1=1
+            LEFT JOIN (SELECT count(*) as friendsNum FROM mbr_tree where parentid = #{id} and depth = 1) tb8 ON 1 = 1
+            LEFT JOIN (SELECT IFNULL(sum(reward), 0.00) as  friendsReward  FROM mbr_rebate_friends_reward where accountid = #{id} and (type = 3 OR type = 4 OR type = 5 OR  type = 6) ) tb9 ON 1 = 1
+
+            LEFT JOIN (SELECT count(*) as huPengNum FROM mbr_tree where parentid = #{id} and depth = 1) tb10 ON 1 = 1
+            LEFT JOIN (SELECT IFNULL(sum(reward), 0.00) as  huPengReward  FROM mbr_rebate_hupeng_reward where accountid = #{id}) tb11 ON 1 = 1
+        )tt
+    </select>
+
+    <select id="selectRiskControlAudit" resultType="java.util.Map"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from (
+            SELECT 'registerIp',COUNT(*) count,registerIp item
+            FROM log_mbrregister
+            WHERE accountId !=#{id} AND registerIp is not null
+                AND  registerIp = (SELECT registerIp FROM log_mbrregister WHERE accountId=#{id} ORDER BY id DESC LIMIT 1)
+
+            UNION ALL
+
+            SELECT 'agent',COUNT(*) count,cagencyId item
+            FROM mbr_account
+            WHERE id !=#{id} AND cagencyId is not null
+                AND cagencyId = (SELECT cagencyId FROM mbr_account WHERE id=#{id})
+
+            UNION ALL
+
+            SELECT 'email',COUNT(*) count,email item
+            FROM mbr_account
+            WHERE  id !=#{id} AND email is not null  AND email !=''
+                AND email = (SELECT email FROM mbr_account WHERE id=#{id})
+
+            UNION ALL
+
+            SELECT 'qq',COUNT(*) count,qq item
+            FROM mbr_account
+            WHERE  id !=#{id}  AND qq is not null AND qq !=''
+                AND qq = (SELECT qq FROM mbr_account WHERE id=#{id})
+
+            UNION ALL
+
+            SELECT  'loginIp',count(DISTINCT l.loginName) count,l.loginIp item
+            FROM log_mbrlogin n
+            INNER JOIN log_mbrlogin l ON n.loginIp = l.loginIp
+            WHERE n.accountId =#{id} AND l.accountId != #{id}
+
+            UNION ALL
+
+            SELECT  'deviceUuid',count(DISTINCT l.accountid) count,l.deviceUuid item
+            FROM mbr_account_device n
+            INNER JOIN mbr_account_device l ON n.deviceuuid = l.deviceuuid
+            and n.deviceuuid != ''
+            WHERE n.accountId =#{id} AND l.accountId != #{id}
+
+            UNION ALL
+
+            SELECT 'sameRealName',COUNT(*) count,realname item
+            FROM mbr_account
+            WHERE  id !=#{id} AND realname is not null  AND realname !=''
+            AND realname = (SELECT realname FROM mbr_account WHERE id=#{id})
+
+            UNION ALL
+
+            SELECT 'labelid',labelid count, labelid item
+            FROM mbr_account
+            WHERE id = #{id}
+        )tt
+        <where>
+            <if test="columnSets != null and columnSets.size()>0">
+                tt.registerIp in
+                <foreach collection="columnSets" open="(" close=")" separator="," item="column">
+                    #{column}
+                </foreach>
+            </if>
+        </where>
+    </select>
+
+    <select id="queryAccountBonusReporList" resultType="java.util.Map">
+		SELECT 'deposit',SUM(depositAmount),count(*) count FROM fund_deposit WHERE accountId=#{accountId}  AND status=1
+		UNION ALL
+		SELECT 'withdraw',SUM(actualarrival),count(*) count FROM fund_acc_withdraw WHERE accountId=#{accountId}  AND status=1
+		UNION ALL
+		SELECT 'bonus',SUM(bonusAmount),count(*) count FROM opr_act_bonus WHERE accountId=#{accountId}  AND status=1
+	</select>
+
+    <select id="queryAccountFundList" resultType="com.wsdy.saasops.modules.member.entity.MbrBillDetail">
+		SELECT * FROM
+		(
+			SELECT financialCode,amount,afterBalance,beforeBalance,orderTime,memo,opType,
+			0 depotAfterBalance,0 depotBeforeBalance,
+			(SELECT codeName FROM t_bs_financialcode WHERE code=financialCode) financialCodeName
+			FROM mbr_bill_detail
+			 WHERE accountId=#{accountId} AND financialCode != 'BI' AND financialCode != 'BO'
+			UNION ALL
+			SELECT case opType when 0 then 'BI'when 1 then 'BO' end financialCode,amount,
+			afterBalance,beforeBalance,createTime orderTime,memo,opType,
+			depotAfterBalance,depotBeforeBalance,
+			(SELECT codeName FROM t_bs_financialcode WHERE code=financialCode) financialCodeName
+			FROM mbr_bill_manage WHERE accountId = #{accountId}
+		) t ORDER BY orderTime DESC
+	</select>
+
+    <select id="queryAccountAuditInfo" resultType="com.wsdy.saasops.modules.member.dto.ItemDto">
+        SELECT * FROM
+        (
+        <if test="keys =='registerIp'">
+            SELECT r.registerIp item,r.loginName,y.agyaccount
+            FROM log_mbrregister r
+            LEFT JOIN mbr_account t ON t.id = r.accountid
+            LEFT JOIN agy_account y ON y.id = t.cagencyid
+            WHERE r.registerIp=#{item} AND r.accountId !=#{accountId}
+        </if>
+        <if test="keys =='loginIp'">
+            SELECT DISTINCT l.loginName,l.loginIp,l.logintime item,y.agyaccount
+            FROM log_mbrlogin n
+            INNER JOIN log_mbrlogin l ON n.loginIp = l.loginIp
+            LEFT JOIN mbr_account t ON t.id = l.accountid
+            LEFT JOIN agy_account y ON y.id = t.cagencyid
+            WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+        </if>
+        <if test="keys =='agent'">
+            SELECT t.loginName,n.agyAccount item FROM mbr_account t LEFT JOIN agy_account n ON t.cagencyId = n.id
+            WHERE t.id !=#{accountId} AND t.cagencyId =#{item}
+        </if>
+        <if test="keys =='email'">
+            SELECT email item,loginName FROM mbr_account WHERE email=#{item} AND id !=#{accountId}
+            AND email is not null  AND email !=''
+        </if>
+        <if test="keys =='qq'">
+            SELECT qq item,loginName FROM mbr_account WHERE qq=#{item} AND id !=#{accountId}
+            AND qq is not null  AND qq !=''
+        </if>
+        <if test="keys =='deviceUuid'">
+            SELECT  l.loginName,l.deviceUuid item,l.createtime,y.agyaccount
+            FROM mbr_account_device n
+            INNER JOIN mbr_account_device l ON n.deviceuuid = l.deviceuuid
+            LEFT JOIN mbr_account t ON t.id = l.accountid
+            LEFT JOIN agy_account y ON y.id = t.cagencyid
+            WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+            and n.deviceuuid != ''
+            order by l.createtime desc
+        </if>
+        <if test="keys =='sameRealName'">
+            SELECT realname item,loginName
+            FROM mbr_account
+            WHERE realname=#{item} AND id !=#{accountId}
+            AND realname is not null  AND realname !=''
+        </if>
+        <if test="keys =='labelid'">
+            SELECT la.name item, t.loginName, y.agyaccount
+            FROM mbr_account t
+            LEFT JOIN agy_account y ON y.id = t.cagencyid
+            LEFT JOIN mbr_label la ON la.id = t.labelid
+            WHERE t.labelid = #{item} AND t.id !=#{accountId}
+        </if>
+       ) t
+    </select>
+
+    <select id="queryAccountMemoList" resultType="com.wsdy.saasops.modules.member.entity.MbrMemo"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrMemo">
+        SELECT mo.*,re.role_name roleName FROM mbr_memo mo LEFT JOIN sys_role re ON mo.roleId = re.role_id
+        <where>
+            <if test="accountId != null">
+                AND mo.accountId=#{accountId}
+            </if>
+        </where>
+        ORDER BY memoTime desc LIMIT 3
+    </select>
+
+    <select id="queryAccountMemoListAll" resultType="com.wsdy.saasops.modules.member.entity.MbrMemo"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrMemo">
+        SELECT mo.*,re.role_name roleName FROM mbr_memo mo LEFT JOIN sys_role re ON mo.roleId = re.role_id
+        <where>
+            <if test="accountId != null">
+                AND mo.accountId=#{accountId}
+            </if>
+        </where>
+        ORDER BY memoTime desc
+    </select>
+
+    <select id="queryAccountSortMemo" resultType="com.wsdy.saasops.modules.member.entity.MbrMemo">
+        SELECT re.role_name roleName,mo.roleId FROM mbr_memo mo
+        LEFT JOIN sys_role re ON mo.roleId = re.role_id
+        WHERE mo.roleId IS NOT NULL AND mo.accountId = #{accountId} GROUP BY mo.roleId
+    </select>
+
+    <select id="findHomePageCount" resultType="java.util.Map">
+        SELECT 'active',count(DISTINCT accountId) count FROM (
+        SELECT DISTINCT accountId  FROM fund_deposit
+        WHERE `status`=1 AND DATE_FORMAT(auditTime, "%Y-%m-%d") =#{startday}
+        UNION ALL
+        SELECT accountId  FROM fund_acc_withdraw
+        WHERE `status`=1 AND DATE_FORMAT(passTime, "%Y-%m-%d") =#{startday}
+        UNION ALL
+        SELECT  DISTINCT account.id accountId FROM rpt_bet_rcd_day ry
+        INNER JOIN mbr_account account ON ry.username=account.loginName
+        WHERE ry.startday =#{startday}
+        ) a
+        UNION ALL
+        SELECT 'register',count(*) FROM mbr_account
+        WHERE DATE_FORMAT(registerTime, "%Y-%m-%d") =#{startday}
+        UNION ALL
+        SELECT 'login',count(DISTINCT accountId) FROM log_mbrlogin
+        WHERE DATE_FORMAT(loginTime, "%Y-%m-%d") =#{startday}
+        UNION ALL
+        SELECT 'depositCount',count(DISTINCT accountId) FROM fund_deposit
+        WHERE `status`=1 AND DATE_FORMAT(auditTime, "%Y-%m-%d") =#{startday}
+        UNION ALL
+        SELECT 'depositSum',IFNULL(sum(depositAmount),0) FROM fund_deposit
+        WHERE `status`=1 AND DATE_FORMAT(auditTime, "%Y-%m-%d") =#{startday}
+        UNION ALL
+        SELECT 'withdrawSum',IFNULL(sum(actualarrival),0) FROM fund_acc_withdraw
+        WHERE `status`=1 AND DATE_FORMAT(passTime, "%Y-%m-%d") =#{startday}
+    </select>
+
+    <select id="findHomePageCountEx" resultType="java.util.Map">
+        -- 活跃用户: 投注额大于0
+       	SELECT 'active',COUNT(DISTINCT username) count FROM rpt_bet_rcd_day WHERE bet > 0
+           		AND startday >= #{startTime} AND startday <![CDATA[ < ]]> #{endTime}
+        -- 新增会员
+        UNION ALL
+        SELECT 'register',count(*) FROM mbr_account
+        WHERE DATE_FORMAT(registerTime, "%Y-%m-%d")  <![CDATA[ >= ]]> #{startTime} and  DATE_FORMAT(registerTime, "%Y-%m-%d")  <![CDATA[ < ]]> #{endTime}
+        -- 登录会员
+        UNION ALL
+        SELECT 'login',count(DISTINCT accountId) FROM log_mbrlogin
+        WHERE DATE_FORMAT(loginTime, "%Y-%m-%d")  <![CDATA[ >= ]]> #{startTime} and   DATE_FORMAT(loginTime, "%Y-%m-%d") <![CDATA[ < ]]> #{endTime}
+        -- 存款会员
+        UNION ALL
+        SELECT 'depositCount',count(DISTINCT accountId) FROM fund_deposit
+        WHERE `status`=1
+            AND DATE_FORMAT(auditTime, "%Y-%m-%d")  <![CDATA[ >= ]]> #{startTime} and   DATE_FORMAT(auditTime, "%Y-%m-%d") <![CDATA[ < ]]> #{endTime}
+        -- 总存款
+        UNION ALL
+        SELECT 'depositSum',IFNULL(sum(depositAmount),0) FROM fund_deposit
+        WHERE `status`=1
+            AND DATE_FORMAT(auditTime, "%Y-%m-%d")  <![CDATA[ >= ]]> #{startTime} and   DATE_FORMAT(auditTime, "%Y-%m-%d") <![CDATA[ < ]]> #{endTime}
+        -- 总取款
+        UNION ALL
+        SELECT 'withdrawSum',IFNULL(SUM(actualarrival),0) FROM fund_acc_withdraw
+        WHERE `status`=1
+            AND DATE_FORMAT(passTime, "%Y-%m-%d")  <![CDATA[ >= ]]> #{startTime} and   DATE_FORMAT(passTime, "%Y-%m-%d") <![CDATA[ < ]]> #{endTime}
+    </select>
+
+    <select id="findRecommendAccounts" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+       SELECT t.loginName FROM mbr_tree tree
+       LEFT JOIN mbr_account t ON t.id = tree.childNodeId
+       WHERE tree.parentId = #{accountId} AND tree.depth=1
+    </select>
+
+    <select id="findExportList" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT distinct t1.loginName,t1.realName,t1.mobile,t1.qq,t1.weChat,t1.loginTime,t1.available,
+            t0.agyAccount,
+            t5.groupName,
+            wa.balance,
+            t4.registerTime,t4.registerIp,t4.regArea,
+            lml.loginIp,lml.loginArea,
+            lml.loginType, lml.loginUrl,
+            t6.tiername,
+            onlinepay.onlineDepositCount,onlinepay.onlineDepositAmount,copay.conDepositCount,copay.conDepositAmount,
+            withdraw.withdrawCount,withdraw.withdrawAmount,
+            bunus.bonusCount,bunus.bonusAmount,
+            fe.createTime depositTime,
+            (select GROUP_CONCAT(CONCAT(province,city) SEPARATOR '|') bankArea from mbr_bankcard where accountId=t1.id and isdel = 0 group by accountid ) bankArea
+        FROM mbr_account t1
+	        JOIN agy_account t0 on t1.cagencyId = t0.id
+	        JOIN mbr_group t5 on t1.groupId=t5.id
+	        LEFT JOIN mbr_wallet wa on t1.loginName = wa.loginName
+	        LEFT JOIN log_mbrregister t4 on t1.loginName=t4.loginName
+	        LEFT JOIN log_mbrlogin lml on lml.loginName = t1.loginName and lml.loginTime = t1.loginTime
+	        JOIN mbr_activity_level t6 on t1.actlevelid = t6.id
+	        LEFT JOIN (select fd.accountId,count(1) onlineDepositCount,sum(depositAmount) onlineDepositAmount from fund_deposit fd where status=1 and mark = 0 group by fd.accountId) onlinepay on onlinepay.accountId = t1.id
+	        LEFT JOIN (select fd.accountId,count(1) conDepositCount,sum(depositAmount) conDepositAmount from fund_deposit fd where status=1 and mark in (1,2,3) group by fd.accountId) copay on copay.accountId = t1.id
+	        LEFT JOIN (select faw.accountId,count(1) withdrawCount,sum(faw.actualarrival) withdrawAmount from fund_acc_withdraw faw where faw.`status`=1 GROUP BY faw.accountId) withdraw on withdraw.accountId = t1.id
+	        LEFT JOIN (select oab.accountId,count(1) bonusCount,sum(oab.bonusAmount) bonusAmount from opr_act_bonus oab where oab.`status` =1 GROUP BY oab.accountId) bunus on bunus.accountId = t1.id
+        	LEFT JOIN (SELECT min(id),accountId, createTime from fund_deposit where status = 1 GROUP BY accountid) fe on fe.accountId  = t1.id
+        <include refid="account_where"/>
+    </select>
+    <sql id="accountAll_where">
+        <where>
+            (s.depth = 1 or s.depth = 0)
+            <if test="modifyTime != null and modifyTime != ''">
+                AND t1.modifyTime <![CDATA[ >= ]]> DATE_FORMAT(#{modifyTime},'%Y-%m-%d %H:%i:%S')
+            </if>
+            <if test="modifyTimeEnd != null and modifyTimeEnd!=''">
+                AND t1.modifyTime <![CDATA[ <= ]]>  DATE_FORMAT(#{modifyTimeEnd},'%Y-%m-%d %H:%i:%S')
+            </if>
+            <if test="registerTime != null and registerTime != ''">
+                AND t1.registerTime <![CDATA[ >= ]]> DATE_FORMAT(#{registerTime},'%Y-%m-%d %H:%i:%S')
+            </if>
+            <if test="registerTimeEnd != null and registerTimeEnd!=''">
+                AND t1.registerTime <![CDATA[ <= ]]>  DATE_FORMAT(#{registerTimeEnd},'%Y-%m-%d %H:%i:%S')
+            </if>
+            <if test="available != null">
+                AND t1.available=#{available}
+            </if>
+        </where>
+    </sql>
+
+    <select id="findAllAccountList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select
+        t1.*,wa.balance totalBalance,0 totalDeposit,0
+        totalWithdrawal,t0.agyAccount,t0.id agyAccountId,t4.registerIp,t4.registerUrl,t4.registerSource,t5.groupName,
+        (SELECT createTime FROM fund_deposit WHERE accountId=t1.id AND`status`=1 LIMIT 1 ) AS depositTime,
+        (SELECT memo FROM mbr_memo WHERE accountId=t1.id ORDER BY memoTime desc LIMIT 1 ) AS newMemo,
+        s.parentId,s.depth
+        from mbr_account t1
+        LEFT JOIN agy_account t0 on t1.cagencyId = t0.id
+        LEFT JOIN mbr_wallet wa on t1.loginName = wa.loginName
+        LEFT JOIN log_mbrregister t4 on t1.loginName=t4.loginName
+        LEFT JOIN mbr_group t5 on t1.groupId=t5.id
+        LEFT JOIN mbr_tree s  on t1.id = s.childNodeId
+        <include refid="accountAll_where"/>
+        order by t1.id
+    </select>
+
+    <select id="findAccountOnlineOutOfTime" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from mbr_account ma where ma.offlinetime  <![CDATA[  <= ]]> DATE_SUB(now() ,INTERVAL 60 MINUTE)  and isonline = 1
+    </select>
+
+    <update id="batchUpdateOnline">
+        update mbr_account set isonline = 0, offlinetime = now() where id in
+        <foreach collection="accountIds" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+    </update>
+    <update id="batchUpdateLoginOutTime">
+        update log_mbrlogin set logouttime = now(),onlinetime = TIMESTAMPDIFF(SECOND,logintime,now())where id in
+        <foreach collection="accountIds" item="id" separator="," open="(" close=")">
+            #{id}
+        </foreach>
+        and logouttime is null
+    </update>
+
+    <select id="countGroupAgent" resultType="java.lang.Integer">
+		select count(1) from agy_account where groupId=#{groupId}
+	</select>
+
+    <select id="findAccoutnSubCount" resultType="java.lang.Integer">
+		SELECT count(*) FROM mbr_tree WHERE parentid=#{accountId} and depth >0
+	</select>
+
+    <select id="accountMassTextingCount" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select
+        count(t1.id) totalAcc,
+        count( CASE WHEN t1.isVerifyMoblie = 1 THEN t1.id ELSE NULL END )  accWithMobile,-- 实发
+        count( CASE WHEN (t1.isVerifyMoblie = 0 or t1.isVerifyMoblie is null) THEN t1.id ELSE NULL END )  accWithoutMobile-- 无手机号
+        from mbr_account t1
+        LEFT JOIN agy_account t0 on t1.cagencyId = t0.id
+        LEFT JOIN mbr_wallet wa on t1.loginName = wa.loginName
+        LEFT JOIN log_mbrregister t4 on t1.loginName=t4.loginName
+        LEFT JOIN mbr_group t5 on t1.groupId=t5.id
+        LEFT JOIN mbr_activity_level mal on t1.actLevelId = mal.id
+        <include refid="account_where"/>
+    </select>
+
+    <select id="findMbrAccountListForMassTexting" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select t1.*
+        from mbr_account t1
+        LEFT JOIN agy_account t0 on t1.cagencyId = t0.id
+        LEFT JOIN mbr_wallet wa on t1.loginName = wa.loginName
+        LEFT JOIN log_mbrregister t4 on t1.loginName=t4.loginName
+        LEFT JOIN mbr_group t5 on t1.groupId=t5.id
+        LEFT JOIN mbr_activity_level mal on t1.actLevelId = mal.id
+        <include refid="account_where"/>
+    </select>
+
+    <select id="findValidBetTotalByDepotIds" resultType="java.math.BigDecimal">
+        SELECT IFNULL(sum(t.validbet),0)
+        FROM (
+            SELECT DISTINCT rpt.*
+            FROM mbr_account mbr
+            LEFT JOIN rpt_bet_rcd_day rpt ON mbr.loginName = rpt.username
+            LEFT JOIN t_gm_depot depot ON rpt.platform = depot.depotcode
+            WHERE mbr.id = #{accountId}
+            AND rpt.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+            AND rpt.startday <![CDATA[ < ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+            AND rpt.gamecategory = #{gameCategory}
+            AND depot.id in
+            <foreach collection="depotIds" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        ) t
+	</select>
+
+    <select id="findPayoutTotal" resultType="java.math.BigDecimal">
+        SELECT IFNULL(sum(t.payout),0)
+        FROM (
+            SELECT DISTINCT rpt.*
+            FROM mbr_account mbr
+            LEFT JOIN rpt_bet_rcd_day rpt ON mbr.loginName = rpt.username
+            LEFT JOIN t_gm_depot depot ON rpt.platform = depot.depotcode
+            WHERE mbr.id = #{accountId}
+            AND rpt.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+            AND rpt.startday <![CDATA[ < ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+            AND rpt.gamecategory = #{gameCategory}
+            AND depot.id in
+            <foreach collection="depotIds" item="item" separator="," open="(" close=")">
+                #{item}
+            </foreach>
+        ) t
+	</select>
+
+    <select id="findSubAccounts" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+		SELECT ma1.* from mbr_account ma
+			INNER JOIN mbr_tree mt ON ma.id = mt.parentid
+			INNER JOIN mbr_account ma1 ON mt.childnodeid = ma1.id
+            INNER JOIN agy_tree  agt ON agt.childnodeid = ma1.cagencyid
+		WHERE ma.loginname = #{loginName}
+
+        <if test="subcagencyId != null">
+            AND ma1.subcagencyid = #{subcagencyId}
+        </if>
+        <if test="groupId != null">
+            AND ma1.groupid = #{groupId}
+        </if>
+        <choose>
+            <when test="cagencyIdList != null and cagencyIdList !='' ">
+                AND agt.parentId in ( ${cagencyIdList} )
+            </when>
+            <when test="cagencyId != null">
+                AND agt.parentId=#{cagencyId}
+            </when>
+            <when test="tagencyIdList != null and tagencyIdList !='' ">
+                AND agt.parentId in ( ${tagencyIdList} )
+            </when>
+            <when test="tagencyId != null">
+                AND agt.parentId=#{tagencyId}
+            </when>
+        </choose>
+        GROUP BY ma.loginName
+	</select>
+
+    <select id="queryAccountMobileEncrypt" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from mbr_account
+        <where>
+            <if test="mobileEncrypt != null">
+                and (
+                mobile =#{mobile}
+                <foreach collection="mobileEncrypt" item="item">
+                    or mobile LIKE concat('%',#{item},'%')
+                </foreach>
+                )
+            </if>
+            <if test="mobileEncrypt == null">
+                and mobile =#{mobile}
+            </if>
+            <if test="isVerifyMoblie != null">
+                and isVerifyMoblie =#{isVerifyMoblie}
+            </if>
+        </where>
+    </select>
+
+    <select id="queryMtAccountMobileEncrypt" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from mbr_account
+        <where>
+            <if test="mobileEncrypt != null">
+                and (
+                mobile =#{mobile}
+                <foreach collection="mobileEncrypt" item="item">
+                    or mobile LIKE concat('%',#{item},'%')
+                </foreach>
+                )
+            </if>
+            <if test="mobileEncrypt == null">
+                and mobile =#{mobile}
+            </if>
+            <if test="isVerifyMoblie != null">
+                and isVerifyMoblie =#{isVerifyMoblie}
+            </if>
+
+            <if test="tagencyId != null">
+                and tagencyid =#{tagencyId}
+            </if>
+        </where>
+    </select>
+
+    <select id="taskList" resultType="com.wsdy.saasops.modules.task.entity.TaskBonus">
+        SELECT bonus.*, c.taskname
+        FROM task_bonus bonus
+        LEFT JOIN task_config c ON c.id = bonus.configid
+        where bonus.accountId =#{accountId}
+	</select>
+
+    <select id="queryBankHistoryListPage" parameterType="java.lang.Integer" resultType="com.wsdy.saasops.modules.member.entity.MbrBankcardHistory">
+        select *
+        from mbr_bankcard_history t
+        where t.accountId = #{accountId}
+        and (t.isdel=1 or t.isuse=1)
+    </select>
+
+    <select id="queryMbrDeviceNum" resultType="java.lang.Integer">
+        SELECT count(*) FROM mbr_use_device WHERE loginname=#{loginName}
+    </select>
+    <select id="getDeviceByUuid" resultType="com.wsdy.saasops.modules.member.entity.MbrUseDevice">
+        SELECT * FROM mbr_use_device
+        WHERE deviceuuid=#{deviceUuid} and loginname=#{loginName}
+          and exptime <![CDATA[ >= ]]> #{exptime}
+        <if test="valitimes != null">
+          and valitimes <![CDATA[ >= ]]>  1
+        </if>
+    </select>
+
+    <select id="getLastDaysMbrAccountLog" resultType="java.lang.Integer">
+        SELECT count(1) FROM mbr_account_log mal
+        WHERE mal.accountid = #{accountId} AND DATE_FORMAT(mal.createtime, '%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{createTime}, '%Y-%m-%d')
+        AND modulename = #{moduleName}
+    </select>
+
+    <select id="getLastDowngradeDays" resultType="java.lang.String">
+        SELECT createtime FROM mbr_account_log mal
+        WHERE mal.accountid = #{accountId}
+        AND modulename = #{moduleName} ORDER BY id DESC LIMIT 1
+    </select>
+
+</mapper>

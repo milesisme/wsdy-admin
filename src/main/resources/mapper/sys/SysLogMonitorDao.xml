@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.sys.dao.SysLogMonitorDao">
+
+	<select id="queryList" resultType="com.wsdy.saasops.modules.sys.entity.SysLogMonitorEntity">
+		select t.* from mbr_account_log t
+		<include refid="queryWhere" />
+		order by t.createTime desc
+	</select>
+
+	<sql id="queryWhere">
+		<where>
+			<if test="accountId != null">
+				AND t.accountId =#{accountId}
+			</if>
+			<if test="content != null and content != ''">
+				AND (modulename LIKE concat('%',#{content},'%') or t.content->'$.item' like concat('%',#{content},'%')
+				or t.content->'$.afterChange' like concat('%',#{content},'%') or t.content->'$.beforeChange' like concat('%',#{content},'%'))
+			</if>
+			<if test="loginName != null and loginName.trim() != ''">
+				AND t.loginName like concat('%',#{loginName},'%')
+			</if>
+			<if test="createStartTime != null and createStartTime != ''">
+				AND t.createTime <![CDATA[ >= ]]> #{createStartTime}
+			</if>
+			<if test="createEndTime != null and createEndTime != ''">
+				AND t.createTime <![CDATA[ <= ]]> #{createEndTime}
+			</if>
+			<if test="moduleName != null and moduleName != ''">
+				AND t.moduleName =#{moduleName}
+			</if>
+			<if test="ip != null and ip != ''">
+				AND t.ip =#{ip}
+			</if>
+		</where>
+	</sql>
+	
+</mapper>

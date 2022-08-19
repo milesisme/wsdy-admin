@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.MaterialMapper">
+
+    <select id="materialList" resultType="com.wsdy.saasops.modules.agent.entity.AgentMaterial"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentMaterial">
+       select * from agy_material
+       <where>
+           <if test="name!=null and name != ''">
+               id in (SELECT materialid from agy_material_detail WHERE name LIKE CONCAT('%',#{name},'%'))
+           </if>
+       </where>
+        ORDER BY createTime desc
+    </select>
+
+    <select id="materialDetailList" resultType="com.wsdy.saasops.modules.agent.entity.AgentMaterialDetail"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentMaterialDetail">
+        select * from agy_material_detail
+        <where>
+            <if test="materialId!=null">
+                AND materialId =#{materialId}
+            </if>
+            <if test="name!=null and name != ''">
+                AND name LIKE CONCAT('%',#{name},'%')
+            </if>
+        </where>
+        ORDER BY createTime desc
+    </select>
+
+
+</mapper>

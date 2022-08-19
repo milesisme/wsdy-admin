@@ -1,0 +1,416 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.AgentNewMapper">
+
+    <select id="newfindAgyAccountListPage" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT * FROM (
+	        SELECT t.*,IFNULL(a.accountCount,0) accountNum,d.departmentName,
+			        IFNULL(su.subordinateAgentCount,0) directAgentCount,
+			        ar.agentType,case t.`attributes` when 1 then acc.agyaccount else ac.agyaccount end agyTopAccount,
+			        CASE t.available WHEN 0 THEN '锁定'  when 1 THEN '正常'   END statusStr,
+			        agyc.contractname contractname,
+			        agyw.balance walletBalance,
+			        agyw.rechargeWallet rechargeWallet,
+			        agyw.payoffWallet payoffWallet,
+			        agyw.walletType walletType,
+                    IFNULL(t.uprate, CASE ar.agentType WHEN 1 THEN  t.rebateratio when 2 THEN t.firstagentratio  END) rate
+			        FROM agy_account t
+		        left join agy_contract agyc on t.contractid=agyc.id
+		        left join agy_wallet  agyw on  t.id = agyw.accountid
+		        LEFT JOIN (SELECT cagencyId,count(*) accountCount from mbr_account GROUP BY cagencyId) a
+		        	on a.cagencyId = t.id
+		        LEFT JOIN agy_department d ON t.departmentid = d.id
+		        LEFT JOIN (SELECT parentid,count(*) subordinateAgentCount from agy_tree WHERE depth =1 GROUP by parentid) su on
+		        	su.parentid = t.id
+		        LEFT JOIN (SELECT max(depth) agentType,childnodeid from agy_tree GROUP by childnodeid) ar
+		        	ON ar.childnodeid = t.id
+		        LEFT JOIN (SELECT parentid,childnodeid from agy_tree WHERE depth=1 GROUP by childnodeid) top
+		        	ON top.childnodeid = t.id
+		        Left join agy_account ac ON ac.id = top.parentid
+		        Left join agy_account acc ON acc.id = t.superiorcloneid
+        <where>
+            <if test="feeModel != null">
+                AND t.feeModel = #{feeModel}
+            </if>
+            <if test="departmentid != null">
+                AND t.departmentid = #{departmentid}
+            </if>
+
+            <if test="departmentid == null and (attributes == 2 or attributes == 3) and departmentIdList!=null and departmentIdList.size()>0">
+                AND t.departmentid in
+                <foreach item="departmentid" collection="departmentIdList" open="(" separator="," close=")">
+                    #{departmentid}
+                </foreach>
+            </if>
+
+            <if test="id != null">
+                AND t.id = #{id}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND t.agyAccount = #{agyAccount}
+            </if>
+            <if test="mobile != null and mobile != ''">
+                AND t.mobile = #{mobile}
+            </if>
+            <if test="realName != null and realName != ''">
+                AND t.realName = #{realName}
+            </if>
+            <if test="agentType != null">
+                AND ar.agentType = #{agentType}
+            </if>
+            <if test="available != null">
+                AND t.available= #{available}
+            </if>
+            <if test="attributes != null">
+                AND t.attributes= #{attributes}
+            </if>
+            <if test="attributes == null and attributesList!=null   and attributesList.size()>0">
+                AND t.attributes in
+                <foreach item="attributes" collection="attributesList" open="(" separator="," close=")">
+                    #{attributes}
+                </foreach>
+            </if>
+
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND t.createTime <![CDATA[ >= ]]>#{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND t.createTime <![CDATA[ <= ]]>#{createTimeTo}
+            </if>
+            <if test="status != null">
+                AND t.status =#{status}
+            </if>
+            <if test="reviewStatus == true">
+                AND t.status !=1
+            </if>
+        </where>
+        ORDER BY t.createtime desc
+        ) a
+        where 1=1
+        <if test="agyTopAccount != null and agyTopAccount !=''">
+            and  a.agyTopAccount=#{agyTopAccount}
+        </if>
+        <if test="orderBy != null and orderBy !=''">
+            order by ${orderBy}
+        </if>
+    </select>
+
+    <select id="totalAgentList" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT t.*, ar.agentType
+        FROM agy_account t
+        LEFT JOIN (SELECT max(depth) agentType,childnodeid from agy_tree GROUP by childnodeid) ar
+        ON ar.childnodeid = t.id
+        WHERE t.available=1
+        <if test="isSign == true">
+            and ar.agentType <![CDATA[ >= ]]> 0 and ar.agentType<![CDATA[ <= ]]>2
+        </if>
+        <if test="isSign == false">
+            and ar.agentType <![CDATA[ >= ]]> 0 and ar.agentType<![CDATA[ <= ]]>3
+        </if>
+        <if test="agyAccount != null and agyAccount != ''">
+            AND t.agyAccount = #{agyAccount}
+        </if>
+        <if test="agentType != null and agentType != ''">
+            AND ar.agentType = #{agentType}
+        </if>
+        <if test="available != null">
+            AND t.available= #{available}
+        </if>
+    </select>
+
+    <select id="agent0verview" resultType="java.util.Map">
+        -- 活跃用户: 存/取款 投注
+        SELECT 'active',count(DISTINCT accountId) count FROM (
+	        SELECT  DISTINCT account.id accountId,SUM(ry.bet) bet
+	        FROM rpt_bet_rcd_day ry
+	        INNER JOIN mbr_account account ON ry.username=account.loginName
+	        WHERE ry.startday  <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+	        and  ry.startday  <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+	        <if test="agentId != null">
+	            and account.cagencyid =#{agentId}
+	        </if>
+	        <if test="subcagencyId != null">
+	            and account.subcagencyid =#{subcagencyId}
+	        </if>
+	        GROUP BY accountId HAVING bet >= 100
+        ) a
+        -- 新增会员
+        UNION ALL
+        SELECT 'register',IFNULL(count(*),0) count FROM mbr_account
+        WHERE registerTime  <![CDATA[ >= ]]> #{startTime}
+        and registerTime <![CDATA[ < ]]> #{endTime}
+        <if test="agentId != null">
+            and cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and subcagencyid =#{subcagencyId}
+        </if>
+        -- 首存人数
+        UNION ALL
+        SELECT 'firstDeposit',IFNULL(count(*),0) count
+        from fund_deposit t
+        inner join(
+        -- 所有会员通过的首存
+        select accountid,min(id) id,depositamount
+        from fund_deposit
+        where status = 1
+        group by accountid
+        ) d on t.id = d.id
+        INNER JOIN mbr_account account ON account.id=t.accountid
+        WHERE t.audittime <![CDATA[ >= ]]> #{startTime}
+        and t.audittime <![CDATA[ <= ]]> #{endTime}
+        and t.`status`=1
+
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+        -- 有效投注
+        UNION ALL
+        SELECT 'validBet',IFNULL(sum(y.validbet),0) count from rpt_bet_rcd_day y
+        INNER JOIN mbr_account account ON account.loginname=y.username
+        WHERE y.startday  <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+        and y.startday  <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+        <!--
+        净输赢
+        UNION ALL
+        SELECT 'payout',-1*IFNULL(sum(y.payout),0) count from rpt_bet_rcd_day y
+        INNER JOIN mbr_account account ON account.loginname=y.username
+        WHERE y.startday  <![CDATA[ >= ]]> #{startTime}
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+            净输赢最高值
+        UNION ALL
+        SELECT 'highestPayout',-1*IFNULL(min(payout),0) count from (
+        SELECT sum(y.payout) payout from rpt_bet_rcd_day y
+        INNER JOIN mbr_account account ON account.loginname=y.username
+        WHERE y.startday <![CDATA[ >= ]]> #{startTime}
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+        GROUP BY y.startday
+        ) a
+        -->
+        -- 下线会员
+        UNION ALL
+        SELECT 'accountNum',IFNULL(count(*),0) count
+        from  mbr_account account
+        <where>
+            <if test="agentId != null">
+                and account.cagencyid =#{agentId}
+            </if>
+            <if test="subcagencyId != null">
+                and account.subcagencyid =#{subcagencyId}
+            </if>
+        </where>
+        -- 登录人数
+        UNION ALL
+        SELECT 'lognNum',IFNULL(count(distinct account.accountid),0) count
+        from  log_mbrlogin account
+        INNER JOIN mbr_account ma on ma.id = account.accountid
+        where account.logintime <![CDATA[ >= ]]> #{startTime}
+            and account.logintime <![CDATA[ <= ]]> #{endTime}
+            <if test="agentId != null">
+                and ma.cagencyid =#{agentId}
+            </if>
+            <if test="subcagencyId != null">
+                and ma.subcagencyid =#{subcagencyId}
+            </if>
+
+
+        -- 存款人数
+        UNION ALL
+        SELECT 'depositNum',IFNULL(count(DISTINCT t.accountid),0) count
+        from fund_deposit t
+        INNER JOIN mbr_account account ON account.id=t.accountid
+        WHERE t.audittime <![CDATA[ >= ]]> #{startTime}
+            and t.audittime <![CDATA[ <= ]]> #{endTime}
+        and t.`status`=1
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+        -- 存款金额
+        UNION ALL
+        SELECT 'depositAmount',IFNULL(sum(t.actualarrival),0) count
+        from fund_deposit t
+        INNER JOIN mbr_account account ON account.id=t.accountid
+        WHERE t.audittime <![CDATA[ >= ]]> #{startTime}
+        and t.audittime <![CDATA[ <= ]]> #{endTime}
+        and t.`status`=1
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+        -- 提现金额
+        UNION ALL
+        SELECT 'withdramAmount',IFNULL(sum(t.actualarrival),0) count
+        from fund_acc_withdraw t
+        INNER JOIN mbr_account account ON account.id=t.accountid
+        WHERE t.passtime <![CDATA[ >= ]]> #{startTime}
+        and t.passtime <![CDATA[ <= ]]> #{endTime}
+        and t.`status`=1
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+       -- 投注金额
+        UNION ALL
+        SELECT 'betAmount',IFNULL(sum(ry.bet),0) count
+        FROM rpt_bet_rcd_day ry
+        INNER JOIN mbr_account account ON ry.username=account.loginName
+        WHERE ry.startday  <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+        and  ry.startday  <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+        -- 派彩输赢金额/总盈亏
+        UNION ALL
+        SELECT 'earnings',IFNULL(sum(ry.payout),0) count
+        FROM rpt_bet_rcd_day ry
+        INNER JOIN mbr_account account ON ry.username=account.loginName
+        WHERE ry.startday  <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+        and  ry.startday  <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+        -- 投注人数
+        UNION ALL
+        SELECT 'betNum',IFNULL(count(DISTINCT ry.username),0) count
+        FROM rpt_bet_rcd_day ry
+        INNER JOIN mbr_account account ON ry.username=account.loginName
+        WHERE ry.startday  <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+        and  ry.startday  <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+        -- 首存金额
+        UNION ALL
+        SELECT 'firstDepositAmount',IFNULL(sum(d.actualArrival),0) count
+        from fund_deposit t
+        inner join(
+        -- 所有会员通过的首存
+        select accountid,min(id) id,actualArrival
+        from fund_deposit
+        where status = 1
+        group by accountid
+        ) d on t.id = d.id
+        INNER JOIN mbr_account account ON account.id=t.accountid
+        WHERE t.audittime <![CDATA[ >= ]]> #{startTime}
+            and t.audittime <![CDATA[ <= ]]> #{endTime}
+        and t.`status`=1
+
+        <if test="agentId != null">
+            and account.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and account.subcagencyid =#{subcagencyId}
+        </if>
+
+        -- 新增投注
+        UNION ALL
+        SELECT 'newBet',IFNULL(count(DISTINCT m.id),0) count
+        FROM mbr_account m LEFT JOIN rpt_bet_rcd_day r ON r.username = m.loginname
+        WHERE m.registertime  <![CDATA[ >= ]]> #{startTime}
+        and  m.registertime  <![CDATA[ <= ]]> #{endTime}
+        and  r.startday  <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+        and  r.startday  <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+        and r.validbet>0
+        <if test="agentId != null">
+            and m.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and m.subcagencyid =#{subcagencyId}
+        </if>
+        -- 优惠总和
+        <!--UNION ALL
+        SELECT 'bonusTotal',IFNULL(sum(f.bonusAmount),0) count
+        FROM  opr_act_bonus f LEFT JOIN mbr_account m on f.accountid=m.id
+        WHERE f.audittime  <![CDATA[ >= ]]> #{startTime}
+        and  f.audittime  <![CDATA[ <= ]]> #{endTime}
+        and f.status=1
+        <if test="agentId != null">
+            and m.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and m.subcagencyid =#{subcagencyId}
+        </if>-->
+        UNION ALL
+        SELECT 'bonusTotal', sum(t.count) count  FROM (
+	        SELECT IFNULL(SUM(IF(fr.source = 3, -1 * fr.bonusamount, fr.bonusamount)), 0) count
+	        FROM opr_act_bonus fr
+	        LEFT JOIN mbr_account m on m.id = fr.accountId
+	        WHERE fr.status = 1
+	        AND str_to_date(fr.applicationtime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+	        AND str_to_date(fr.applicationtime, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+	        <if test="agentId != null">
+	            AND m.cagencyid =#{agentId}
+	        </if>
+	        <if test="subcagencyId != null">
+	            AND m.subcagencyid =#{subcagencyId}
+	        </if>
+	        UNION ALL
+	        SELECT 
+	        	IFNULL(SUM(fr.taskbonus), 0) count
+	        FROM mbr_funds_report fr
+	        LEFT JOIN mbr_account m on m.id = fr.accountId
+	        WHERE fr.bonus > 0
+	        AND str_to_date(fr.reportDate, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+	        AND str_to_date(fr.reportDate, '%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+	        <if test="agentId != null">
+	            AND m.cagencyid =#{agentId}
+	        </if>
+	        <if test="subcagencyId != null">
+	            AND m.subcagencyid =#{subcagencyId}
+	        </if>
+        ) t
+    </select>
+    
+    <select id="viewOtherAccount" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT
+        <if test="columnSets != null and columnSets.size()>0">
+            <foreach item="columnName" collection="columnSets" separator=",">
+                ${columnName}
+            </foreach>
+        </if>
+	        FROM agy_account
+	        WHERE id = #{agyId}
+    </select>
+    
+</mapper>

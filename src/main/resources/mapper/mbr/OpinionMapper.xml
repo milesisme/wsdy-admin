@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.mapper.OpinionMapper">
+
+    <select id="finOpinionList" resultType="com.wsdy.saasops.modules.member.entity.MbrOpinion"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrOpinion">
+        SELECT p.*,t.realname,a.tiername FROM mbr_opinion p
+        LEFT JOIN mbr_account t ON p.accountid = t.id
+        LEFT JOIN mbr_activity_level a ON t.actlevelid = a.id
+        <where>
+            <if test="status != null">
+                AND p.status =#{status}
+            </if>
+            <if test="type != null">
+                AND p.type =#{type}
+            </if>
+            <if test="actLevelId != null">
+                AND t.actLevelId =#{actLevelId}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND t.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="realName != null and realName != ''">
+                AND t.realName LIKE CONCAT('%',#{realName}, '%')
+            </if>
+        </where>
+        ORDER BY p.`status` asc,p.modifyTime desc
+    </select>
+
+</mapper>

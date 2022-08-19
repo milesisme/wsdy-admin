@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modules.mapper.AgentMenuMapper">
+
+    <select id="queryRoleList" resultType="long">
+		select role_id from
+		agy_user_role where agyaccount = #{agyaccount}
+	</select>
+
+    <select id="selectRoleMenuTree" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuTree" parameterType="java.lang.String">
+		select DISTINCT m.* from  agy_menu m
+		inner join agy_role_menu sm on sm.menu_id = m.menu_id
+		and sm.role_id in (${roleIds}) ORDER BY m.order_num ASC
+	</select>
+
+    <select id="selectSubAccountRoleMenuTree" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuTree" parameterType="java.lang.String">
+		select DISTINCT m.* from  agy_menu m
+		inner join agy_sub_menu sm on sm.menu_id = m.menu_id
+		and sm.agyaccount = #{agyaccount} ORDER BY m.order_num ASC
+	</select>
+
+    <select id="queryListParentId" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		select * from agy_menu where parent_id = #{parentId}
+		 order by order_num asc
+	</select>
+
+    <!-- 查询用户的所有菜单ID -->
+    <select id="queryAllMenuId" resultType="java.lang.Long">
+		select distinct rm.menu_id from agy_user_role ur
+		LEFT JOIN agy_role_menu rm on ur.role_id = rm.role_id
+		where ur.agyaccount = #{agyaccount}
+	</select>
+
+    <!-- 查询用户的所有菜单ID -->
+    <select id="querySubAccountAllMenuId" resultType="java.lang.Long">
+		select distinct rm.menu_id from agy_sub_menu rm
+		where rm.agyaccount = #{agyaccount}
+		<if test="menuId !=null">
+            and rm.menu_id =#{menuId}
+        </if>
+	</select>
+
+
+    <select id="queryList" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+        select m.*,(select p.name from sys_menu p where p.menu_id = m.parent_id) as
+        parentName,(SELECT count(*) from agy_role_menu rm where
+        rm.menu_id = m.menu_id) userCount
+        from agy_menu m
+        <choose>
+            <when test="sidx != null and sidx.trim() != ''">
+                order by m.${sidx} ${order}
+            </when>
+            <otherwise>
+                order by m.order_num asc
+            </otherwise>
+        </choose>
+        <if test="offset != null and limit != null">
+            limit #{offset}, #{limit}
+        </if>
+    </select>
+
+    <!-- 查询用户的所有权限 -->
+    <select id="queryAllPerms" resultType="java.lang.String">
+		select m.perms from agy_user_role ur
+			LEFT JOIN agy_role_menu rm on ur.role_id = rm.role_id
+			LEFT JOIN agy_menu m on rm.menu_id = m.menu_id
+		where ur.agyaccount = #{agyaccount}
+	</select>
+
+    <insert id="saveUserRole">
+		insert into agy_user_role (`user_id`,`role_id`,`agyaccount`)
+		 values(#{userId},#{roleId},#{agyaccount})
+	</insert>
+
+</mapper>

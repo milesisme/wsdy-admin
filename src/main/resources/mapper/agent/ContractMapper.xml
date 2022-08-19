@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.ContractMapper">
+
+    <select id="contractList" resultType="com.wsdy.saasops.modules.agent.entity.AgentContract">
+        SELECT c.*,IFNULL(a.contractCount,0) contractCount
+        from agy_contract c
+        LEFT JOIN (SELECT count(*) contractCount,o.contractid from agy_account o GROUP BY contractid) a
+        ON c.id = a.contractid
+        order by modifyTime desc
+    </select>
+
+</mapper>

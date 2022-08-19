@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<head>
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type"/>
+    <meta content="true" name="HandheldFriendly"/>
+</head>
+<body>
+<script type="text/javascript" src="https://cdn.bootcss.com/jquery/2.2.1/jquery.min.js"></script>
+<script type="text/javascript" th:src="${obj.jsUrl}"></script>
+<script th:inline="javascript">
+    var systemidvar = "424";
+    login();
+    iapiSetCallout('Login', calloutLogin);
+
+    function login() {
+        iapiSetClientPlatform("mobile&deliveryPlatform=HTML5");
+        var realMode = 1;
+        iapiLogin([[${obj.loginName}]], [[${obj.pwd}]], realMode, [[${obj.language}]]);
+    }
+
+    function calloutLogin(response) {
+        if (response.errorCode) {
+            alert("Login failed. " + response.playerMessage + " Error code: " + response.errorCode);
+        }
+        else {
+            iapiSetCallout('GetTemporaryAuthenticationToken', calloutGetTemporaryAuthenticationToken);
+            iapiRequestTemporaryToken(1, systemidvar, 'GamePlay');
+        }
+    }
+
+    function launchMobileClient(temptoken) {
+        var clientUrl = [[${obj.gameUrl}]] + '&tempToken=' + temptoken
+            + '&lobby=' + location.href.substring(0, location.href.lastIndexOf('/') + 1)
+            + 'lobby.html' + '&support=' + location.href.substring(0, location.href.lastIndexOf('/') + 1)
+            + 'support.html' + '&logout=' + location.href.substring(0, location.href.lastIndexOf('/') + 1)
+            + 'logout.html' + '&deposit=' + location.href.substring(0, location.href.lastIndexOf('/') + 1) + 'deposit.html';
+        document.location = clientUrl;
+    }
+
+    function calloutGetTemporaryAuthenticationToken(response) {
+        if (response.errorCode) {
+            alert("Token failed. " + response.playerMessage + " Error code: " + response.errorCode);
+        }
+        else {
+            launchMobileClient(response.sessionToken.sessionToken);
+        }
+    }
+
+</script>
+</body>
+</html>

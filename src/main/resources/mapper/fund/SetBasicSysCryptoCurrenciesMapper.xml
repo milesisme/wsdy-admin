@@ -1,0 +1,212 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.system.pay.dao.SetBasicSysCryptoCurrenciesMapper">
+
+    <select id="queryList" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysCryptoCurrencies"
+            parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysCryptoCurrencies">
+        SELECT sq.*,group_concat(bb.bankname SEPARATOR '/') as bankNamesStr,
+        bb.bankcode , bb.category
+        FROM set_basic_sys_cryptocurrencies sq
+        INNER JOIN set_basic_cryptocurrencies_bank qb on sq.id = qb.currenciesid
+        INNER JOIN t_bs_bank bb on qb.bankid = bb.id
+        WHERE sq.isdelete = #{isDelete}
+        GROUP BY sq.id
+        ORDER BY
+        <choose>
+            <when test="'1'.toString() == sortItem">
+                sq.id
+            </when>
+            <when test="'4'.toString() == sortItem">
+                sq.modifytime
+            </when>
+            <when test="'3'.toString() == sortItem">
+                sq.dayMaxAmout
+            </when>
+            <when test="'5'.toString() == sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        sq.available ASC,
+                        sq.createTime ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        sq.available DESC,
+                        sq.createTime DESC
+                    </when>
+                </choose>
+            </when>
+            <otherwise>
+                sq.id
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="'5'.toString() != sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        DESC
+                    </when>
+                    <otherwise>
+                        DESC
+                    </otherwise>
+                </choose>
+            </when>
+        </choose>
+    </select>
+
+    <select id="queryById" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysCryptoCurrencies">
+        SELECT sq.*, bb.bankcode , bb.category
+        FROM set_basic_sys_cryptocurrencies sq
+        INNER JOIN set_basic_cryptocurrencies_bank qb on sq.id = qb.currenciesid
+        INNER JOIN t_bs_bank bb on qb.bankid = bb.id
+        WHERE sq.id = #{id}
+    </select>
+
+
+    <select id="findGroupById" resultType="com.wsdy.saasops.modules.member.entity.MbrGroup">
+        SELECT gp.* FROM set_basic_cryptocurrencies_group qg
+        INNER JOIN mbr_group gp ON qg.groupId = gp.id
+        WHERE qg.currenciesid = #{currenciesId}
+    </select>
+
+    <insert id="batchInsertCrBank">
+        insert into set_basic_cryptocurrencies_bank (currenciesid,bankid) VALUES
+        <foreach collection="crBanks" item="item" index="index" separator="," >
+            (#{item.currenciesId}, #{item.bankId})
+        </foreach>
+    </insert>
+
+
+    <select id="getCrGroupIsQueue" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicCryptoCurrenciesGroup">
+        select sbp.groupid,sbp.isqueue from set_basic_cryptocurrencies_group sbp
+        INNER JOIN set_basic_sys_cryptocurrencies sq on sbp.currenciesid = sq.id
+        group by sbp.groupid
+    </select>
+    <insert id="batchInsertCrGroup">
+        insert into set_basic_cryptocurrencies_group (currenciesid,groupid) VALUES
+        <foreach collection="crGroups" item="item" index="index" separator="," >
+            (#{item.currenciesId}, #{item.groupId})
+        </foreach>
+    </insert>
+
+    <delete id="deleteCrBank">
+        delete from set_basic_cryptocurrencies_bank where currenciesid = #{crId}
+    </delete>
+    <delete id="deleteCrGroup" parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBasicCryptoCurrenciesGroup">
+        delete from set_basic_cryptocurrencies_group
+        <where>
+            <if test="currenciesId != null">
+                currenciesid = #{currenciesId}
+            </if>
+            <if test="groupId != null">
+                groupid = #{groupId}
+            </if>
+        </where>
+    </delete>
+
+    <delete id="deleteCrGroupEx" parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBasicCryptoCurrenciesGroup">
+        delete from set_basic_cryptocurrencies_group
+        where groupid =  #{groupId} and currenciesid in(
+            select pay.id
+            from set_basic_sys_cryptocurrencies pay
+            inner join (select * from set_basic_cryptocurrencies_group) g on pay.id = g.currenciesid
+            where g.groupid =  #{groupId} and pay.available=1
+        )
+    </delete>
+
+    <select id="findBankList" resultType="com.wsdy.saasops.modules.base.entity.BaseBank">
+        select b.* from t_bs_bank b
+        INNER JOIN set_basic_cryptocurrencies_bank sqb on sqb.bankid = b.id
+        INNER JOIN set_basic_sys_cryptocurrencies sq on sqb.currenciesid = sq.id
+        WHERE sq.id = #{currenciesId}
+        and sq.available = 1
+        and sq.isdelete = 0
+    </select>
+
+    <select id="findCrListWithSelected" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysCryptoCurrencies"
+            parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysCryptoCurrencies">
+        SELECT sq.*,IF(qg.groupid is null,0,1) as selected,qg.isqueue,qg.sort,
+        bb.bankcode , bb.category, bb.banklog as bankLogo
+        FROM set_basic_sys_cryptocurrencies sq
+        INNER JOIN set_basic_cryptocurrencies_bank qb on sq.id = qb.currenciesid
+        INNER JOIN t_bs_bank bb on qb.bankid = bb.id
+        LEFT JOIN (select * from set_basic_cryptocurrencies_group where groupid = #{groupId}) qg on sq.id = qg.currenciesid
+        where
+            sq.available = 1
+            and sq.isdelete = 0
+    </select>
+
+    <select id="getCrGroup" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicCryptoCurrenciesGroup">
+        SELECT sbp.* FROM set_basic_cryptocurrencies_group sbp
+        INNER JOIN set_basic_sys_cryptocurrencies sq on sbp.currenciesid = sq.id
+        <where>
+            <if test="currenciesId != null">
+                currenciesid = #{currenciesId}
+            </if>
+            <if test="groupId != null">
+                groupid = #{groupId}
+            </if>
+        </where>
+    </select>
+
+    <select id="findCrList" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysCryptoCurrencies">
+        SELECT 
+        	sq.id,sq.minamout,sbp.isqueue,sq.name,sq.showname,sq.isHot,sq.isRecommend,
+        	bb.bankcode crName, bb.category, bb.banklog,bb.backbankimg
+        FROM set_basic_cryptocurrencies_group sbp
+	        INNER JOIN set_basic_sys_cryptocurrencies sq on sbp.currenciesid = sq.id
+	        INNER JOIN set_basic_cryptocurrencies_bank qb on sq.id = qb.currenciesid
+	        INNER JOIN t_bs_bank bb on qb.bankid = bb.id
+        WHERE sbp.groupid = #{groupId}
+        AND sq.available = 1
+        AND sq.isdelete = 0
+        GROUP BY sq.id
+        ORDER BY sbp.sort asc,sq.id desc
+    </select>
+    <select id="getCrLogo" resultType="com.wsdy.saasops.api.modules.pay.dto.CrPayLogoDto">
+        select * from t_pay_cryptocurrencies_logo
+        order by orderid
+    </select>
+
+
+    <select id="getCrByCodeAndProtocol" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysCryptoCurrencies" >
+        SELECT sq.*, bb.id as bankCardId
+        FROM set_basic_sys_cryptocurrencies sq
+        INNER JOIN set_basic_cryptocurrencies_bank qb on sq.id = qb.currenciesid
+        INNER JOIN t_bs_bank bb on qb.bankid = bb.id
+        WHERE sq.isdelete = 0 and sq.available = 1
+        <if test="currencyCode != null and currencyCode !=''">
+            and bb.bankCode = #{currencyCode}
+        </if>
+        <if test="currencyProtocol != null and currencyProtocol  !=''">
+            and bb.category = #{currencyProtocol}
+        </if>
+    </select>
+
+    <select id="getCrByCodeAndProtocolFromManage" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysCryptoCurrencies" >
+        SELECT bb.id as bankCardId
+        FROM t_bs_bank bb
+        WHERE 1=1
+        <if test="currencyCode != null and currencyCode !=''">
+            and bb.bankCode = #{currencyCode}
+        </if>
+        <if test="currencyProtocol != null and currencyProtocol  !=''">
+            and bb.category = #{currencyProtocol}
+        </if>
+    </select>
+
+    <select id="qryBankAndWalletSumById" resultType="java.lang.Integer"
+            parameterType="java.lang.Integer">
+        select count(t.id) from (
+            select id
+            from mbr_bankcard
+            where available=1 and isdel=0 and accountId=#{id}
+            union all
+            select id
+            from mbr_cryptocurrencies
+            where available=1 and isdel=0 and accountId=#{id}
+        )t
+	</select>
+</mapper>

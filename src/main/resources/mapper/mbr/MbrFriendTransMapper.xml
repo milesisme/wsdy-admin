@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.mapper.MbrFriendTransMapper">
+    <select id="findMbrFriendsList"  resultType="com.wsdy.saasops.api.modules.user.dto.FriendsListDto">
+       SELECT mbr_account.id,mbr_account.loginName
+            FROM mbr_account LEFT JOIN mbr_tree ON mbr_account.id=mbr_tree.childNodeId
+            WHERE mbr_tree.parentId=#{accoutId} AND mbr_tree.depth =1
+     </select>
+    <!--loginName-->
+    <select id="findMbrFriendsTransList" parameterType="com.wsdy.saasops.modules.member.dto.MbrFriendTransDetailDto" resultType="com.wsdy.saasops.modules.member.entity.MbrFriendTransDetail">
+        SELECT mf.id,mf.transLoginName,mf.transAccountId,mf.transAmount,mf.transBeforeBalance,mf.transAfterBalance,
+        mf.receiptLoginName,mf.receiptAccountId,mf.receiptBeforeBalance,mf.receiptAfterBalance,mf.createTime
+        FROM mbr_friend_trans_detail mf
+        <where>
+            <choose>
+                <when test='type !=null and type==1'>
+                    <if test="loginName !=null and loginName !=''">
+                        AND  mf.receiptLoginName = #{loginName}
+                    </if>
+                    <if test="transLoginName !=null and transLoginName !=''">
+                        AND  mf.transLoginName = #{transLoginName}
+                    </if>
+                </when>
+                <when test='type !=null and type==2'>
+                    <if test="loginName !=null and loginName !=''">
+                        AND  mf.transLoginName = #{loginName}
+                    </if>
+                    <if test="receiptLoginName !=null and receiptLoginName !=''">
+                        AND  mf.receiptLoginName = #{receiptLoginName}
+                    </if>
+                </when>
+                <when test="(type ==null or type==0) and loginName !=null and loginName !=''">
+                    <if test="loginName !=null and loginName !=''">
+                        AND  (mf.transLoginName = #{loginName} OR mf.receiptLoginName =#{loginName})
+                    </if>
+                </when>
+            </choose>
+            <if test="startTime != null and startTime != ''">
+                AND mf.createTime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND mf.createTime <![CDATA[ <= ]]> #{endTime}
+            </if>
+
+        </where>
+        order by mf.id DESC
+    </select>
+
+    <select id="findTodayCount" parameterType="com.wsdy.saasops.modules.member.dto.MbrFriendTransDetailDto" resultType="com.wsdy.saasops.modules.member.entity.MbrFriendTransDetail">
+        select sum(t.transInAmount) transInAmount, sum(t.transOutAmount) transOutAmount
+        from (
+            select sum(transamount) transOutAmount, 0 transInAmount from mbr_friend_trans_detail mf1
+            where 1=1
+            <if test="loginName !=null and loginName !=''">
+                AND mf1.transloginname = #{loginName}
+            </if>
+            AND mf1.createTime <![CDATA[ >= ]]> #{startTime}
+            AND mf1.createTime <![CDATA[ <= ]]> #{endTime}
+
+            union all
+
+            select 0 transOutAmount, sum(transamount) transInAmount from mbr_friend_trans_detail mf2
+            where 1=1
+            <if test="loginName !=null and loginName !=''">
+                AND mf2.receiptloginname = #{loginName}
+            </if>
+            AND mf2.createTime <![CDATA[ >= ]]> #{startTime}
+            AND mf2.createTime <![CDATA[ <= ]]> #{endTime}
+        ) t
+    </select>
+
+    <select id="findFriendsTransOneInfo"    resultType="com.wsdy.saasops.modules.member.entity.MbrFriendTransDetail">
+        SELECT mf.id,mf.transLoginName,mf.transAccountId,mf.transAmount,mf.transBeforeBalance,mf.transAfterBalance,
+               mf.receiptLoginName,mf.receiptAccountId,mf.receiptBeforeBalance,mf.receiptAfterBalance,mf.createTime
+               FROM mbr_friend_trans_detail mf
+               where mf.mbrBillDetailTransId=#{mbdId} or mf.mbrBillDetailReceipId=#{mbdId}
+    </select>
+
+</mapper>

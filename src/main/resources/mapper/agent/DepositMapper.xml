@@ -1,0 +1,311 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.DepositMapper">
+
+    <update id="updatePayStatus" parameterType="com.wsdy.saasops.modules.agent.entity.AgentDeposit">
+        UPDATE agy_deposit SET
+        <if test="accountId != null ">
+            accountId =#{accountId},
+        </if>
+        <if test="companyPayId != null ">
+            companyPayId=#{companyPayId},
+        </if>
+        <if test="onlinePayId != null ">
+            onlinePayId=#{onlinePayId},
+        </if>
+        <if test="qrCodeId != null ">
+            qrCodeId=#{qrCodeId},
+        </if>
+        <if test="mark != null ">
+            mark=#{mark},
+        </if>
+        <if test="isPayment != null ">
+            isPayment=#{isPayment},
+        </if>
+        <if test="depositAmount != null ">
+            depositAmount = #{depositAmount},
+        </if>
+        <if test="depositUser != null ">
+            depositUser = #{depositUser},
+        </if>
+        <if test="discountAmount != null ">
+            discountAmount = #{discountAmount},
+        </if>
+        <if test="handlingCharge != null ">
+            handlingCharge = #{handlingCharge},
+        </if>
+        <if test="actualArrival != null ">
+            actualArrival = #{actualArrival},
+        </if>
+        <if test="ip != null ">
+            ip = #{ip},
+        </if>
+        <if test="memo != null ">
+            memo = #{memo},
+        </if>
+        <if test="modifyUser != null">
+            modifyUser =#{modifyUser},
+        </if>
+        <if test="modifyTime != null ">
+            modifyTime = #{modifyTime},
+        </if>
+        <if test="auditUser != null ">
+            auditUser = #{auditUser},
+        </if>
+        <if test="auditTime != null ">
+            auditTime = #{auditTime},
+        </if>
+        <if test="billDetailId != null ">
+            billDetailId = #{billDetailId},
+        </if>
+        <if test="status != null">
+            status = #{status}
+        </if>
+        where status = 2
+        <if test="orderNo != null">
+            and orderNo = #{orderNo}
+        </if>
+        <if test="status == 0">
+            and createTime <![CDATA[ <= ]]> date_sub(NOW(), INTERVAL 12 HOUR)
+        </if>
+    </update>
+    <select id="findDepositList" resultType="com.wsdy.saasops.modules.agent.entity.AgentDeposit"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentDeposit">
+        SELECT
+        dt.id,dt.accountId,dt.companyPayId,dt.onlinePayId,dt.mark,dt.status,
+        dt.isPayment,dt.depositAmount,dt.depositUser,dt.handlingCharge,dt.actualArrival,
+        dt.auditUser,dt.auditTime,dt.ip,dt.memo,dt.createUser,left(dt.createTime,19)
+        createTime,dt.modifyUser,left(dt.modifyTime,19)
+        modifyTime,dt.orderNo,dt.orderPrefix,dt.billDetailId,dt.activityId,dt.depositPostscript
+        ,dt.fundSource fundSource,
+        agy.agyAccount,pay.name onlinePayName,deposit.bankName depositType,deposit.realName,dt.handingback,
+        case dt.mark when 0 then concat_ws('-',pay.name,p.platfromName)
+        when 1 then concat_ws('-',deposit.realName,deposit.bankName)
+        when 2 then qr.name
+        when 3 then cr.name
+        end payType,
+        dt.payorderno,dt.crid,dt.hash,dt.depositAmountcr,dt.exchangerate,
+        cr.currencycode currencyCode, cr.currencyprotocol currencyProtocol,
+        case dt.`status` when 0 then '失败' when 1 then '成功' when 2 then '待处理' end statusStr
+        FROM
+        agy_deposit dt
+        LEFT JOIN agy_account agy ON dt.accountId = agy.id
+        LEFT JOIN set_bacic_onlinePay pay ON pay.id = dt.onlinePayId
+        LEFT JOIN t_pay p ON p.id = pay.payId
+        LEFT JOIN set_basic_sys_deposit deposit ON deposit.id = dt.companyPayId
+        LEFT JOIN set_basic_sys_qrcode qr ON qr.id = dt.qrcodeid
+        LEFT JOIN set_basic_sys_cryptocurrencies cr on cr.id = dt.crid
+        <include refid="deposits_where"/>
+        ORDER BY dt.createTime DESC
+    </select>
+
+    <select id="findSumDepositAmount" resultType="java.lang.Double"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentDeposit">
+        SELECT sum(depositAmount)
+        FROM agy_deposit
+        WHERE
+        STATUS = #{status} AND mark = #{mark}
+        AND date_format(createTime, '%Y-%m-%d') = #{createTime}
+    </select>
+
+    <select id="findDepositCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentDeposit">
+        SELECT count(*) FROM agy_deposit dt
+        <include refid="deposit_where"/>
+    </select>
+
+    <sql id="deposit_where">
+        <where>
+            <if test="id != null">
+                AND dt.id =#{id}
+            </if>
+            <if test="accountId != null">
+                AND dt.accountId =#{accountId}
+            </if>
+            <if test="groupIds != null and groupIds.size()>0">
+                AND act.groupId in
+                <foreach item="groupId" collection="groupIds" open="(" separator="," close=")">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="agyTopAccountIds != null and agyTopAccountIds.size()>0">
+                AND act.tagencyId in
+                <foreach item="agyTopAccountId" collection="agyTopAccountIds" open="(" separator="," close=")">
+                    #{agyTopAccountId}
+                </foreach>
+            </if>
+            <if test="agyAccountIds != null and agyAccountIds.size()>0">
+                AND act.cagencyId in
+                <foreach item="agyAccountId" collection="agyAccountIds" open="(" separator="," close=")">
+                    #{agyAccountId}
+                </foreach>
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND act.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND act.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND agy.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+            </if>
+            <if test="onlinePayId != null">
+                AND dt.onlinePayId =#{onlinePayId}
+            </if>
+            <if test="companyPayIds != null and companyPayIds.size()>0">
+                AND dt.companyPayId in
+                <foreach item="companyPayId" collection="companyPayIds" open="(" separator="," close=")">
+                    #{companyPayId}
+                </foreach>
+            </if>
+            <if test="statuss != null and statuss.size()>0">
+                AND dt.status in
+                <foreach item="status" collection="statuss" open="(" separator="," close=")">
+                    #{status}
+                </foreach>
+            </if>
+            <if test="mark != null">
+                AND dt.mark =#{mark}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND dt.createTime <![CDATA[ >= ]]>
+                #{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND dt.createTime <![CDATA[ <= ]]>
+                #{createTimeTo}
+            </if>
+
+        </where>
+    </sql>
+
+
+    <sql id="deposits_where">
+        <where>
+            <if test="accountId != null">
+                AND dt.accountId =#{accountId}
+            </if>
+            <if test="id != null">
+                AND dt.id =#{id}
+            </if>
+            <if test="agyTopAccountIds != null and agyTopAccountIds.size()>0">
+                AND act.tagencyId in
+                <foreach collection="agyTopAccountIds" open="(" close=")" separator="," item="agyTopAccountId">
+                    #{agyTopAccountId}
+                </foreach>
+            </if>
+
+            <if test="accountIds != null and accountIds.size()>0">
+                AND dt.accountId in
+                <foreach collection="accountIds" open="(" close=")" separator="," item="accountId">
+                    #{accountId}
+                </foreach>
+            </if>
+
+            <if test="groupIds != null and groupIds.size()>0">
+                AND act.groupId in
+                <foreach collection="groupIds" open="(" close=")" separator="," item="groupId">
+                    #{groupId}
+                </foreach>
+            </if>
+
+            <if test="statuss != null and statuss !=''">
+                AND dt.status in (${statuss})
+            </if>
+
+            <if test="agyAccountIds != null and agyAccountIds.size()>0">
+                AND act.cagencyId in
+                <foreach item="agyAccountId" collection="agyAccountIds" open="(" separator="," close=")">
+                    #{agyAccountId}
+                </foreach>
+            </if>
+
+            <if test="onlinePayIds != null and onlinePayIds.size()>0">
+                AND dt.onlinePayId in
+                <foreach collection="onlinePayIds" open="(" close=")" separator="," item="onlinePayId">
+                    #{onlinePayId}
+                </foreach>
+            </if>
+            <if test="companyPayIds != null and companyPayIds.size()>0">
+                AND dt.companyPayId in
+                <foreach item="companyPayId" collection="companyPayIds" open="(" separator="," close=")">
+                    #{companyPayId}
+                </foreach>
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND act.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND agy.agyAccount =#{agyAccount}
+            </if>
+            <if test="companyPayId != null">
+                AND dt.companyPayId =#{companyPayId}
+            </if>
+            <if test="markStr != null and markStr!=''">
+                AND dt.mark in (${markStr})
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND dt.createTime <![CDATA[ >= ]]>
+                #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND dt.createTime <![CDATA[ <= ]]>
+                #{endTime}
+            </if>
+
+            <if test="fundSourceList != null and fundSourceList != ''">
+                AND dt.fundSource in (${fundSourceList})
+            </if>
+            <if test="orderNoStr != null and orderNoStr != ''">
+                AND concat(dt.orderPrefix,dt.orderNo) like concat('%',#{orderNoStr},'%')
+            </if>
+            <if test="isTest == 0">
+                and not exists (
+                select * from agy_tree tree where  tree.childnodeid = act.cagencyid and tree.parentid = 4
+                )
+            </if>
+            <if test="isTest == 1">
+                and  exists (
+                select * from agy_tree tree where  tree.childnodeid = act.cagencyid and tree.parentid = 4
+                )
+            </if>
+            <if test="agyAccountStr != null and agyAccountStr != ''">
+                and  exists (
+                select * from agy_tree tree left join agy_account agy on tree.parentid =agy.id where  tree.childnodeid = act.cagencyid and agy.agyAccount LIKE CONCAT('%',#{agyAccountStr}, '%')
+                )
+            </if>
+            <if test="qrCodePayIds != null and qrCodePayIds.size()>0">
+                AND dt.qrcodeid in
+                <foreach collection="qrCodePayIds" open="(" close=")" separator="," item="qrcodeid">
+                    #{qrcodeid}
+                </foreach>
+            </if>
+            <if test="crIds != null and crIds.size()>0">
+                AND dt.crid in
+                <foreach collection="crIds" open="(" close=")" separator="," item="crid">
+                    #{crid}
+                </foreach>
+            </if>
+        </where>
+    </sql>
+
+    <select id="findDepositListSum" resultType="com.wsdy.saasops.modules.agent.entity.AgentDeposit"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentDeposit">
+        SELECT
+        (
+            SELECT if(SUM(depositamount) is null,0,SUM(depositamount))  FROM agy_deposit
+            WHERE STATUS = 1 and date_format(auditTime, '%Y-%m-%d') = date_format(now(),'%Y-%m-%d')
+        )as todayDeposit,
+        sum(if(dt.status=1,dt.depositAmount,0)) depositAmount, sum(if(dt.status=1,dt.handlingCharge,0)) handlingCharge, sum(if(dt.status=1,dt.actualArrival,0)) actualArrival
+        FROM agy_deposit dt  LEFT JOIN mbr_account act ON dt.accountId = act.id
+        <include refid="deposits_where"/>
+    </select>
+
+    <select id="findOfflineDepositInfo" resultType="com.wsdy.saasops.api.modules.pay.dto.DepositPostScript">
+		SELECT
+		tb2.bankName,tb2.bankAccount,tb2.realName,tb2.bankBranch,tb1.depositAmount,tb1.depositPostscript
+		FROM agy_deposit tb1,set_basic_sys_deposit tb2 WHERE
+		tb1.companyPayId= tb2.id and tb1.id=#{id}
+	</select>
+</mapper>

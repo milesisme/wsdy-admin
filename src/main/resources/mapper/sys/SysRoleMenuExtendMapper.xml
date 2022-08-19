@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.sys.dao.SysRoleMenuExtendMapper">
+
+	<select id="getByUserId" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuExtend">
+		SELECT
+		sme.*
+		FROM
+		 sys_menu_extend sme
+		INNER JOIN	sys_role_menu_extend srme ON sme.menuid = srme.menuid
+		INNER JOIN sys_user_role sur ON sur.role_id = srme.roleid
+		WHERE
+			sur.user_id = #{userId}
+	</select>
+
+	<select id="getSysRoleMenuExtend" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleMenuExtend">
+		SELECT
+		srme.*
+		FROM
+		sys_role_menu_exten srme
+		WHERE
+		srme.roleid = #{roleId}
+		AND srme.menuid = #{menuId}
+		AND srme.type = #{type}
+	</select>
+
+	<select id="getSysRoleByRoleMenuExtend" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity">
+		SELECT
+		sr.*
+		FROM
+		sys_role_menu_exten srme
+		INNER JOIN sys_role sr ON srme.roleid = sr.role_id
+		WHERE
+		srme.menuid = #{menuId}
+		AND srme.type = #{type}
+	</select>
+    <select id="getSysRosePermExtendByRoleId" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleMenuExtend">
+		DELETE FROM
+		sys_role_menu_exten
+		WHERE
+		roleid = #{roleId}
+	</select>
+
+
+    <delete id="deleteSysRoleMenuExtend" >
+		DELETE FROM
+ 		sys_role_menu_exten
+		WHERE
+		roleid = #{roleId}
+		AND menuid = #{menuId}
+		AND type = #{type}
+
+	</delete>
+    <delete id="deleteSysRoleMenuExtendByRoleId">
+		DELETE FROM
+		sys_role_menu_extend
+		WHERE
+		roleid = #{roleId}
+	</delete>
+
+	<insert id="saveBatchMenuExtend" parameterType="com.wsdy.saasops.modules.sys.entity.SysRoleMenuEntity">
+		insert into sys_role_menu_extend (roleid, menuid)
+		values
+		<foreach collection="list" item="item" index="index" separator="," >
+			(
+			#{item.roleId},#{item.menuId}
+			)
+		</foreach>
+	</insert>
+
+	<delete id="deleteSysRoleMenuExtendByMenuId">
+		DELETE FROM
+		sys_role_menu_extend
+		WHERE
+		menuid = #{menuId}
+	</delete>
+
+	<select id="getSysALLRoleMenuExtend" resultType="java.lang.Long">
+		select distinct(srm.roleid) from sys_role_menu_extend srm left join sys_menu_extend sm on srm.menuid=sm.menuid where  sm.refid = 0 and sm.type = 7 and srm.roleid != 1
+	</select>
+
+</mapper>

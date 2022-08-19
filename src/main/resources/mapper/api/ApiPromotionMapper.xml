@@ -1,0 +1,634 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.api.modules.user.mapper.ApiPromotionMapper">
+
+	<select id="findYestodayRebates" resultType="java.math.BigDecimal">
+		select sum(t.amount) from fund_audit t
+		where t.financialCode = 'FA'
+		and t.createTime <![CDATA[ >= ]]> DATE_FORMAT(CURDATE(), '%Y-%m-%d 00:00:00')
+		and t.createTime <![CDATA[ <= ]]> DATE_FORMAT(CURDATE(), '%Y-%m-%d 23:59:59')
+		and t.accountId = #{accountId}
+	</select>
+
+	<select id="findTotalRebates" resultType="java.math.BigDecimal">
+		select sum(t.amount) from fund_audit t
+		where t.financialCode = 'FA'
+		and t.status = 1
+		and t.accountId = #{accountId}
+		and t.createTime <![CDATA[ <= ]]> DATE_FORMAT(CURDATE(), '%Y-%m-%d 23:59:59')
+	</select>
+
+	<select id="findTotalResult" resultType="java.math.BigDecimal">
+		select sum(rpt.payout)+sum(rpt.jackpotPayout) from mbr_tree t
+		left join mbr_account mbr on t.childNodeId= mbr.id
+		left join rpt_bet_rcd_day rpt on mbr.loginName = rpt.username
+		where t.parentId=#{accountId}
+		AND t.depth = 1
+		AND rpt.startday <![CDATA[ >= ]]> date_add(curdate(), interval - day(curdate()) + 1 day)
+		AND rpt.startday <![CDATA[ <= ]]> last_day(curdate())
+	</select>
+
+	<select id="recentlyActive" resultType="com.wsdy.saasops.api.modules.user.dto.RebateAccountDto">
+		SELECT ma.id accountId,
+		ma.loginName,
+		ma.registerTime,
+		ma.loginTime,
+		sum(IFNULL(re.amount,0)) rebate,
+		re.depth
+		FROM mbr_tree mt
+		INNER JOIN mbr_account ma on mt.childNodeId = ma.id
+		LEFT JOIN mbr_rebate_report_new re on ma.loginname = re.subloginname
+		where mt.parentid = #{accountId}
+		and mt.depth = 1
+		group by ma.loginName
+	</select>
+
+	<select id="findActiveUserCount" resultType="java.lang.Integer">
+		select count(*) from (
+		SELECT mbr.id accountId,
+		mbr.loginName,
+		mbr.registerTime,
+		mbr.loginTime,
+		sum(re.amount) rebate
+		FROM mbr_tree t left join mbr_rebate_report_new re on t.childNodeId=re.accountId left join mbr_account mbr on t.childNodeId=mbr.id
+		WHERE t.parentId=#{accountId}
+		AND t.depth = 1
+		AND re.reportTime <![CDATA[ >= ]]> #{startTime}
+		AND re.reportTime <![CDATA[ <= ]]> #{endTime}
+		group by mbr.loginName
+		)tt where tt.rebate is not null
+	</select>
+
+	<!--
+	<select id="findTotalBalance" resultType="java.math.BigDecimal">
+		select sum(re.rebateAmount) rebate
+		FROM mbr_tree t left join mbr_rebate_report re on t.childNodeId=re.accountId left join mbr_account mbr on t.childNodeId=mbr.id
+		WHERE t.parentId=#{accountId}
+		AND t.depth = 1
+		AND re.reportTime <![CDATA[ >= ]]> #{startTime}
+		AND re.reportTime <![CDATA[ <= ]]> #{endTime}
+	</select> -->
+
+	<select id="findValidBetTotal" resultType="java.math.BigDecimal">
+		select sum(rpt.validbet) from mbr_account mbr
+		left join rpt_bet_rcd_day rpt on mbr.loginName = rpt.username
+		where mbr.id = #{accountId}
+		and rpt.startday <![CDATA[ >= ]]> DATE_SUB(str_to_date(#{startTime}, '%Y-%m-%d'), interval 1 day)
+		and rpt.startday <![CDATA[ <= ]]> DATE_SUB(str_to_date(#{endTime}, '%Y-%m-%d'), interval 1 day)
+	</select>
+
+	<select id="rebateInfo" resultType="com.wsdy.saasops.api.modules.user.dto.RebateAccountDto">
+		SELECT mbr.id accountId,
+		mbr.loginName,
+		mbr.registerTime,
+		mbr.loginTime,
+		sum(IFNULL(amount,0)) rebate
+		FROM mbr_rebate_report_new re left join mbr_account mbr on re.subaccountid=mbr.id
+		WHERE mbr.id = #{accountId}
+		AND re.reportTime <![CDATA[ <= ]]> DATE_FORMAT(CURDATE(), '%Y-%m-%d 23:59:59')
+	</select>
+
+	<select id="getRebateTotalByDepth" parameterType="com.wsdy.saasops.modules.member.entity.MbrRebateReportNew"
+			resultType="java.math.BigDecimal">
+        SELECT IFNULL(sum(IFNULL(amount,0)),0) rebateAmount FROM mbr_rebate_report_new
+        WHERE accountId = #{accountId}
+        AND reportTime <![CDATA[ >= ]]> #{startTime}
+        AND reportTime <![CDATA[ <= ]]> #{endTime}
+        AND depth between #{lowDepth} and #{highDepth}
+    </select>
+
+	<select id="findParentInfo" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+			resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+		select * from mbr_account ma
+			INNER JOIN mbr_tree mt on ma.id = mt.parentid
+		where  mt.childnodeid = #{id} and depth = 1
+    </select>
+
+	<select id="findChildsInfo" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+			resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+		select * from mbr_account ma
+			INNER JOIN mbr_tree mt on ma.id = mt.childnodeid
+		where  mt.parentid = #{id} and depth = 1
+    </select>
+
+	<select id="getMbrTreeDepth" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+			resultType="java.lang.Integer">
+		select max(mt.depth) from mbr_account ma
+			INNER JOIN mbr_tree mt on ma.id = mt.parentid
+		where  mt.childnodeid = #{id}
+    </select>
+
+	<select id="getSubAccRebateRatio" parameterType="com.wsdy.saasops.api.modules.user.dto.RebateAccSanGongDto"
+			resultType="com.wsdy.saasops.api.modules.user.dto.RebateAccSanGongDto">
+		select total.*,sum(CASE WHEN (re.depth != 1 or re.amount is null)  THEN 0 ELSE re.amount END ) totalAmount
+		from (
+			select s.id,s.loginname,s.rebateratio,sum(CASE WHEN t.depth = 1 THEN 1 ELSE 0 END) count,s.logintime,s.registertime
+			from (
+			select ma.id,ma.loginname,ma.rebateratio,ma.logintime,ma.registertime
+			from mbr_account ma
+			INNER JOIN mbr_tree mt on ma.id = mt.childnodeid
+			<where>
+				mt.parentid = #{parentAccId} and mt.depth = 1
+				<if test=" loginName != null and loginName !=''">
+					AND ma.loginname = #{loginName}
+				</if>
+			</where>
+			)s LEFT JOIN  mbr_tree t  on t.parentid = s.id
+			group by s.id
+			) total LEFT JOIN  mbr_rebate_report_new re on re.subaccountid = total.id
+		group by total.id
+		order by total.registertime desc,total.count desc,total.id asc
+    </select>
+
+	<select id="verifyMbrRelation"
+			resultType="com.wsdy.saasops.modules.member.entity.MbrTree">
+		select * from mbr_tree mt where mt.childnodeid = #{childNodeId} and mt.parentid = #{parentId}
+	</select>
+
+	<select id="getSubAccRebateSum" parameterType="com.wsdy.saasops.api.modules.user.dto.RebateAccSanGongSumDto"
+			resultType="com.wsdy.saasops.api.modules.user.dto.RebateAccSanGongSumDto">
+		select mbr.id parentId, mbr.loginname parentLoginName,mbr.rebateratio,mbr.logintime,mbr.registertime,
+		count(distinct re.subaccountid) count,
+		(CASE WHEN (sum(re.validbet))  is null THEN 0 ELSE (sum(re.validbet))  END) totalValidbet,
+		(CASE WHEN (sum(re.amount))  is null THEN 0 ELSE (sum(re.amount))  END) totalAmount
+		from mbr_account mbr
+		LEFT JOIN mbr_rebate_report_new re on mbr.id = re.accountid
+		<where>
+			re.amount > 0 AND re.depth in(0,1)
+			<if test="parentId != null">
+				AND re.accountid = #{parentId}
+			</if>
+			<if test="startTime != null and startTime != ''">
+				AND re.reporttime <![CDATA[ >= ]]>  DATE_FORMAT(#{startTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND re.reporttime <![CDATA[ <= ]]>  DATE_FORMAT(#{endTime},'%Y-%m-%d %H:%i:%s')
+			</if>
+		</where>
+	</select>
+
+	<select id="getSubAccRebateDetail" parameterType="com.wsdy.saasops.api.modules.user.dto.RebateAccSanGongDetailDto"
+			resultType="com.wsdy.saasops.api.modules.user.dto.RebateAccSanGongDetailDto">
+		select re.*,dt.audittime
+		from mbr_rebate_report_new re
+		left join  fund_audit dt on re.auditid = dt.id
+		<where>
+			re.amount > 0 AND re.depth in(0,1)
+			<if test="parentId != null">
+				AND re.accountid = #{parentId}
+			</if>
+			<if test="startTime != null and startTime != ''">
+				AND dt.audittime <![CDATA[ >= ]]>  #{startTime}
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND dt.audittime <![CDATA[ <= ]]>  #{endTime}
+			</if>
+			<if test="subLoginName != null and subLoginName != ''">
+				AND re.subLoginName like concat('%',#{subLoginName},'%')
+			</if>
+		</where>
+		order by dt.audittime desc
+	</select>
+
+	<select id="getChildCount" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+			resultType="java.lang.Integer">
+		select count(*)
+		from mbr_tree mt
+		where mt.parentid =  #{accountId} AND mt.depth = 1
+    </select>
+
+	<select id="getTotalRebateForParent" parameterType="com.wsdy.saasops.api.modules.user.dto.RebateAccSanGongSumDto"
+			resultType="java.math.BigDecimal">
+		select (CASE WHEN (sum(amount))  is null THEN 0 ELSE (sum(amount))  END) totalAmount
+		from mbr_rebate_report_new re
+		where re.subaccountid =#{parentId} and depth = 1;
+    </select>
+
+
+	<select id="getApiFriendRebateDtoList" resultType="com.wsdy.saasops.api.modules.user.dto.FriendRebateDto">
+		SELECT
+		ma2.loginname subLoginName,
+		ma2.id subAccountId,
+		IFNULL(tt.firstChargeReward, 0) firstChargeReward,
+		IFNULL(tt.firstChargeTime,"") firstChargeTime,
+		IFNULL(tt.validBetReward, 0) validBetReward,
+		IFNULL(tt.totalDeposit, 0) totalDeposit
+		FROM
+		mbr_account ma
+		INNER JOIN mbr_tree mt ON mt.parentid = ma.id
+		INNER JOIN mbr_account ma2 ON ma2.id = mt.childnodeid
+
+		<if test="subLoginName != null and subLoginName != ''">
+			LEFT JOIN
+		</if>
+
+		<if test="subLoginName == null or subLoginName == ''">
+			<choose>
+				<when test="showAll != null and showAll == 0">
+					INNER JOIN
+				</when>
+				<otherwise>
+					LEFT JOIN
+				</otherwise>
+			</choose>
+		</if>
+
+
+
+
+
+		(SELECT
+		t.loginname, t.accountid, t.subaccountid, t.subloginname,
+		SUM(CASE WHEN type = 1 THEN reward END) AS totalDeposit,
+		MAX(CASE WHEN type = 3 THEN reward END) AS firstChargeReward,
+		MAX(CASE WHEN type = 3 THEN eventtime END) AS firstChargeTime,
+		SUM(CASE WHEN type = 4 THEN reward END) AS validBetReward
+		FROM
+		(SELECT mf.loginname, mf.accountid, mf.subaccountid, mf.subloginname, reward, 3 type, mf.eventtime
+		FROM   mbr_rebate_friends mf where mf.type = 3
+		<if test="firstChargeStartTime != null and firstChargeStartTime != '' ">
+			AND mf.eventtime <![CDATA[ >= ]]> DATE_FORMAT( #{firstChargeStartTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+		<if test="firstChargeEndTime != null and firstChargeEndTime != ''">
+			AND mf.eventtime <![CDATA[ <= ]]> DATE_FORMAT( #{firstChargeEndTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		UNION
+		SELECT   mf.loginname, mf.accountid, mf.subaccountid, mf.subloginname, sum(reward) reward , 4 type, 0 eventtime
+		FROM  mbr_rebate_friends mf WHERE  (mf.type = 20 or mf.type = 21 or mf.type = 22 or mf.type = 23 or mf.type = 24 or mf.type = 25)
+
+
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="startTime == null or startTime == ''">
+			<if test="firstChargeStartTime != null and firstChargeStartTime != '' ">
+				AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{firstChargeStartTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime == null or endTime == ''">
+			<if test="firstChargeEndTime != null and firstChargeEndTime != ''">
+				AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{firstChargeEndTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		</if>
+		group by mf.subaccountid
+
+		UNION
+		SELECT   mf.loginname, mf.accountid, mf.subaccountid, mf.subloginname, sum(reward) reward , 1 type ,0 eventtime
+		FROM  mbr_rebate_friends mf WHERE mf.type = 1
+
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="startTime == null or startTime == ''">
+			<if test="firstChargeStartTime != null and firstChargeStartTime != '' ">
+				AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{firstChargeStartTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime == null or endTime == ''">
+			<if test="firstChargeEndTime != null and firstChargeEndTime != ''">
+				AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{firstChargeEndTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		</if>
+
+		)  t
+		group by t.subaccountid) tt ON tt.subAccountId = mt.childnodeid
+		WHERE
+		mt.parentid = #{accountId}
+		AND mt.depth = 1
+
+		<if test="subLoginName != null and subLoginName != ''">
+			AND ma2.loginname = #{subLoginName}
+		</if>
+
+	</select>
+
+
+	<select id="getApiFriendRebateDtoDetails" resultType="com.wsdy.saasops.api.modules.user.dto.FriendRebateDto">
+		SELECT
+			mf.subloginname,
+			mf.subaccountId,
+			IFNULL(SUM( CASE WHEN type = 1 THEN amount END ), 0) AS totalDeposit,
+			IFNULL(max( CASE WHEN type = 3 THEN amount END ), 0) AS firstCharge,
+			IFNULL(sum( CASE WHEN type = 20 THEN reward END ), 0) AS tyValidBetReward,
+			IFNULL(sum( CASE WHEN type = 21 THEN reward END ), 0) AS dzValidBetReward,
+			IFNULL(sum( CASE WHEN type = 22 THEN reward END ), 0) AS djValidBetReward,
+			IFNULL(sum( CASE WHEN type = 23 THEN reward END ), 0) AS qpValidBetReward,
+			IFNULL(sum( CASE WHEN type = 24 THEN reward END ), 0) AS cpValidBetReward,
+			IFNULL(sum( CASE WHEN type = 25 THEN reward END ), 0) AS zrValidBetReward
+			FROM
+			mbr_rebate_friends mf
+		WHERE
+		mf.loginname = #{loginName}
+		AND mf.subloginname = #{subLoginName}
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >=  ]]>DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+		GROUP BY
+		mf.subloginname
+
+
+	</select>
+
+	<select id="getFriendRebateRewardReportForDay" resultType="com.wsdy.saasops.api.modules.user.dto.FriendRebateRewardDto">
+
+		SELECT
+			t1.time,
+			t1.num,
+			t1.firstchargeReward,
+			t1.validbetreward,
+			IFNULL(t2.num, 0) AS rnum
+		FROM
+		(SELECT
+			date_format( mr.incomeTime, '%Y-%m-%d' ) AS time,
+			IFNULL(MAX( CASE WHEN type = 2 THEN invitenum END ), 0) AS num,
+			IFNULL(MAX( CASE WHEN type = 3 THEN reward END ), 0) AS firstchargeReward,
+			IFNULL(SUM( CASE WHEN type = 4 THEN reward END ), 0) AS validbetreward
+		FROM
+			mbr_rebate_friends_reward mr
+		WHERE
+			mr.accountId = #{accountId}
+			<if test="startTime != null and startTime != ''">
+				AND mr.incomeTime <![CDATA[ >=  ]]>DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+
+			<if test="endTime != null and endTime != ''">
+				AND mr.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		GROUP BY date_format( mr.incomeTime, '%Y-%m-%d' )) t1
+
+		LEFT JOIN (
+		SELECT
+			date_format( mf.incomeTime, '%Y-%m-%d' ) time,
+			count( DISTINCT mf.subaccountId ) num
+		FROM
+			mbr_rebate_friends mf
+		WHERE
+			mf.accountId = #{accountId}
+			AND mf.reward > 0
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >=  ]]>DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+		GROUP BY
+			date_format( mf.incomeTime, '%Y-%m-%d' )) t2  ON t1.time = t2.time
+	</select>
+
+	<select id="getFriendRebateRewardReportForMonth" resultType="com.wsdy.saasops.api.modules.user.dto.FriendRebateRewardDto">
+		SELECT
+		t1.time,
+		t1.num,
+		t1.firstchargeReward,
+		t1.validbetreward,
+		IFNULL(t2.num, 0) AS rnum
+		FROM
+		(SELECT
+		date_format( mr.incomeTime, '%Y-%m' ) AS time,
+		IFNULL(MAX( CASE WHEN type = 2 THEN invitenum END ), 0) AS num,
+		IFNULL(MAX( CASE WHEN type = 3 THEN reward END ), 0) AS firstchargeReward,
+		IFNULL(SUM( CASE WHEN type = 4 THEN reward END ), 0) AS validbetreward
+		FROM
+		mbr_rebate_friends_reward mr
+		WHERE
+		mr.accountId = #{accountId}
+		<if test="startTime != null and startTime != ''">
+			AND mr.incomeTime <![CDATA[ >=  ]]>DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mr.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+		GROUP BY date_format( mr.incomeTime, '%Y-%m' )) t1
+
+		LEFT JOIN (
+		SELECT
+		date_format( mf.incomeTime, '%Y-%m' ) time,
+		count( DISTINCT mf.subaccountId ) num
+		FROM
+		mbr_rebate_friends mf
+		WHERE
+		mf.accountId = #{accountId}
+		AND mf.reward > 0
+
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >=  ]]>DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+		GROUP BY
+		date_format( mf.incomeTime, '%Y-%m' )) t2  ON t1.time = t2.time
+
+	</select>
+	
+	
+	<select id="getFriendRebateAccountInfo" resultType="com.wsdy.saasops.api.modules.user.dto.FriendRebateAccountDto">
+		SELECT
+			ma.id as accountid,
+			ma.loginname,
+			ma.logintime,
+			mal.accountlevel
+		FROM
+			mbr_account ma
+			INNER JOIN mbr_activity_level mal ON ma.actlevelid = mal.id
+		WHERE
+			ma.loginname = #{loginName}
+	</select>
+
+	<select id="getFriendRebateSummary" resultType="com.wsdy.saasops.api.modules.user.dto.FriendRebateSumDto">
+		SELECT
+			1 AS type,
+			IFNULL(SUM( CASE WHEN type = 3  OR  type = 4 OR  type = 5  OR  type = 6 THEN reward END ), 0) AS actualReward ,
+			IFNULL(SUM( CASE WHEN type = 3 THEN reward END ), 0) AS firstchargeReward,
+			IFNULL(SUM( CASE WHEN type = 4 THEN reward END ), 0) AS validbetreward
+		FROM
+			mbr_rebate_friends_reward mr
+		WHERE
+			mr.accountid = #{accountId}
+		GROUP BY
+			mr.accountid UNION
+		SELECT
+			2 AS type,
+			IFNULL(SUM( CASE WHEN type = 3  OR  type = 4 OR  type = 5  OR  type = 6 THEN reward END ), 0) AS actualReward ,
+			IFNULL(SUM( CASE WHEN type = 3 THEN reward END ), 0) AS firstchargeReward,
+			IFNULL(SUM( CASE WHEN type = 4 THEN reward END ), 0) AS validbetreward
+		FROM
+			mbr_rebate_friends_reward mr
+			WHERE
+			mr.accountid = #{accountId}
+			AND TO_DAYS( NOW( ) ) - TO_DAYS( mr.incomeTime ) = 1
+	</select>
+
+	<select id="getFriendRebatePersonalRewardSummary" resultType="com.wsdy.saasops.api.modules.user.dto.FriendRebatePersonalRewardSummaryDto">
+		SELECT
+			mr.accountid,
+			IFNULL(SUM( CASE WHEN type = 3 THEN reward END ), 0) AS firstchargeReward,
+			IFNULL(SUM( CASE WHEN type = 4 THEN reward END ), 0) AS validbetreward
+		FROM
+			mbr_rebate_friends_reward mr
+		WHERE
+			mr.accountid = #{accountId}
+			<if test="startTime != null and startTime != ''">
+				AND mr.incomeTime <![CDATA[ >=  ]]>DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+
+			<if test="endTime != null and endTime != ''">
+				AND mr.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		GROUP BY
+			mr.accountid
+	</select>
+
+
+	<select id="getFriendRebateFriendsRewardSummary" resultType="com.wsdy.saasops.api.modules.user.dto.FriendRebateFriendRewardSummaryDto">
+		SELECT
+		ma.id accountId,
+		IFNULL(SUM(tt.firstChargeReward), 0) firstChargeReward,
+		IFNULL(SUM(tt.validBetReward),0) validBetReward
+		FROM
+		mbr_account ma
+		INNER JOIN mbr_tree mt ON mt.parentid = ma.id
+		INNER JOIN mbr_account ma2 ON ma2.id = mt.childnodeid
+		INNER JOIN
+		(SELECT
+		t.loginname, t.accountid, t.subaccountid, t.subloginname,
+		MAX(CASE WHEN type = 3 THEN reward END) AS firstChargeReward,
+		SUM(CASE WHEN type = 4 THEN reward END) AS validBetReward
+		FROM
+		(SELECT mf.loginname, mf.accountid, mf.subaccountid, mf.subloginname, reward, 3 type, mf.eventtime
+		FROM   mbr_rebate_friends mf where mf.type = 3
+		<if test="firstChargeStartTime != null and firstChargeStartTime != '' ">
+			AND mf.eventtime <![CDATA[ >= ]]> DATE_FORMAT( #{firstChargeStartTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+		<if test="firstChargeEndTime != null and firstChargeEndTime != ''">
+			AND mf.eventtime <![CDATA[ <= ]]> DATE_FORMAT( #{firstChargeEndTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		UNION
+		SELECT   mf.loginname, mf.accountid, mf.subaccountid, mf.subloginname, sum(reward) reward , 4 type, 0 eventtime
+		FROM  mbr_rebate_friends mf WHERE  (mf.type = 20 or mf.type = 21 or mf.type = 22 or mf.type = 23 or mf.type = 24 or mf.type = 25)
+
+
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="startTime == null or startTime == ''">
+			<if test="firstChargeStartTime != null and firstChargeStartTime != '' ">
+				AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{firstChargeStartTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime == null or endTime == ''">
+			<if test="firstChargeEndTime != null and firstChargeEndTime != ''">
+				AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{firstChargeEndTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		</if>
+		group by mf.subaccountid
+
+		UNION
+		SELECT   mf.loginname, mf.accountid, mf.subaccountid, mf.subloginname, sum(reward) reward , 1 type ,0 eventtime
+		FROM  mbr_rebate_friends mf WHERE mf.type = 1
+
+		<if test="startTime != null and startTime != ''">
+			AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="startTime == null or startTime == ''">
+			<if test="firstChargeStartTime != null and firstChargeStartTime != '' ">
+				AND mf.incomeTime <![CDATA[ >= ]]> DATE_FORMAT( #{firstChargeStartTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime == null or endTime == ''">
+			<if test="firstChargeEndTime != null and firstChargeEndTime != ''">
+				AND mf.incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{firstChargeEndTime}, '%Y-%m-%d %H:%i:%s' )
+			</if>
+		</if>
+
+		)  t
+		group by t.subaccountid) tt ON tt.subAccountId = mt.childnodeid
+		WHERE
+		mt.parentid = #{accountId}
+		AND mt.depth = 1
+
+		<if test="subLoginName != null and subLoginName != ''">
+			AND ma2.loginname = #{subLoginName}
+		</if>
+	</select>
+
+
+	<select id="rewardList" resultType="com.wsdy.saasops.api.modules.user.dto.FriendRebateRewardListDto">
+		SELECT
+			incomeTime as time ,
+			STATUS,
+			'好友返利' type,
+			IFNULL(SUM(reward), 0) reward
+		FROM
+			mbr_rebate_friends_reward
+		WHERE
+		( type = 3 OR type = 4 OR type = 5 OR type = 6)
+
+			AND accountId = #{accountId}
+
+		<if test="startTime != null and startTime != ''">
+			AND incomeTime <![CDATA[ >=  ]]>DATE_FORMAT( #{startTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		<if test="endTime != null and endTime != ''">
+			AND incomeTime <![CDATA[ <= ]]> DATE_FORMAT( #{endTime}, '%Y-%m-%d %H:%i:%s' )
+		</if>
+
+		GROUP BY
+		incomeTime
+
+	</select>
+
+
+</mapper>

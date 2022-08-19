@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrAccountMapper">
+
+    <!-- mbr_account -->
+
+
+    <select id="findMbrAccountByLoginNames" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT * from mbr_account
+        <where>
+            <if test="loginNames != null and loginNames.size()>0">
+                and loginname in
+                <foreach collection="loginNames" item="loginName" open="(" close=")" separator=",">
+                    #{loginName}
+                </foreach>
+            </if>
+        </where>
+    </select>
+</mapper>

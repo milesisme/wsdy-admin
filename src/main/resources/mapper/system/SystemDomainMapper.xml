@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.system.domain.mapper.DomainMapper">
+
+    <resultMap type="com.wsdy.saasops.modules.system.domain.entity.SystemDomain" id="domainResultMap">
+        <id property="id" column="id" jdbcType="INTEGER"/>
+        <!--名称-->
+        <result property="name" column="name" jdbcType="VARCHAR" />
+        <!--域名类型-->
+        <result property="domainType" column="domainType" jdbcType="INTEGER" />
+        <!--域名路径-->
+        <result property="domainUrl" column="domainUrl" jdbcType="VARCHAR" />
+        <!--是否绑定 0：绑定 1：未绑定-->
+        <result property="bind" column="bind" jdbcType="INTEGER" />
+        <!--1;审批中 2：绑定 3：解绑-->
+        <result property="state" column="state" jdbcType="INTEGER" />
+        <result property="createTime" column="createTime" jdbcType="TIMESTAMP" />
+        <result property="modifyTime" column="modifyTime" jdbcType="TIMESTAMP" />
+    </resultMap>
+
+    <sql id="sql">
+        id,name,domainType,domainUrl,bind,state,createTime,modifyTime
+    </sql>
+    <sql id="sqlConditions">
+        <if test=" id != null and id !=''">
+            AND id = #{id}
+        </if>
+        <if test=" name != null and name !=''">
+            AND name = #{name}
+        </if>
+        <if test=" domainType != null and domainType !='' and domainType !=0">
+            AND domainType = #{domainType}
+        </if>
+        <if test=" domainUrl != null and domainUrl !=''">
+            AND domainUrl LIKE CONCAT('%',#{domainUrl}, '%')
+        </if>
+        <if test=" bind != null and bind !=''">
+            AND bind = #{bind}
+        </if>
+        <if test=" state != null and state !=''">
+            AND state = #{state}
+        </if>
+        <if test=" states != null and states !=''">
+            AND state in( ${states} )
+        </if>
+    </sql>
+    <select id="queryByConditions" parameterType="com.wsdy.saasops.modules.system.domain.entity.SystemDomain" resultMap="domainResultMap">
+    SELECT 
+    <include refid="sql" />
+        FROM set_basic_domain
+        <where>
+            <include refid="sqlConditions" />
+        </where>
+        ORDER by modifyTime DESC
+    </select>
+    <delete id="delByIds" parameterType="java.lang.String">
+        DELETE FROM set_basic_domain
+        <where>
+            id in  (${ids})
+        </where>
+    </delete>
+    <insert id="multiInsert" parameterType="java.util.List" >
+    INSERT into set_basic_domain
+        (<include refid="sql" />)
+    VALUES
+        <foreach collection ="list" item="item" index= "index" separator =",">
+          (
+            #{item.id}, #{item.name},#{item.domainType},#{item.domainUrl},#{item.bind}, #{item.state}, #{item.createTime}, #{item.modifyTime}
+                            )
+                        </foreach >
+    </insert>
+</mapper>

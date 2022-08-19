@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.sys.dao.SysRoleDao">
+
+    <select id="queryObject" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity">
+		select role_id as roleId,
+			   role_name as roleName,
+			   remark as remark,
+			   dept_id as deptId,
+			   create_time as createTime,
+			   role_nickName as roleNickName,
+			   createUser as createUser,
+			   isEnable as isEnable
+		 from sys_role where
+		role_id = #{value}
+	</select>
+
+    <select id="queryList" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity" parameterType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity">
+        select role_id as roleId,
+			   role_name as roleName,
+			   remark as remark,
+			   dept_id as deptId,
+			   create_time as createTime,
+			   role_nickName as roleNickName,
+			   createUser as createUser,
+			   isEnable as isEnable from sys_role
+        where role_id != 1
+            <if test="roleName != null and roleName.trim() != ''">
+                and `role_name` like concat('%',#{roleName},'%')
+            </if>
+            <if test="createUser != null">
+                and createUser = #{createUser}
+            </if>
+        <choose>
+            <when test="sidx != null and sidx.trim() != ''">
+                order by ${sidx} ${order}
+            </when>
+            <otherwise>
+                order by role_id asc
+            </otherwise>
+        </choose>
+        <if test="offset != null and limit != null">
+            limit #{offset}, #{limit}
+        </if>
+    </select>
+
+    <select id="queryTotal" resultType="int">
+        select count(*) from sys_role
+        <where>
+        	role_id <![CDATA[ <> ]]> 1
+            <if test="roleName != null and roleName.trim() != ''">
+                and `role_name` like concat('%',#{roleName},'%')
+            </if>
+        </where>
+    </select>
+
+    <insert id="save" parameterType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity"
+            useGeneratedKeys="true" keyProperty="roleId">
+		insert into sys_role
+		(
+		`role_id`,
+		`role_name`,
+		`remark`,
+		`create_time`,
+		role_nickName,createUser
+		)
+		values
+		(
+		#{roleId},
+		#{roleName},
+		#{remark},
+		#{createTime},
+		#{roleNickName},
+		#{createUser}
+		)
+	</insert>
+
+    <update id="update" parameterType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity">
+        update sys_role
+        <set>
+            <if test="roleName != null">`role_name` = #{roleName},</if>
+            <if test="remark != null">`remark` = #{remark},</if>
+            <if test="roleNickName != null">`role_nickName` = #{roleNickName},</if>
+            <if test="createUser != null">`createUser` = #{createUser},</if>
+            <if test="isEnable != null">`isEnable` = #{isEnable}</if>
+        </set>
+        where role_id = #{roleId}
+    </update>
+
+    <delete id="deleteBatch">
+        delete sys_role ,sys_role_menu ,sys_user_role FROM sys_role
+        LEFT JOIN sys_role_menu on sys_role.role_id =sys_role_menu.role_id
+        LEFT JOIN sys_user_role on sys_role.role_id =sys_user_role.role_id
+        where sys_role.role_id in
+        <foreach item="roleId" collection="array" open="(" separator=","
+                 close=")">
+            ${roleId}
+        </foreach>
+        ;
+    </delete>
+
+    <!-- 查询用户创建的角色ID列表 -->
+    <select id="queryRoleIdList" resultType="long">
+		select role_id from
+		sys_role where createUser = #{createUser}
+	</select>
+    <select id="queryRoleList" resultType="long">
+		select role_id from
+		sys_user_role where user_id = #{userId}
+	</select>
+
+    <!--查询角色表，并计算该角色的人数 -->
+    <select id="queryConditions" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity"
+            parameterType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity">
+        SELECT
+	        A.role_id as roleId,
+	        A.role_name as roleName,
+	        A.remark as remark,
+	        A.dept_id as deptId,
+	        A.create_time as createTime,
+	        A.role_nickName as roleNickName,
+	        A.createUser as createUser,
+	        A.isEnable as isEnable,
+	        IFNULL(B.userNum,0) userNum 
+	        from sys_role A
+        LEFT JOIN (
+        SELECT count(1) userNum,role_id FROM sys_user_role GROUP BY role_id )
+        B on B.role_id=A.role_id
+        <where>
+            A.role_id <![CDATA[ <> ]]> 1
+            <if test="roleName != null and roleName.trim() != ''">
+                and `role_name` like concat('%',#{roleName},'%')
+            </if>
+            <if test="createUser != null and createUser !='' ">
+                AND A.createUser =#{createUser}
+            </if>
+            <if test="isEnableList != null and isEnableList !='' ">
+                AND isEnable in ( ${isEnableList} )
+            </if>
+        </where>
+    </select>
+
+    <select id="queryByRolename" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity"
+            parameterType="java.lang.String">
+		select * from
+		sys_role
+		where role_name = #{roleName}
+	</select>
+
+    <select id="getSavedMenuAuth" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleMenuEntity"
+            parameterType="java.lang.Long">
+		select srm.*,sm.parent_id,sm.type from sys_role_menu srm inner join sys_menu sm on sm.menu_id =srm.menu_id where srm.role_id = #{roleId}
+	</select>
+
+    <select id="findSysRoleById" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity">
+        select * from sys_role where role_id = #{roleId}
+    </select>
+    
+    
+    <select id="queryRoleIdsByMenuId" resultType="java.lang.Integer">
+      SELECT t.role_id FROM (
+	       	SELECT srm.role_id,COUNT(srm.menu_id) count FROM  sys_menu sm LEFT JOIN sys_role_menu srm 
+				ON sm.menu_id = srm.menu_id WHERE sm.parent_id =  #{menuId} GROUP BY role_id  HAVING count = (
+			SELECT COUNT(*) from sys_menu WHERE parent_id =  #{menuId} )
+		) t
+    </select>
+
+</mapper>

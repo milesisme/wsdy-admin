@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.AgentHomeMapper">
+
+    <sql id="depotPayout_where">
+        SELECT * from (
+            SELECT (if(sign(sum(totalPayout))=-1, abs(sum(totalPayout)),
+            -1*sum(totalPayout))-sum(bonusamount)-sum(taskBonusamount) - SUM(calculateProfit)) totalProfit,a.startday
+            from (
+                SELECT a.totalPayout,a.startday,
+                IFNULL(b.taskBonusamount,0) taskBonusamount,IFNULL(c.bonusamount,0) bonusamount,IFNULL(d.calculateProfit,0) calculateProfit
+                FROM (
+                    SELECT IFNULL(sum(r.payout),0) totalPayout,date_format(startday, '%Y-%m-%d') startday
+                    FROM mbr_account t
+                    LEFT JOIN rpt_bet_rcd_day r ON r.username = t.loginname
+                    <where>
+                        <if test="time != null and time != ''">
+                            and date_format(r.startday, '%Y-%m')<![CDATA[ >= ]]>#{time}
+                            and date_format(r.startday, '%Y-%m')<![CDATA[ <= ]]>#{time}
+                        </if>
+                        <if test="startTime != null and startTime != ''">
+                            and date_format(r.startday, '%Y-%m-%d')<![CDATA[ >= ]]>#{startTime}
+                        </if>
+                        <if test="endTime != null and endTime != ''">
+                            and date_format(r.startday, '%Y-%m-%d')<![CDATA[ <= ]]>#{endTime}
+                        </if>
+                        <if test="agentId != null">
+                            and t.cagencyid =#{agentId}
+                        </if>
+                        <if test="subcagencyId != null">
+                            and t.subcagencyid =#{subcagencyId}
+                        </if>
+                    </where>
+                    GROUP BY date_format(startday, '%Y-%m-%d')
+                ) a
+                
+                LEFT JOIN (
+                    SELECT sum(s.bonusamount) taskBonusamount,date_format(s.time, '%Y-%m-%d') time
+                    FROM task_bonus s
+                    LEFT JOIN mbr_account t ON t.id = s.accountid
+                    <where>
+                        <if test="time != null and time != ''">
+                            and date_format(s.time, '%Y-%m')<![CDATA[ >= ]]>#{time}
+                            and date_format(s.time, '%Y-%m')<![CDATA[ <= ]]>#{time}
+                        </if>
+                        <if test="startTime != null and startTime != ''">
+                            and date_format(s.time, '%Y-%m-%d')<![CDATA[ >= ]]>#{startTime}
+                        </if>
+                        <if test="endTime != null and endTime != ''">
+                            and date_format(s.time, '%Y-%m-%d')<![CDATA[ <= ]]>#{endTime}
+                        </if>
+                        <if test="agentId != null">
+                            and t.cagencyid =#{agentId}
+                        </if>
+                        <if test="subcagencyId != null">
+                            and t.subcagencyid =#{subcagencyId}
+                        </if>
+                    </where>
+                    GROUP BY date_format(s.time, '%Y-%m-%d')
+                ) b ON a.startday = b.time
+                
+                LEFT JOIN (
+                    SELECT sum(s.bonusamount) bonusamount,date_format(s.applicationTime, '%Y-%m-%d')
+                    applicationTime from opr_act_bonus s
+                    left JOIN mbr_account t ON t.id = s.accountid
+                    WHERE s.status =1
+                    <if test="time != null and time != ''">
+                        and date_format(s.applicationTime, '%Y-%m')<![CDATA[ >= ]]>#{time}
+                        and date_format(s.applicationTime, '%Y-%m')<![CDATA[ <= ]]>#{time}
+                    </if>
+                    <if test="startTime != null and startTime != ''">
+                        and date_format(s.applicationTime, '%Y-%m-%d')<![CDATA[ >= ]]>#{startTime}
+                    </if>
+                    <if test="endTime != null and endTime != ''">
+                        and date_format(s.applicationTime, '%Y-%m-%d')<![CDATA[ <= ]]>#{endTime}
+                    </if>
+                    <if test="agentId != null">
+                        and t.cagencyid =#{agentId}
+                    </if>
+                    <if test="subcagencyId != null">
+                        and t.subcagencyid =#{subcagencyId}
+                    </if>
+                    GROUP BY date_format(s.applicationTime, '%Y-%m-%d')
+                ) c ON a.startday = c.applicationTime
+                
+                LEFT JOIN (
+                    SELECT 
+                    	SUM(IF(s.financialCode = 'AM', -1 * s.amount, s.amount)) calculateProfit,
+                    	date_format(s.audittime, '%Y-%m-%d') startday 
+                    FROM fund_audit s
+                    LEFT JOIN mbr_account t ON t.id = s.accountid
+                    WHERE s.status = 1 AND s.isCalculateProfit = 1
+                    
+                    <if test="time != null and time != ''">
+                        and date_format(s.audittime, '%Y-%m')<![CDATA[ >= ]]>#{time}
+                        and date_format(s.audittime, '%Y-%m')<![CDATA[ <= ]]>#{time}
+                    </if>
+                    <if test="startTime != null and startTime != ''">
+                        and date_format(s.audittime, '%Y-%m-%d')<![CDATA[ >= ]]>#{startTime}
+                    </if>
+                    <if test="endTime != null and endTime != ''">
+                        and date_format(s.audittime, '%Y-%m-%d')<![CDATA[ <= ]]>#{endTime}
+                    </if>
+                    <if test="agentId != null">
+                        and t.cagencyid =#{agentId}
+                    </if>
+                    <if test="subcagencyId != null">
+                        and t.subcagencyid =#{subcagencyId}
+                    </if>
+                    GROUP BY date_format(s.audittime, '%Y-%m-%d')
+                ) d ON a.startday = d.startday
+                
+                GROUP BY a.startday
+            ) a GROUP BY a.startday
+        ) r
+    </sql>
+
+    <sql id="depoeRate_wherw">
+        SELECT sum(payout) payout, IFNULL(ge.rate,0) rate,lg.id gamelogoId,
+        concat(a.depotcode,cat.catname) depotname,a.startday startday
+        from (
+            SELECT r.platform, d.id depotId,payout,r.username,r.startday,d.depotcode,
+            case when r.gamecategory='Chess' then '6'
+            when r.gamecategory='Sport' then '1'
+            when r.gamecategory='Live' then '3'
+            when r.gamecategory='Slot' then '5'
+            when r.gamecategory='Hunter' then '8'
+            when r.gamecategory='Esport' then '9'
+            when r.gamecategory='Lottery' then '12'
+            end type,r.gamecategory
+            from rpt_bet_rcd_day r
+            LEFT JOIN t_gm_depot d ON r.platform = d.depotcode
+            WHERE r.gamecategory != ''
+        ) a
+        INNER JOIN mbr_account t ON t.loginname = a.username
+        LEFT JOIN t_game_logo lg ON a.depotid = lg.depotid and lg.catid = a.type
+        LEFT JOIN set_gm_game ge ON ge.gamelogoid = lg.id
+        LEFT JOIN agy_account ag ON ag.id = t.cagencyid
+        LEFT JOIN t_gm_cat cat ON cat.id = a.type
+        WHERE a.type != '' and a.depotId != ''
+        <if test="agentId != null">
+            and t.cagencyid =#{agentId}
+        </if>
+        <if test="subcagencyId != null">
+            and t.subcagencyid =#{subcagencyId}
+        </if>
+        <if test="time != null and time != ''">
+            AND date_format(a.startday, '%Y-%m')<![CDATA[ >= ]]> #{time}
+        </if>
+        <if test="time != null and time != ''">
+            AND date_format(a.startday, '%Y-%m')<![CDATA[ <= ]]> #{time}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            and date_format(a.startday, '%Y-%m-%d')<![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            and date_format(a.startday, '%Y-%m-%d')<![CDATA[ <= ]]>#{endTime}
+        </if>
+    </sql>
+
+    <sql id="depotCostList_Detail">
+        SELECT sum(cost) cost,startday from(
+            SELECT case when rate>0 and payout<![CDATA[ < ]]>0 then abs(rate/100*payout) else 0 end cost,
+            startday
+            from(
+                <include refid="depoeRate_wherw"/>
+                GROUP BY a.startday, a.platform,a.type
+            ) b
+        )a GROUP BY a.startday
+    </sql>
+
+    <sql id="sumDepotCostList_Detail">
+        SELECT sum(cost) cost from(
+            SELECT case when rate>0 and payout<![CDATA[ < ]]>0 then abs(rate/100*payout) else 0 end cost
+            from(
+                <include refid="depoeRate_wherw"/>
+                GROUP BY a.platform,a.type
+            ) b
+        )a
+    </sql>
+
+    <select id="getHighestPayout" resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.DataTrendParamDto">
+        select max(IFNULL(amount,0)) amount from(
+            select sum(amount) amount,startday time from(
+                SELECT case when totalProfit>0 then totalProfit-cost else totalProfit+cost end amount,b.startday
+                from (<include refid="depotPayout_where"/>) b
+                LEFT JOIN (<include refid="depotCostList_Detail"/>) a
+                ON b.startday = a.startday
+                GROUP BY b.startday
+            ) a GROUP BY startday
+        ) a
+    </select>
+
+    <select id="findNetwinLoseList" resultType="com.wsdy.saasops.agapi.modules.dto.DataTrendDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.DataTrendParamDto">
+        select sum(amount) amount,startday time from(
+            SELECT case when totalProfit>0 then totalProfit-cost else totalProfit+cost end amount,b.startday
+            from (<include refid="depotPayout_where"/>) b
+            LEFT JOIN (<include refid="depotCostList_Detail"/>) a
+            ON b.startday = a.startday
+            GROUP BY b.startday
+        ) a GROUP BY startday
+    </select>
+
+</mapper>

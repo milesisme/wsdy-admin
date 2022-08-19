@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrAccountDeviceMapper">
+    <select id="getSameDeviceMbrList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccountDevice">
+        select d.id,d.deviceuuid,d.createtime,d.accountid,d.loginname,t.count
+        from (
+            select deviceuuid,count(*) count
+            from mbr_account_device
+            where deviceuuid is not null and deviceuuid != ''
+                and isblackopr = 0  and deviceuuid != 'l2wt-NaN'
+            group by deviceuuid
+        ) t
+        left join mbr_account_device d on t.deviceuuid = d.deviceuuid
+        where t.count > #{num}
+        order by t.deviceuuid,d.createtime asc,count desc
+    </select>
+
+    <update id="batchUpdateMbrGroup">
+        UPDATE mbr_account SET groupid =#{groupId}
+        WHERE id IN
+        <foreach item="id" collection="groups" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <update id="batchUpdateMbrDevice">
+        UPDATE mbr_account_device SET isBlackOpr = 1
+        WHERE id IN
+        <foreach item="id" collection="groups" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+    <select id="getCountByLoginNameAndDevice" resultType="java.lang.Integer">
+        select count(1) from log_mbrlogin
+        where loginname=#{loginName} and deviceuuid=#{device}
+    </select>
+</mapper>

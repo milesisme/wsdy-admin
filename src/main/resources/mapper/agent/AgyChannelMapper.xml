@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wsdy.saasops.modules.agent.dao.AgyChannelMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.wsdy.saasops.modules.agent.entity.AgyChannel">
+        <id column="id" property="id" />
+        <result column="masterNum" property="masterNum" />
+        <result column="viceNum" property="viceNum" />
+        <result column="name" property="name" />
+        <result column="groupId" property="groupId" />
+        <result column="deductRate" property="deductRate" />
+        <result column="isOpen" property="isOpen" />
+        <result column="updateTime" property="updateTime" />
+        <result column="udapyeBy" property="udapyeBy" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, masterNum, viceNum, name, groupId, deductRate, isOpen, updateTime, udapyeBy
+    </sql>
+
+	<select id="list" resultType="com.wsdy.saasops.modules.agent.entity.AgyChannel"
+            parameterType="com.wsdy.saasops.modules.agent.dto.AgyChannelDto">
+		SELECT cg.name groupName,ch.*
+			FROM agy_channel ch 
+				LEFT JOIN agy_channel_group cg on cg.id = ch.groupId
+		<where>
+			<if test="masterNum != null and masterNum != ''">
+				AND ch.masterNum = #{masterNum}
+			</if>
+			<if test="viceNum != null and viceNum != ''">
+				AND ch.viceNum = #{viceNum}
+			</if>
+			<if test="groupId != null">
+				AND ch.groupId = #{groupId}
+			</if>
+			<if test="isOpen != null">
+				AND ch.isOpen = #{isOpen}
+			</if>
+			<if test="name != null and name != ''">
+				AND ch.name LIKE CONCAT('%',#{name},'%' )
+			</if>
+			 <if test="startTime != null and startTime != ''">
+                AND ch.updateTime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND ch.updateTime <![CDATA[ <= ]]> #{endTime}
+            </if>
+		</where>
+		ORDER BY ch.updateTime DESC
+    </select>
+    
+    
+	<select id="selectByMasterNum" resultType="com.wsdy.saasops.modules.agent.dto.AgyChannelForApiDto">
+		SELECT viceNum, masterNum, deductRate
+			FROM agy_channel  WHERE masterNum = #{masterNum} AND isOpen = 1 LIMIT 1
+    </select>
+    
+	<select id="getByNum" resultType="com.wsdy.saasops.modules.agent.entity.AgyChannel">
+		SELECT id, masterNum, viceNum, isOpen
+			FROM agy_channel  WHERE (viceNum = #{num} OR masterNum = #{num}) AND isOpen = 1
+			LIMIT 1
+    </select>
+    
+	<select id="getByNumAndId" resultType="com.wsdy.saasops.modules.agent.entity.AgyChannel">
+		SELECT id, masterNum, viceNum
+			FROM agy_channel  WHERE id != #{id} AND (viceNum = #{num} OR masterNum = #{num})
+			LIMIT 1
+    </select>
+    
+	<select id="getCountByGroupId" resultType="java.lang.Integer">
+		SELECT count(id)
+			FROM agy_channel  WHERE groupId = #{groupId}
+    </select>
+    
+</mapper>

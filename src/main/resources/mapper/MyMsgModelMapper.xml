@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.system.msgtemple.mapper.myMsgModelMapper">
+    <resultMap id="resultMap" type="com.wsdy.saasops.modules.system.msgtemple.entity.MsgModel">
+        <id  column="id" property="id" jdbcType="INTEGER" />
+        <result property="name" column="name" jdbcType="VARCHAR" />
+        <result property="msgType" column="msgType" jdbcType="INTEGER" />
+        <result property="inMail" column="inMail" jdbcType="VARCHAR" />
+        <result property="email" column="email" jdbcType="VARCHAR" />
+        <result property="phoneMail" column="phoneMail" jdbcType="VARCHAR" />
+        <result property="state" column="state" jdbcType="INTEGER" />
+        <result property="creater" column="creater" jdbcType="VARCHAR" />
+        <result property="createTime" column="createTime" jdbcType="TIMESTAMP" />
+        <result property="modifyTime" column="modifyTime" jdbcType="TIMESTAMP" />
+        <result property="msgName" column="msgName" jdbcType="VARCHAR" />
+        <result property="inMailDef" column="inMailDef" jdbcType="INTEGER" />
+        <result property="emailDef" column="emailDef" jdbcType="INTEGER" />
+        <result property="phoneMailDef" column="phoneMailDef" jdbcType="INTEGER" />
+    </resultMap>
+    <sql id="sql">
+            id,name,msgType,inMail,email,phoneMail,state,creater,createTime,inMailDef,emailDef,phoneMailDef
+    </sql>
+    <sql id="sqlConditions">
+        <if test=" id != null and id !=''">
+            AND id = #{id}
+        </if>
+        <if test=" name != null and name !=''">
+            AND name = #{name}
+        </if>
+        <if test=" inMailDef != null and inMailDef !=''">
+            AND inMailDef = #{inMailDef}
+        </if>
+        <if test=" emailDef != null and emailDef !=''">
+            AND emailDef = #{emailDef}
+        </if>
+        <if test=" phoneMailDef != null and phoneMailDef !=''">
+            AND phoneMailDef = #{phoneMailDef}
+        </if>
+        <if test=" state != null and state !=''">
+            AND state = #{state}
+        </if>
+    </sql>
+    <select id="queryByConditions" resultMap="resultMap" parameterType="com.wsdy.saasops.modules.system.msgtemple.entity.MsgModel">
+      SELECT
+        A.id,A.name,A.msgType,A.inMail,A.email,A.phoneMail,A.state,A.creater,A.createTime,A.modifyTime,A.inMailDef,A.emailDef,A.phoneMailDef ,b.NAME msgName
+        FROM set_basic_msgmodel A
+        LEFT JOIN set_basic_msgmodeltype b on A.msgType = b.id
+        WHERE 1=1
+        <if test=" id != null and id !='' ">
+            AND A.id = #{id}
+        </if>
+        <if test=" name != null and name !=''">
+            AND A.name = #{name}
+        </if>
+        <if test="states != null and states.size()>0">
+                AND A.state in
+                <foreach item="state" collection="states" open="(" separator="," close=")">
+                    #{state}
+                </foreach>
+        </if>
+        <!-- <if test=" state != null and state !=''">
+            AND A.state = #{state}
+        </if> -->
+        <if test="msgTypes != null and msgTypes.size()>0">
+                AND A.msgType in
+                <foreach item="msgType" collection="msgTypes" open="(" separator="," close=")">
+                    #{msgType}
+                </foreach>
+        </if>
+        <!-- <if test=" msgType != null and msgType !=''">
+            AND A.msgType = #{msgType}
+        </if> -->
+        <if test=" inMailDef != null and inMailDef !=''">
+            AND inMailDef = #{inMailDef}
+        </if>
+        <if test=" emailDef != null and emailDef !=''">
+            AND emailDef = #{emailDef}
+        </if>
+        <if test=" phoneMailDef != null and phoneMailDef !=''">
+            AND phoneMailDef = #{phoneMailDef}
+        </if>
+    </select>
+   <delete id="deleteByIds" parameterType="java.lang.String" >
+       DELETE  FROM set_basic_msgmodel WHERE
+       id in (${ids})
+   </delete>
+
+    <select id="selectListByIds" parameterType="java.lang.String" resultType="com.wsdy.saasops.modules.system.msgtemple.entity.MsgModel">
+        select * FROM set_basic_msgmodel WHERE id in (${ids})
+    </select>
+</mapper>

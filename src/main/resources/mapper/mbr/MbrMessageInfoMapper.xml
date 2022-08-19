@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrMessageInfoMapper">
+    <select id="selectMbrMessageInfo"  parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        select * from mbr_message_info info
+        <where>
+            (info.expirationtime is null or info.expirationtime <![CDATA[ >= ]]> NOW())
+            <if test="createTime!=null">
+                AND info.createTime <![CDATA[ >= ]]> #{createTime}
+            </if>
+            <if test="messageId!=null">
+                AND info.messageId = #{messageId}
+            </if>
+            <if test="msgType == 1">
+                AND info.isSign in (0,1)
+            </if>
+            <if test="msgType == 2">
+                AND info.isSign = 2
+            </if>
+            <if test="isRead != null">
+                AND info.isRead = #{isRead}
+            </if>
+            <if test="isDelete != null">
+                AND (info.isDelete = 0 or info.isDelete is null)
+            </if>
+
+        </where>
+    </select>
+
+    <select id="fineMbrMessageV2Info"  parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        select * from (select * FROM mbr_message_info ORDER BY id
+            <if test="isMessage==0">
+                desc
+            </if>
+        ) info
+        <where>
+            <if test="messageId!=null">
+                AND info.messageId = #{messageId}
+            </if>
+            <if test="msgType == 1">
+                AND info.isSign in (0,1)
+            </if>
+            <if test="msgType == 2">
+                AND info.isSign = 2
+            </if>
+            <if test="isRead != null">
+                AND info.isRead = #{isRead}
+            </if>
+            <if test="isDelete != null">
+                AND (info.isDelete = 0 or info.isDelete is null)
+            </if>
+            <if test="infoId != null and isMessage==1 and infoId>0">
+                AND info.id <![CDATA[ >= ]]>#{infoId}
+            </if>
+            <if test="infoId != null and isMessage==0 and infoId>0">
+                AND info.id <![CDATA[ <= ]]>#{infoId}
+            </if>
+            <if test="num != null ">
+                LIMIT #{num}
+            </if>
+        </where>
+    </select>
+
+    <update id="updateMessageList" parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        update mbr_message_info set isReadSys = #{isReadSys} where messageId = #{messageId}
+    </update>
+
+    <update id="setMessageMbrRead" parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        update mbr_message_info set isread = 1
+        where messageid in (
+            select id from mbr_message where accountid = #{accountId}
+        ) AND issign = 2
+    </update>
+
+    <insert id="batchInsertMbrMessage">
+        insert into mbr_message (accountid,loginname,time,isrevert) VALUES
+        <foreach collection="groups" item="item" index="index" separator="," >
+            (#{item.accountId}, #{item.loginName}, #{item.time}, #{item.isRevert})
+        </foreach>
+    </insert>
+    <update id="batchUpdateMbrMessage">
+        UPDATE mbr_message SET time =#{time},isrevert =#{isRevert}
+        WHERE id IN
+        <foreach item="id" collection="groups" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+    <insert id="batchInsertMbrMessageInfo">
+        insert into mbr_message_info (messageid,textcontent,imageurl,createtime,createuser,issign,isread,isreadsys,isdelete,expirationtime) VALUES
+        <foreach collection="groups" item="item" index="index" separator="," >
+            (#{item.messageId}, #{item.textContent}, #{item.imageUrl}, #{item.createTime}, #{item.createUser}, #{item.isSign}, #{item.isRead}, #{item.isReadSys}, #{item.isDelete}, #{item.expirationTime})
+        </foreach>
+    </insert>
+
+    <delete id="messageDeleteExpiration">
+        delete FROM mbr_message_info
+        WHERE expirationtime is not null and expirationtime <![CDATA[ < ]]> NOW()
+    </delete>
+</mapper>

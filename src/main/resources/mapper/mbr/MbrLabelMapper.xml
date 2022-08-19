@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrLabelMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.wsdy.saasops.modules.member.entity.MbrLabel">
+        <id column="id" property="id" />
+        <result column="name" property="name" />
+        <result column="isAvailable" property="isAvailable" />
+        <result column="isSetRule" property="isSetRule" />
+        <result column="aliPayWithdrawal" property="aliPayWithdrawal" />
+        <result column="bankWithdrawal" property="bankWithdrawal" />
+        <result column="isExemptAliPay" property="isExemptAliPay" />
+        <result column="isExemptBank" property="isExemptBank" />
+        <result column="memo" property="memo" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, name, isAvailable, isSetRule, aliPayWithdrawal, bankWithdrawal, isExemptAliPay, isExemptBank, memo
+    </sql>
+    
+    <select id="listPage" resultType="com.wsdy.saasops.modules.member.entity.MbrLabel">
+        SELECT * FROM mbr_label
+        <where>
+        	<if test="name != null and name != ''">
+	            AND name LIKE CONCAT('%',#{name},'%')
+	        </if>
+        	<if test="isAvailable != null">
+	            AND isAvailable = #{isAvailable}
+	        </if>
+        </where>
+    </select>
+    
+    <update id="updateAvailable">
+        UPDATE mbr_label SET isAvailable = #{isAvailable} WHERE id = #{id}
+    </update>
+    
+     <select id="checkNameCount" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM mbr_label
+        <where>
+        	<if test="name != null and name != ''">
+	            AND name = #{name}
+	        </if>
+        	<if test="id != null">
+	            AND id != #{id}
+	        </if>
+        </where>
+    </select>
+    
+    <update id="setMbrLabel">
+        UPDATE mbr_account SET labelid = #{labelid} WHERE loginname IN
+        <foreach item="item" collection="userList" separator="," open="(" close=")" index="">
+	      	#{item}
+	    </foreach>
+    </update>
+
+</mapper>

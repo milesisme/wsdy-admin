@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.log.mapper.LogMapper">
+    <select id="findMemberLoginLastOne" resultType="com.wsdy.saasops.modules.log.entity.LogMbrLogin"
+            parameterType="java.lang.String">
+		select * from log_mbrlogin where loginName=#{loginName}
+		order by loginTime
+		desc limit 1
+	</select>
+    <delete id="deleteMbrLoginBatch" parameterType="String">
+        DELETE log_mbrlogin where id in
+        <foreach item="id" index="index" collection="array" open="("
+                 separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+    <delete id="deleteMbrRegBatch" parameterType="String">
+        DELETE log_mbrregister where id in
+        <foreach item="id" index="index" collection="array" open="("
+                 separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+    <delete id="deleteSystemBatch" parameterType="String">
+        DELETE log_system where id in
+        <foreach item="id" index="index" collection="array" open="("
+                 separator="," close=")">
+            #{id}
+        </foreach>
+    </delete>
+    <update id="updateLoginTime" parameterType="Integer">
+		update log_mbrlogin set logoutTime=now(),onlineTime=TIMESTAMPDIFF(SECOND,loginTime,now()) where id=#{id}
+	</update>
+
+    <select id="queryLoginAreaIsNull" resultType="com.wsdy.saasops.modules.log.entity.LogMbrLogin" >
+		select * from log_mbrlogin where id in(
+            select max(id) id from log_mbrlogin group by loginName
+        ) and loginarea is null order by logintime desc
+	</select>
+
+    <select id="loginDays" resultType="java.lang.Integer">
+        select count(IFNULL(t.logintime,0))
+        from (
+            select DATE_FORMAT(logintime,'%Y-%m-%d') logintime
+            from log_mbrlogin
+            where accountid = #{accountId}
+            and DATE_FORMAT(logintime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startDay}
+            and DATE_FORMAT(logintime,'%Y-%m-%d') <![CDATA[ <= ]]>  #{endDay}
+            group by DATE_FORMAT(logintime,'%Y-%m-%d')
+        )t
+
+    </select>
+    <select id="getFirstLogin" resultType="com.wsdy.saasops.modules.log.entity.LogMbrLogin">
+        select *
+        from log_mbrlogin
+        where accountid = #{accountId}
+        order by id asc
+        limit 1
+    </select>
+
+</mapper>

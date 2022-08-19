@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrGroupMapper">
+
+ 	<select id="getGroupByUserId" resultType="com.wsdy.saasops.modules.member.entity.MbrGroup" >
+        SELECT gro.* FROM mbr_group gro LEFT JOIN mbr_account acc ON acc.groupid = gro.id WHERE acc.id = #{userId}
+    </select>
+
+    <update id="updateDifferentNameOff">
+        UPDATE mbr_group SET bankdifferentname=0
+    </update>
+
+</mapper>

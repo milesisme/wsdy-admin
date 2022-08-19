@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.AgyReportMapper">
+
+    <select id="upperScoreRecord" resultType="com.wsdy.saasops.modules.agent.entity.AgyBillDetail"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyBillDetail">
+        SELECT b.*,t.loginname,f.codename from agy_bill_detail b
+        LEFT JOIN mbr_account t ON b.meraccountid =  t.id
+        LEFT JOIN t_bs_financialcode f ON b.financialcode = f.`code`
+        <where>
+            <if test="financialCode == null || financialCode == ''">
+                AND b.financialcode in ('ADZ','ASF')
+            </if>
+            <if test="financialCode != null and financialCode != ''">
+                AND b.financialcode=#{financialCode}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND t.loginName=#{loginName}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND b.agyAccount = #{agyAccount}
+            </if>
+            <if test="walletType != null">
+                AND b.walletType = #{walletType}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND b.ordertime <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND b.ordertime <![CDATA[ <= ]]>#{endTime}
+            </if>
+        </where>
+        order by b.ordertime desc
+    </select>
+
+
+    <select id="agentAccountChange" resultType="com.wsdy.saasops.modules.agent.entity.AgyBillDetail"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyBillDetail">
+        SELECT b.*,f.codename from agy_bill_detail b
+        LEFT JOIN t_bs_financialcode f ON b.financialcode = f.`code`
+        <where>
+            <if test="financialCode != null and financialCode != ''">
+                AND b.financialcode=#{financialCode}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND b.agyAccount = #{agyAccount}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND b.ordertime <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND b.ordertime <![CDATA[ <= ]]>#{endTime}
+            </if>
+        </where>
+        order by b.ordertime desc
+    </select>
+</mapper>

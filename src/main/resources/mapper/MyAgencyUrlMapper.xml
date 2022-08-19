@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.system.agencydomain.mapper.MySystemAgencyUrlMapper">
+
+	<!-- 可根据自己的需求，是否要使用 -->
+    <resultMap type="com.wsdy.saasops.modules.system.agencydomain.entity.SystemAgencyUrl" id="resultMap">
+        <result property="id" column="id"/>
+        <result property="name" column="name"/>
+        <result property="state" column="state"/>
+        <result property="url" column="url"/>
+		<result property="sum" column="sum" />
+		<result property="agencyId" column="agencyId" />
+		<result property="states" column="states"/>
+        <result property="bind" column="bind"/>
+        <result property="createTime" column="createTime" jdbcType="TIMESTAMP" />
+        <result property="modifyTime" column="modifyTime" jdbcType="TIMESTAMP" />
+    </resultMap>
+    <sql id="sql">
+        id,name,state,url,bind,agencyId
+    </sql>
+
+    <select id="queryConditions" resultMap="resultMap" parameterType="com.wsdy.saasops.modules.system.agencydomain.entity.SystemAgencyUrl">
+        SELECT  A.sum ,B.id,B.state,B.url,C.agyAccount,B.name,B.createTime,B.modifyTime,B.bind from
+        set_basic_agencyurl B inner JOIN agy_account C ON C.id =B.agencyId
+        LEFT JOIN (SELECT  count(tagencyId) sum ,tagencyId agencyId
+        FROM mbr_account group by tagencyId
+        union
+        SELECT  count(cagencyId) sum ,cagencyId agencyId
+        FROM mbr_account group by cagencyId )A on A.agencyId =B.agencyId
+        <where>
+            <if test=" name !=null and name !=''">
+                And B.name LIKE CONCAT('%',#{name}, '%')
+            </if>
+            <if test=" agencyId !=null and agencyId !=''">
+                And A.agencyId =#{agencyId}
+            </if>
+            <if test=" url !=null and url !=''">
+                And B.url LIKE CONCAT('%',#{url}, '%')
+            </if>
+            <if test=" state !=null and state !=''">
+                And B.state =#{state}
+            </if>
+            <if test=" states !=null and states !='' ">
+                And B.state in (${states})
+            </if>
+            <if test=" agyAccount !=null and agyAccount !=''">
+                And C.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+            </if>
+        </where>
+    </select>
+    <insert id="multiInsert" parameterType="java.util.List" >
+        INSERT into set_basic_agencyurl
+        (<include refid="sql" />)
+        VALUES
+        <foreach collection ="list" item="item" index= "index" separator =",">
+            (
+            #{item.id}, #{item.name},#{item.state},#{item.url},#{item.bind}, #{item.agencyId}
+            )
+        </foreach >
+    </insert>
+    <delete id="multiDelete" parameterType="java.lang.String">
+        DELETE FROM set_basic_agencyurl where id in (${ids})
+    </delete>
+</mapper>

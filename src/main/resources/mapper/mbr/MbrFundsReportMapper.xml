@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrFundsReportMapper">
+
+    <select id="getMbrTodayReport" parameterType="com.wsdy.saasops.modules.member.entity.MbrFundsReport" resultType="com.wsdy.saasops.modules.member.entity.MbrFundsReport">
+        SELECT mfr.* FROM mbr_funds_report mfr WHERE mfr.reportdate = #{reportDate} AND mfr.accountid = #{accountId}
+    </select>
+
+    <select id="getMbrTodayReportList" parameterType="com.wsdy.saasops.modules.member.entity.MbrFundsReport" resultType="com.wsdy.saasops.modules.member.entity.MbrFundsReport">
+        SELECT mfr.* FROM mbr_funds_report mfr WHERE mfr.reportdate = #{reportDate}
+    </select>
+
+    <select id="countMbrFundsReport" parameterType="com.wsdy.saasops.modules.member.entity.MbrFundsReport" resultType="com.wsdy.saasops.modules.member.entity.MbrFundsReport">
+        SELECT
+            tt.createTime reportDate,
+            tt.auditTime auditDate,
+            tt.accountId,
+            IFNULL( sum( tt.totalDepositBalance ), 0 ) deposit,
+            IFNULL( sum( tt.totalActualDepositBalance ), 0 ) actualDeposit,
+            IFNULL( sum( tt.totalDrawAmount ), 0 ) withdraw,
+            IFNULL( sum( tt.totalBonusAmount ), 0 ) bonus,
+            IFNULL( sum( tt.totalOnlineBonusAmount ), 0 ) onlineBonus,
+            IFNULL( sum( tt.totalOfflineBonusAmount ), 0 ) offlineBonus,
+            IFNULL( sum( tt.totalTaskBonusAmount ), 0 ) taskBonus
+        FROM
+            (
+            SELECT
+                DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                sum( t.depositAmount ) totalDepositBalance,
+                sum( t.actualArrival ) totalActualDepositBalance,
+                0 totalDrawAmount,
+                0 totalBonusAmount,
+                0 totalOnlineBonusAmount,
+                0 totalOfflineBonusAmount,
+                0 totalTaskBonusAmount
+            FROM
+                fund_deposit t
+            WHERE
+                t.STATUS = 1
+                AND DATE_FORMAT( t.modifyTime, '%Y-%m-%d' ) = #{reportDate}
+            GROUP BY
+                DATE_FORMAT( t.auditTime, '%Y-%m-%d' ),
+                t.accountId
+
+            UNION ALL
+
+            SELECT
+                DATE_FORMAT( t.passTime, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.passTime, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                0 totalDepositBalance,
+                0 totalActualDepositBalance,
+                SUM( t.actualarrival ) totalDrawAmount,
+                0 totalBonusAmount,
+                0 totalOnlineBonusAmount,
+                0 totalOfflineBonusAmount,
+                0 totalTaskBonusAmount
+            FROM
+                fund_acc_withdraw t
+            WHERE
+                t.STATUS = 1
+                AND DATE_FORMAT( t.modifyTime, '%Y-%m-%d' ) = #{reportDate}
+            GROUP BY
+                DATE_FORMAT( t.passTime, '%Y-%m-%d' ),
+                t.accountid
+
+            UNION ALL
+
+            SELECT
+                DATE_FORMAT( t.createTime, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                0 totalDepositBalance,
+                0 totalActualDepositBalance,
+                0 totalDrawAmount,
+                sum( t.bonusAmount ) totalBonusAmount,
+                0 totalOnlineBonusAmount,
+                0 totalOfflineBonusAmount,
+                0 totalTaskBonusAmount
+            FROM
+                (-- 红利
+                SELECT
+                    bonusAmount,
+                    accountId,
+                    DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ) createTime,
+                    DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) auditTime
+                FROM
+                    opr_act_bonus t
+                WHERE
+                    t.STATUS = 1
+                    AND DATE_FORMAT( t.audittime, '%Y-%m-%d' ) = #{reportDate}
+                UNION ALL
+                -- 任务
+                SELECT
+                    bonusAmount,
+                    accountId,
+                    DATE_FORMAT( t.time, '%Y-%m-%d' ) createTime,
+                    DATE_FORMAT( t.time, '%Y-%m-%d' ) auditTime
+                FROM
+                    task_bonus t
+                WHERE
+                    1 = 1
+                    AND DATE_FORMAT( t.time, '%Y-%m-%d' ) = #{reportDate}
+                ) t
+            WHERE
+                1 = 1
+            GROUP BY
+            DATE_FORMAT( t.createTime, '%Y-%m-%d' ), t.accountId
+
+            UNION ALL
+
+            SELECT
+                DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                0 totalDepositBalance,
+                0 totalActualDepositBalance,
+                0 totalDrawAmount,
+                0 totalBonusAmount,
+                sum( t.bonusAmount ) totalOnlineBonusAmount,
+                0 totalOfflineBonusAmount,
+                0 totalTaskBonusAmount
+            FROM opr_act_bonus t
+            LEFT JOIN opr_act_activity oaa on oaa.id = t.activityid
+            WHERE
+                oaa.isonline = 1
+                AND t.STATUS = 1
+                AND DATE_FORMAT( t.audittime, '%Y-%m-%d' ) = #{reportDate}
+            GROUP BY
+            DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ), t.accountId
+
+            UNION ALL
+
+            SELECT
+                DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                0 totalDepositBalance,
+                0 totalActualDepositBalance,
+                0 totalDrawAmount,
+                0 totalBonusAmount,
+                0 totalOnlineBonusAmount,
+                sum( t.bonusAmount ) totalOfflineBonusAmount,
+                0 totalTaskBonusAmount
+            FROM opr_act_bonus t
+            LEFT JOIN opr_act_activity oaa on oaa.id = t.activityid
+            WHERE
+                oaa.isonline = 0
+                AND t.STATUS = 1
+                AND DATE_FORMAT( t.audittime, '%Y-%m-%d' ) = #{reportDate}
+            GROUP BY
+            DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ), t.accountId
+
+            UNION ALL
+
+            SELECT
+                DATE_FORMAT( t.time, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.time, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                0 totalDepositBalance,
+                0 totalActualDepositBalance,
+                0 totalDrawAmount,
+                0 totalBonusAmount,
+                0 totalOnlineBonusAmount,
+                0 totalOfflineBonusAmount,
+                sum( t.bonusAmount ) totalTaskBonusAmount
+            FROM task_bonus t
+            WHERE
+                1 = 1
+                AND DATE_FORMAT( t.time, '%Y-%m-%d' ) = #{reportDate}
+            GROUP BY
+            DATE_FORMAT( t.time, '%Y-%m-%d' ), t.accountId
+        ) tt
+        GROUP BY
+            tt.createTime, tt.auditTime, tt.accountId
+    </select>
+
+    <select id="countMbrFundsReportByAccountId" parameterType="com.wsdy.saasops.modules.member.entity.MbrFundsReport" resultType="com.wsdy.saasops.modules.member.entity.MbrFundsReport">
+        SELECT
+            tt.createTime reportDate,
+            tt.auditTime auditDate,
+            tt.accountId,
+            IFNULL( sum( tt.totalDepositBalance ), 0 ) deposit,
+            IFNULL( sum( tt.totalActualDepositBalance ), 0 ) actualDeposit,
+            IFNULL( sum( tt.totalDrawAmount ), 0 ) withdraw,
+            IFNULL( sum( tt.totalBonusAmount ), 0 ) bonus,
+            IFNULL( sum( tt.totalOnlineBonusAmount ), 0 ) onlineBonus,
+            IFNULL( sum( tt.totalOfflineBonusAmount ), 0 ) offlineBonus,
+            IFNULL( sum( tt.totalTaskBonusAmount ), 0 ) taskBonus
+        FROM
+            (
+            SELECT
+                DATE_FORMAT( t.createTime, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                0 totalDepositBalance,
+                0 totalActualDepositBalance,
+                0 totalDrawAmount,
+                sum( t.bonusAmount ) totalBonusAmount,
+                0 totalOnlineBonusAmount,
+                0 totalOfflineBonusAmount,
+                0 totalTaskBonusAmount
+            FROM
+                (-- 红利
+                SELECT
+                    bonusAmount,
+                    accountId,
+                    DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ) createTime,
+                    DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) auditTime
+                FROM
+                    opr_act_bonus t
+                WHERE
+                    t.STATUS = 1
+                    AND t.accountid = #{accountId}
+                    AND DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ) = #{reportDate}
+                UNION ALL
+                -- 任务
+                SELECT
+                    bonusAmount,
+                    accountId,
+                    DATE_FORMAT( t.time, '%Y-%m-%d' ) createTime,
+                    DATE_FORMAT( t.time, '%Y-%m-%d' ) auditTime
+                FROM
+                    task_bonus t
+                WHERE
+                    1 = 1
+                    AND t.accountid = #{accountId}
+                    AND DATE_FORMAT( t.time, '%Y-%m-%d' ) = #{reportDate}
+                ) t
+            WHERE
+                1 = 1
+            GROUP BY
+            DATE_FORMAT( t.createTime, '%Y-%m-%d' ), t.accountId
+
+            UNION ALL
+
+            SELECT
+                DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                0 totalDepositBalance,
+                0 totalActualDepositBalance,
+                0 totalDrawAmount,
+                0 totalBonusAmount,
+                sum( t.bonusAmount ) totalOnlineBonusAmount,
+                0 totalOfflineBonusAmount,
+                0 totalTaskBonusAmount
+            FROM opr_act_bonus t
+            LEFT JOIN opr_act_activity oaa on oaa.id = t.activityid
+            WHERE
+                oaa.isonline = 1
+                AND t.STATUS = 1
+                AND t.accountid = #{accountId}
+                AND DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ) = #{reportDate}
+            GROUP BY
+            DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ), t.accountId
+
+            UNION ALL
+
+            SELECT
+                DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.auditTime, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                0 totalDepositBalance,
+                0 totalActualDepositBalance,
+                0 totalDrawAmount,
+                0 totalBonusAmount,
+                0 totalOnlineBonusAmount,
+                sum( t.bonusAmount ) totalOfflineBonusAmount,
+                0 totalTaskBonusAmount
+            FROM opr_act_bonus t
+            LEFT JOIN opr_act_activity oaa on oaa.id = t.activityid
+            WHERE
+                oaa.isonline = 0
+                AND t.STATUS = 1
+                AND t.accountid = #{accountId}
+                AND DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ) = #{reportDate}
+            GROUP BY
+            DATE_FORMAT( t.applicationTime, '%Y-%m-%d' ), t.accountId
+
+            UNION ALL
+
+            SELECT
+                DATE_FORMAT( t.time, '%Y-%m-%d' ) createTime,
+                DATE_FORMAT( t.time, '%Y-%m-%d' ) auditTime,
+                t.accountId,
+                0 totalDepositBalance,
+                0 totalActualDepositBalance,
+                0 totalDrawAmount,
+                0 totalBonusAmount,
+                0 totalOnlineBonusAmount,
+                0 totalOfflineBonusAmount,
+                sum( t.bonusAmount ) totalTaskBonusAmount
+            FROM task_bonus t
+            WHERE
+                1 = 1
+                AND t.accountid = #{accountId}
+                AND DATE_FORMAT( t.time, '%Y-%m-%d' ) = #{reportDate}
+            GROUP BY
+            DATE_FORMAT( t.time, '%Y-%m-%d' ), t.accountId
+        ) tt
+        GROUP BY
+            tt.createTime, tt.accountId
+    </select>
+
+    <update id="updateReportDepositByUserDate" parameterType="com.wsdy.saasops.modules.member.entity.MbrMessageInfo">
+        update mbr_funds_report set withdraw = withdraw - #{withdraw}
+        where accountid = #{accountId} and reportdate = DATE_FORMAT( #{reportDate}, '%Y-%m-%d' )
+    </update>
+
+</mapper>

@@ -1,0 +1,2018 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.fund.mapper.FundMapper">
+    <!--查询当前用户当天的已使用的限免是次数 -->
+    <select id="querySumFeeFreeTimes" resultType="java.util.Map">
+		SELECT SUM(1) freeTimes ,accountId as accountId FROM fund_deposit
+		WHERE status !=0
+		and handlingCharge = 0
+		and accountId = #{accountId}
+		AND createTime <![CDATA[ >= ]]> #{startTime}
+		group by accountId
+	</select>
+
+    <update id="updatePayStatus" parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        UPDATE fund_deposit SET
+        <if test="accountId != null ">
+            accountId =#{accountId},
+        </if>
+        <if test="companyPayId != null ">
+            companyPayId=#{companyPayId},
+        </if>
+        <if test="onlinePayId != null ">
+            onlinePayId=#{onlinePayId},
+        </if>
+        <if test="qrCodeId != null ">
+            qrCodeId=#{qrCodeId},
+        </if>
+        <if test="mark != null ">
+            mark=#{mark},
+        </if>
+        <if test="isPayment != null ">
+            isPayment=#{isPayment},
+        </if>
+        <if test="depositAmount != null ">
+            depositAmount = #{depositAmount},
+        </if>
+        <if test="depositUser != null ">
+            depositUser = #{depositUser},
+        </if>
+        <if test="discountAmount != null ">
+            discountAmount = #{discountAmount},
+        </if>
+        <if test="handlingCharge != null ">
+            handlingCharge = #{handlingCharge},
+        </if>
+        <if test="actualArrival != null ">
+            actualArrival = #{actualArrival},
+        </if>
+        <if test="ip != null ">
+            ip = #{ip},
+        </if>
+        <if test="memo != null ">
+            memo = #{memo},
+        </if>
+        <if test="modifyUser != null">
+            modifyUser =#{modifyUser},
+        </if>
+        <if test="modifyTime != null ">
+            modifyTime = #{modifyTime},
+        </if>
+        <if test="auditUser != null ">
+            auditUser = #{auditUser},
+        </if>
+        <if test="auditTime != null ">
+            auditTime = #{auditTime},
+        </if>
+        <if test="billDetailId != null ">
+            billDetailId = #{billDetailId},
+        </if>
+        <if test="status != null">
+            status = #{status}
+        </if>
+        where status = 2
+        <if test="orderNo != null">
+            and orderNo = #{orderNo}
+        </if>
+        <if test="status == 0">
+            and createTime <![CDATA[ <= ]]> date_sub(NOW(), INTERVAL 12 HOUR)
+        </if>
+    </update>
+    <select id="findDepositList" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT
+	        dt.id,dt.accountId,dt.companyPayId,dt.onlinePayId,dt.mark,dt.status,
+	        dt.isPayment,dt.depositAmount,dt.depositUser,dt.handlingCharge,dt.actualArrival,
+	        dt.auditUser,dt.auditTime,dt.ip,dt.memo,dt.createUser,
+	        left(dt.createTime,19) createTime,dt.modifyUser,left(dt.modifyTime,19) modifyTime,
+	        dt.orderNo,dt.orderPrefix,dt.billDetailId,dt.activityId,dt.depositPostscript, dt.fundSource fundSource,
+	        dt.payorderno,dt.crid,dt.hash,IFNULL(dt.depositAmountcr,0) depositAmountcr,dt.exchangerate,dt.handingback,
+	        case dt.mark
+	            when 0 then concat_ws('-',pay.name,p.platfromName)
+	            when 1 then concat_ws('-',deposit.realName,deposit.bankName)
+	          --  when 2 then qr.name
+	            when 3 then cr.name
+	        end payType,
+	
+	        act.loginName,act.tagencyId,
+	        gp.groupName,
+	        -- agy.agyAccount,
+	        pay.name onlinePayName,
+	        deposit.bankName depositType,deposit.realName,
+	       -- bank.bankcode currencyCode, bank.category currencyProtocoldepositStatisticByPay
+	        cr.currencycode currencyCode, cr.currencyprotocol currencyProtocol,
+	        IFNULL(det.depositCount,0) depositCount,
+	        agy.agyaccount, mal.tiername tierName
+        FROM fund_deposit dt
+        LEFT JOIN mbr_account act ON dt.accountId = act.id
+        LEFT JOIN mbr_group gp ON act.groupId = gp.id
+       -- LEFT JOIN agy_account agy ON act.cagencyId = agy.id
+        LEFT JOIN set_bacic_onlinePay pay ON pay.id = dt.onlinePayId
+        LEFT JOIN t_pay p ON p.id = pay.payId
+        LEFT JOIN set_basic_sys_deposit deposit ON deposit.id = dt.companyPayId
+       -- LEFT JOIN set_basic_sys_qrcode qr ON qr.id = dt.qrcodeid
+        LEFT JOIN set_basic_sys_cryptocurrencies cr on cr.id = dt.crid
+       --  LEFT JOIN set_basic_cryptocurrencies_bank cbk on cr.id = cbk.currenciesid
+       --  LEFT JOIN t_bs_bank bank on cbk.bankid = bank.id
+       LEFT JOIN (select accountid, count(id) depositCount FROM fund_deposit WHERE status = 1 GROUP BY accountid) det ON det.accountid = dt.accountid
+      	LEFT JOIN agy_account agy ON agy.id =  act.cagencyid AND dt.accountId = act.id
+      	LEFT JOIN mbr_activity_level mal ON mal.id = act.actLevelId AND dt.accountId = act.id
+        <include refid="deposits_where"/>
+        ORDER BY dt.createTime DESC
+    </select>
+    
+    <select id="findDepositListApi" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT
+	        fd.id,fd.accountId,fd.companyPayId,fd.onlinePayId,fd.mark,fd.status,fd.isPayment,fd.depositAmount,fd.depositUser,fd.handlingCharge,fd.actualArrival,
+	        fd.auditUser,fd.auditTime,fd.ip,fd.memo,fd.createUser,left(fd.createTime,19)
+	        createTime,fd.modifyUser,left(fd.modifyTime,19)
+	        modifyTime,concat_ws('',fd.orderPrefix,fd.orderNo) orderNo,
+	        fd.orderPrefix,fd.billDetailId,fd.activityId,fd.depositPostscript,0 isSign,
+	        case fd.`mark`
+	        when 0 then sbo.showName
+	        when 1 then ifnull(sbf.showName,sbsd.bankName)
+	        when 2 then sbsq.name
+	        when 3 then scr.showName
+	        end depositTypeName
+        FROM fund_deposit fd
+        LEFT JOIN set_bacic_onlinePay sbo on fd.onlinePayId=sbo.id
+        LEFT JOIN set_basic_sys_deposit sbsd on fd.companyPayId=sbsd.id
+        LEFT JOIN set_basic_fastpay sbf on sbsd.fastPayId=sbf.id
+        LEFT JOIN set_basic_sys_qrcode sbsq on fd.qrcodeid=sbsq.id
+        LEFT JOIN set_basic_sys_cryptocurrencies scr on fd.crid=scr.id
+        <where>
+            <if test="status != null">
+                AND fd.status =#{status}
+            </if>
+            <if test="accountId != null">
+                AND fd.accountId =#{accountId}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND fd.createTime <![CDATA[ >= ]]>
+                #{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND fd.createTime <![CDATA[ <= ]]>
+                #{createTimeTo}
+            </if>
+        </where>
+        <choose>
+            <when test="orderBy != null and orderBy !=''">
+                ORDER BY fd.${orderBy}
+            </when>
+            <otherwise>
+                order by fd.createTime desc
+            </otherwise>
+        </choose>
+    </select>
+    
+    <select id="findDepositListApiCompany" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT
+        fd.id,fd.accountId,fd.companyPayId,fd.onlinePayId,fd.mark,fd.status,
+        fd.isPayment,fd.depositAmount,fd.depositUser,fd.handlingCharge,fd.actualArrival,
+        fd.auditUser,fd.auditTime,fd.ip,fd.memo,fd.createUser,left(fd.createTime,19)
+        createTime,fd.modifyUser,left(fd.modifyTime,19)
+        modifyTime,concat_ws('',fd.orderPrefix,fd.orderNo) orderNo,
+        fd.orderPrefix,fd.billDetailId,fd.activityId,fd.depositPostscript,
+        case fd.mark when 1 then sbsd.bankName
+        when 2 then sbsq.name end depositTypeName
+        FROM fund_deposit fd
+        LEFT JOIN set_basic_sys_deposit sbsd on fd.companyPayId=sbsd.id
+        LEFT JOIN set_basic_sys_qrcode sbsq on fd.qrcodeid=sbsq.id
+        where fd.mark in (1,2,3)
+        <if test="accountId != null">
+            AND fd.accountId =#{accountId}
+        </if>
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND fd.createTime <![CDATA[ >= ]]>
+            #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND fd.createTime <![CDATA[ <= ]]>
+            #{createTimeTo}
+        </if>
+        order by fd.createTime desc
+    </select>
+
+    <select id="findDepositListApiOther" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        select t1.createTime,concat_ws('',t1.orderPrefix,t1.orderNo) orderNo,t1.`status`,
+        t1.orderPrefix,amount depositAmount,amount actualArrival ,2 isSign,t1.auditAddType,
+        <if test="financialCode == 'AA'">
+            '人工增加' depositTypeName
+        </if>
+        <if test="financialCode == 'FA'">
+            '返利增加' depositTypeName
+        </if>
+        from fund_audit t1 where t1.accountId=#{accountId} and t1.status=1
+        <if test="financialCode == 'AA'">
+            and t1.financialCode ='AA'
+        </if>
+        <if test="financialCode == 'FA'">
+            and t1.financialCode ='FA'
+        </if>
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND t1.createTime<![CDATA[ >= ]]> #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND t1.createTime <![CDATA[ <= ]]> #{createTimeTo}
+        </if>
+        order by t1.createTime desc
+    </select>
+
+    <select id="findDepositAndOtherList" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        select * from (
+        SELECT sbsd.bankName depositTypeName,fd.createTime,fd.orderPrefix,
+        concat_ws('',fd.orderPrefix,fd.orderNo) orderNo,
+        '公司入款' depositType,fd.depositAmount,actualArrival,
+        case fd.`status` when 0 then '失败' when 1 then '成功' when 2 then '待处理' end statusStr,fd.`status`
+        FROM fund_deposit fd
+        LEFT JOIN set_basic_sys_deposit sbsd on fd.companyPayId=sbsd.id
+        LEFT JOIN set_basic_sys_qrcode sbsq on fd.qrcodeid=sbsq.id
+        where fd.mark in (1,2,3) AND fd.accountId =#{accountId}
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND fd.createTime <![CDATA[ >= ]]> #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND fd.createTime <![CDATA[ <= ]]> #{createTimeTo}
+        </if>
+        UNION
+        SELECT sbo.name depositTypeName,fd.createTime,
+        fd.orderPrefix,concat_ws('',fd.orderPrefix,fd.orderNo) orderNo,
+        '线上入款' depositType,fd.depositAmount,actualArrival,
+        case fd.`status` when 0 then '失败' when 1 then '成功' when 2 then '待处理' end statusStr,fd.`status`
+        FROM fund_deposit fd
+        LEFT JOIN set_bacic_onlinePay sbo on fd.onlinePayId=sbo.id
+        where fd.mark =0 AND fd.accountId =#{accountId}
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND fd.createTime <![CDATA[ >= ]]> #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND fd.createTime <![CDATA[ <= ]]> #{createTimeTo}
+        </if>
+        UNION
+        select '人工增加' depositTypeName,t1.createTime,
+        t1.orderPrefix,concat_ws('',t1.orderPrefix,t1.orderNo) orderNo,
+        '人工增加' depositType,amount
+        depositAmount,amount actualArrival,case `status` when 0 then '拒绝'
+        when 1 then '成功' when 2 then '待处理' end,status from fund_audit t1
+        where accountId=#{accountId}rder by available desc,sort asc, createTime desc
+        and `status`=1 and financialCode ='AA'
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND createTime <![CDATA[ >= ]]> #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND createTime <![CDATA[ <= ]]> #{createTimeTo}
+        </if>
+        )tb1
+        order by createTime desc
+    </select>
+
+    <select id="findDepositSum" resultType="java.lang.Double"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT
+        ifnull(sum(depositAmount),0.00) total
+        FROM
+        fund_deposit
+        <where>
+            AND status =1
+            <if test="accountId != null">
+                AND accountId =#{accountId}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND createTime <![CDATA[ >= ]]>
+                #{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND createTime <![CDATA[ <= ]]>
+                #{createTimeTo}
+            </if>
+        </where>
+    </select>
+
+    <select id="findDepositSumOther" resultType="java.lang.Double"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        select ifnull(sum(amount),0.00) total from fund_audit
+        where accountId=#{accountId} and `status`=1
+        <if test="financialCode == 'AA'">
+            and financialCode ='AA'
+        </if>
+        <if test="financialCode == 'FA'">
+            and financialCode ='FA'
+        </if>
+        and createTime<![CDATA[ >= ]]> #{createTimeFrom}
+        and createTime <![CDATA[ <= ]]> #{createTimeTo}
+    </select>
+
+    <select id="findDepositSumAndAudit" resultType="java.lang.Double"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT IFNULL(SUM(amount),0) FROM (
+        SELECT sum(depositAmount) amount
+        FROM fund_deposit WHERE accountId = #{accountId} and `status` =1
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND createTime <![CDATA[ >= ]]> #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND createTime <![CDATA[ <= ]]> #{createTimeTo}
+        </if>
+        union
+        SELECT sum(amount) amount
+        FROM fund_audit WHERE accountId = #{accountId}
+        and `status` =1 and financialCode='AA'
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND createTime <![CDATA[ >= ]]> #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND createTime <![CDATA[ <= ]]> #{createTimeTo}
+        </if>
+        ) a
+    </select>
+
+    <select id="findSumDepositAmount" resultType="java.lang.Double"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT sum(depositAmount)
+        FROM fund_deposit
+        WHERE
+        STATUS = #{status} AND mark = #{mark}
+        AND date_format(createTime, '%Y-%m-%d') = #{createTime}
+    </select>
+
+    <select id="findDepositCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT count(*) FROM fund_deposit dt
+        <include refid="deposit_where"/>
+    </select>
+
+    <select id="findAccWithdrawList" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw"
+            parameterType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        SELECT
+	        CASE aw.status WHEN 4 THEN 2 WHEN 5 THEN 3 ELSE aw.status
+	        END status,aw.id,aw.orderNo,aw.orderPrefix,aw.accountId,aw.drawingAmount,aw.handlingCharge,
+	        aw.cutAmount,aw.discountAmount,aw.actualArrival,aw.auditUser,aw.auditTime,aw.passUser,aw.passTime,aw.changeMemo,
+	        aw.ip,aw.memo,aw.createUser,aw.createTime,aw.modifyUser,aw.modifyTime,aw.billDetailId,aw.bankCardId,aw.type,aw.memoWithdraw,
+	        act.loginName,gp.groupName,agt.agyAccount,card.realName,topAgt.agyAccount topAgyAccount,aw.exemptMemo,aw.exemptTime,aw.exemptUser,aw.isExempt,
+	        card.bankName,card.address,aw.withdrawSource withdrawSource, act.tagencyId,detail.orderid,
+	        cr.walletname,cr.currencycode,cr.currencyprotocol,cr.walletaddress,aw.actualarrivalcr,aw.exchangerate,aw.methodtype,
+	        lockStatus,lockOperator,lastLockTime,aw.methodType,aw.hash, mal.tiername tierName, aw.relatedOrderno, aw.cuiCount
+	        <if test ="withdrawCount == 1" >
+	         ,account.rownum withdrawCount
+	         </if>
+        FROM fund_acc_withdraw aw
+        LEFT JOIN mbr_account act ON aw.accountId = act.id
+        LEFT JOIN mbr_group gp ON act.groupId = gp.id
+        LEFT JOIN agy_account agt ON act.cagencyId = agt.id
+        LEFT JOIN agy_account topAgt ON topAgt.id = act.tagencyId
+        LEFT JOIN mbr_bankcard card ON aw.bankCardId = card.id
+        LEFT JOIN fund_merchant_detail detail ON aw.id = detail.accWithdrawId
+        LEFT JOIN mbr_cryptocurrencies cr on aw.cryptocurrenciesid = cr.id
+        LEFT JOIN mbr_activity_level mal ON mal.id = act.actLevelId AND aw.accountId = act.id
+        <if test="(agyAccountIds != null and agyAccountIds.size()>0) or (topAgyAccounts != null and topAgyAccounts.size()>0)">
+            INNER JOIN agy_tree agyt  On agyt.childnodeid = act.cagencyid
+        </if>
+        <if test ="withdrawCount == 1" >
+            LEFT JOIN (select
+            -- rownum  判断  @p_accountid是否和当前的accountid一样 ，true:让 @i+=1 false:重置@i
+            (@i := case  when  @p_accountid=accountid then @i + 1 else 1 end )  rownum,
+            fund_acc_withdraw.id
+            --  设置 @p_accountid等于上一个 accountid
+            ,(@p_accountid:=accountid) accountid
+            from    fund_acc_withdraw ,
+            (SELECT  @i := 0, @p_accountid:='') AS a
+            group  by   accountid,id) account on aw.id=account.id
+        </if>
+        <include refid="accWithdraw_where"/>
+        ORDER BY aw.createTime DESC
+    </select>
+    
+    <select id="findFixateAccWithdraw" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        SELECT case aw.status when 4 then 2 when 5 then 3 ELSE aw.status
+        end status,aw.id,aw.orderNo,aw.orderPrefix,aw.accountId,aw.drawingAmount,
+        aw.handlingCharge,aw.cutAmount,aw.discountAmount,aw.actualArrival,aw.createTime, aw.cuiCount
+        from fund_acc_withdraw aw
+        <where>
+            aw.accountId=#{accountId}
+            <if test="status != null">
+                AND aw.status=#{status}
+            </if>
+            <if test="startTime != null and startTime!=''">
+                AND aw.createTime&gt;=#{startTime}
+            </if>
+            <if test="endTime != null and endTime!=''">
+                AND aw.createTime&lt;=#{endTime}
+            </if>
+        </where>
+        <choose>
+            <when test="orderBy != null and orderBy !=''">
+                ORDER BY aw.${orderBy}
+            </when>
+            <otherwise>
+                ORDER BY aw.createTime DESC
+            </otherwise>
+        </choose>
+    </select>
+    
+    <select id="totalFixateAccWithdraw" resultType="java.lang.Double">
+        SELECT IFNULL(sum(IFNULL(actualArrival,0)),0) actualArrivals from
+        fund_acc_withdraw
+        <where>
+            accountId=#{accountId}
+            AND status = 1
+            <if test="startTime != null and startTime!=''">
+                AND createTime&gt;=#{startTime}
+            </if>
+            <if test="endTime != null and endTime!=''">
+                AND createTime&lt;=#{endTime}
+            </if>
+        </where>
+    </select>
+
+    <select id="accSumDrawingAmount" resultType="java.lang.Double"
+            parameterType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+		SELECT SUM(actualarrival)
+		FROM fund_acc_withdraw
+		WHERE status = #{status} AND date_format(passTime, '%Y-%m-%d') =
+		#{passTime}
+	</select>
+
+    <select id="findAccWithdrawCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        SELECT count(*) FROM fund_acc_withdraw aw
+        INNER JOIN mbr_account ma ON ma.id = aw.accountid
+        <if test="(agyAccountIds != null and agyAccountIds.size()>0) or (topAgyAccounts != null and topAgyAccounts.size()>0)">
+            INNER JOIN agy_tree agyt  On agyt.childnodeid = act.cagencyid
+        </if>
+        <include refid="accWithdraw_where"/>
+    </select>
+
+    <select id="findAccDepositCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT COUNT(*) FROM fund_deposit deposit
+        WHERE deposit.accountid = #{accountId} AND deposit.createTime &lt;= #{createTime}
+        AND deposit.status = 1
+    </select>
+
+    <select id="findMbrBillManageList"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrBillManage"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrBillManage">
+        SELECT
+        manage.*,
+        agt.agyAccount,
+        act.realName,
+        aga.agyAccount AS topAgyAccount,
+        depot.depotName,
+        act.tagencyId
+        FROM
+        mbr_bill_manage manage
+        LEFT JOIN mbr_account act ON manage.accountId = act.id
+        LEFT JOIN agy_account agt ON act.cagencyId = agt.id
+        LEFT JOIN agy_account aga ON act.tagencyId = aga.id
+        LEFT JOIN t_gm_depot depot ON depot.id = manage.depotId
+        <include refid="billManage_where"/>
+        ORDER BY manage.createTime DESC,manage.id DESC
+    </select>
+
+    <select id="findFundAuditList" resultType="com.wsdy.saasops.modules.fund.entity.FundAudit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundAudit">
+        SELECT dt.*,
+        (CASE WHEN dt.financialCode = 'AM' THEN dt.reduceType  ELSE dt.auditAddType END) as adjustType,
+        agt.agyAccount,aut.agyAccount AS topAgyAccount,cue.codeName AS causeName,
+        detail.afterBalance,
+        detail.beforeBalance,
+        act.tagencyId
+        FROM fund_audit dt
+        INNER JOIN mbr_account act ON dt.accountId = act.id
+        LEFT JOIN agy_account agt ON act.cagencyId = agt.id
+        LEFT JOIN agy_account aut ON agt.parentId = aut.id
+        LEFT JOIN t_bs_financialcode cue ON cue.code = dt.financialCode
+        LEFT JOIN mbr_bill_detail detail ON dt.billDetailId = detail.id
+        <if test="(cagencyIds != null and cagencyIds.size()>0) or  (tagencyIds != null and tagencyIds.size()>0)">
+            INNER JOIN agy_tree agyt ON agyt.childnodeid = act.cagencyid
+        </if>
+        <include refid="fundAudit_where"/>
+        ORDER BY dt.createTime DESC
+    </select>
+
+    <select id="findFundDepositOne" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT t.*,a.isDrawings FROM fund_deposit t
+        INNER JOIN mbr_audit_account a ON t.id = a.depositId
+        WHERE t.accountId = #{accountId} AND t.status = #{status} AND t.isPayment
+        IS TRUE
+        <if test="createTime != null and createTime != ''">
+            AND date_format(t.createTime,'%Y-%m-%d') = #{createTime}
+        </if>
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND date_format(t.createTime) <![CDATA[ >= ]]>
+            #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND date_format(t.createTime) <![CDATA[ <= ]]>
+            #{createTimeTo}
+        </if>
+        ORDER BY t.id LIMIT 1
+    </select>
+
+    <sql id="fundAudit_where">
+        where dt.financialCode != 'FA'
+        <if test="accountId != null and accountId != ''">
+            AND dt.accountId =#{accountId}
+        </if>
+
+        <choose>
+            <when test="cagencyIds != null and cagencyIds.size()>0">
+                AND agyt.parentid in
+                <foreach collection="cagencyIds" open="(" close=")" separator="," item="cagencyId">
+                    #{cagencyId}
+                </foreach>
+            </when>
+
+            <when test="tagencyIds != null and tagencyIds.size()>0">
+                AND agyt.parentid in
+                <foreach collection="tagencyIds" open="(" close=")" separator="," item="tagencyId">
+                    #{tagencyId}
+                </foreach>
+            </when>
+        </choose>
+
+        <if test="financialCodes != null and financialCodes.size()>0">
+            AND dt.financialCode in
+            <foreach collection="financialCodes" open="(" close=")" separator="," item="financialCode">
+                #{financialCode}
+            </foreach>
+        </if>
+        <if test="statuss != null and statuss.size()>0">
+            AND dt.status in
+            <foreach collection="statuss" open="(" close=")" separator="," item="status">
+                #{status}
+            </foreach>
+        </if>
+        <if test="depositTypes != null and depositTypes.size()>0">
+            AND dt.depositType in
+            <foreach collection="depositTypes" open="(" close=")" separator="," item="depositType">
+                #{depositType}
+            </foreach>
+        </if>
+        <if test="agyAccount != null and agyAccount != ''">
+            AND agt.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+        </if>
+        <if test="loginName != null and loginName != ''">
+            AND dt.loginName LIKE CONCAT('%',#{loginName}, '%')
+        </if>
+        <if test="id != null and id != ''">
+            AND dt.id =#{id}
+        </if>
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND dt.createTime <![CDATA[ >= ]]>
+            #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND dt.createTime <![CDATA[ <= ]]>
+            #{createTimeTo}
+        </if>
+        <if test="auditAddTypes != null and auditAddTypes.size()>0">
+            AND dt.auditAddType in
+            <foreach collection="auditAddTypes" open="(" close=")" separator="," item="auditAddType">
+                #{auditAddType}
+            </foreach>
+        </if>
+        <if test="reduceTypes != null and reduceTypes.size()>0">
+            AND dt.reduceType in
+            <foreach collection="reduceTypes" open="(" close=")" separator="," item="reduceType">
+                #{reduceType}
+            </foreach>
+        </if>
+    </sql>
+
+    <sql id="billManage_where">
+        <where>
+            <if test="accountId != null and accountId != ''">
+                AND manage.accountId =#{accountId}
+            </if>
+            <if test="orderNo != null and orderNo != ''">
+                AND manage.orderNo =#{orderNo}
+            </if>
+            <if test="tagencyIds != null and tagencyIds.size()>0">
+                AND act.tagencyId in
+                <foreach collection="tagencyIds" open="(" close=")" separator="," item="tagencyId">
+                    #{tagencyId}
+                </foreach>
+            </if>
+            <if test="cagencyIds != null and cagencyIds.size()>0">
+                AND act.cagencyId in
+                <foreach collection="cagencyIds" open="(" close=")" separator="," item="cagencyId">
+                    #{cagencyId}
+                </foreach>
+            </if>
+            <if test="statuss != null and statuss.size()>0">
+                AND manage.status in
+                <foreach collection="statuss" open="(" close=")" separator="," item="status">
+                    #{status}
+                </foreach>
+            </if>
+            <if test="opTypes != null and opTypes.size()>0">
+                AND manage.opType in
+                <foreach collection="opTypes" open="(" close=")" separator="," item="opType">
+                    #{opType}
+                </foreach>
+            </if>
+            <if test="depotIds != null and depotIds.size()>0">
+                AND manage.depotId in
+                <foreach collection="depotIds" open="(" close=")" separator="," item="depotId">
+                    #{depotId}
+                </foreach>
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND manage.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="realName != null and realName != ''">
+                AND act.realName LIKE CONCAT('%',#{realName}, '%')
+            </if>
+            <if test="id != null and id != ''">
+                AND manage.id =#{id}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND manage.createTime <![CDATA[ >= ]]> #{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND manage.createTime <![CDATA[ <= ]]> #{createTimeTo}
+            </if>
+            <if test="transferSourceList != null and transferSourceList != ''">
+                AND manage.transferSource in (${transferSourceList})
+            </if>
+        </where>
+    </sql>
+
+    <sql id="accWithdraw_where">
+        <where>
+            <if test="hash != null and hash != ''">
+                AND aw.hash =#{hash}
+            </if>
+            <if test="id != null">
+                AND aw.id =#{id}
+            </if>
+            <if test="isExempt != null">
+                AND aw.isExempt =#{isExempt}
+            </if>
+
+            <if test="minDrawingAmount != null ">
+                AND aw.drawingAmount <![CDATA[ >= ]]> #{minDrawingAmount}
+            </if>
+
+            <if test="maxDrawingAmount != null ">
+                AND aw.drawingAmount <![CDATA[ <= ]]>#{maxDrawingAmount}
+            </if>
+
+            <if test="auditUser != null and auditUser != ''">
+                AND aw.auditUser = #{auditUser}
+            </if>
+
+            <if test="groupIds != null and groupIds.size()>0">
+                AND gp.id in
+                <foreach item="groupId" collection="groupIds" open="(" separator="," close=")">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="baseAuth != null">
+                <choose>
+                    <when
+                            test="baseAuth.groupIds != null and baseAuth.groupIds != '' and baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                        <if test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                            AND act.groupId in ( ${baseAuth.groupIds} )
+                        </if>
+                        <if
+                                test="baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                            AND act.cagencyId in ( ${baseAuth.agyAccountIds} )
+                        </if>
+                    </when>
+                    <otherwise>
+                        AND gp.id = -1
+                    </otherwise>
+                </choose>
+            </if>
+
+            <choose>
+                <when test="agyAccountIds != null and agyAccountIds.size()>0">
+                    AND agyt.parentid in
+                    <foreach item="agyAccountId" collection="agyAccountIds" open="(" separator="," close=")">
+                        #{agyAccountId}
+                    </foreach>
+                </when>
+                <when test="topAgyAccounts != null and topAgyAccounts.size()>0">
+                    AND agyt.parentid in
+                    <foreach item="topAgyAccount" collection="topAgyAccounts" open="(" separator="," close=")">
+                        #{topAgyAccount}
+                    </foreach>
+                </when>
+            </choose>
+
+            <if test="statuss != null and statuss.size()>0">
+                AND aw.status in
+                <foreach item="status" collection="statuss" open="(" separator="," close=")">
+                    #{status}
+                </foreach>
+            </if>
+            <if test="notStatus != null">
+                AND aw.status !=#{notStatus}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND act.loginName =#{loginName}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND agt.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+            </if>
+            <if test="realName != null and realName != ''">
+                AND card.realName LIKE CONCAT('%',#{realName}, '%')
+            </if>
+            <if test="auditUser != null and auditUser != ''">
+                AND aw.auditUser LIKE CONCAT('%',#{auditUser}, '%')
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND aw.createTime <![CDATA[ >= ]]>
+                #{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND aw.createTime <![CDATA[ <= ]]>
+                #{createTimeTo}
+            </if>
+
+            <if test="startPassTime != null and startPassTime != ''">
+                AND aw.passTime <![CDATA[ >= ]]>
+                #{startPassTime}
+            </if>
+            <if test="endPassTime != null and endPassTime != ''">
+                AND aw.passTime <![CDATA[ <= ]]>
+                #{endPassTime}
+            </if>
+
+            <if test="accountId != null and accountId != ''">
+                AND aw.accountId =#{accountId}
+            </if>
+            <if test="withdrawSourceList != null and withdrawSourceList != ''">
+                AND aw.withdrawSource in (${withdrawSourceList})
+            </if>
+            <if test="orderNo != null and orderNo != ''">
+                AND concat(aw.orderPrefix,aw.orderNo) like concat('%',#{orderNo},'%')
+            </if>
+            <if test="methodType != null">
+                <choose>
+                    <when test="methodType == 2">
+                        AND aw.methodType = 0
+                        AND card.bankName = '支付宝'
+                    </when>
+                    <when test="methodType == 0">
+                        AND aw.methodType =#{methodType}
+                        AND (card.bankName is null OR card.bankName != '支付宝')
+                    </when>
+                    <otherwise>
+                        AND aw.methodType =#{methodType}
+                    </otherwise>
+                </choose>
+            </if>
+            <if test="lockStatus != null">
+                AND aw.lockStatus =#{lockStatus}
+            </if>
+            <if test="currencyProtocol != null and currencyProtocol != '' ">
+                AND cr.currencyprotocol =#{currencyProtocol}
+            </if>
+
+        </where>
+    </sql>
+
+    <sql id="deposit_where">
+        <where>
+            <if test="id != null">
+                AND dt.id =#{id}
+            </if>
+            <if test="accountId != null">
+                AND dt.accountId =#{accountId}
+            </if>
+            <if test="groupIds != null and groupIds.size()>0">
+                AND act.groupId in
+                <foreach item="groupId" collection="groupIds" open="(" separator="," close=")">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="agyTopAccountIds != null and agyTopAccountIds.size()>0">
+                AND act.tagencyId in
+                <foreach item="agyTopAccountId" collection="agyTopAccountIds" open="(" separator="," close=")">
+                    #{agyTopAccountId}
+                </foreach>
+            </if>
+            <if test="agyAccountIds != null and agyAccountIds.size()>0">
+                AND act.cagencyId in
+                <foreach item="agyAccountId" collection="agyAccountIds" open="(" separator="," close=")">
+                    #{agyAccountId}
+                </foreach>
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND act.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND act.loginName LIKE CONCAT('%',#{loginName}, '%')
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND agy.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+            </if>
+            <if test="onlinePayId != null">
+                AND dt.onlinePayId =#{onlinePayId}
+            </if>
+            <if test="companyPayIds != null and companyPayIds.size()>0">
+                AND dt.companyPayId in
+                <foreach item="companyPayId" collection="companyPayIds" open="(" separator="," close=")">
+                    #{companyPayId}
+                </foreach>
+            </if>
+            <if test="statuss != null and statuss.size()>0">
+                AND dt.status in
+                <foreach item="status" collection="statuss" open="(" separator="," close=")">
+                    #{status}
+                </foreach>
+            </if>
+            <if test="mark != null">
+                AND dt.mark =#{mark}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND dt.createTime <![CDATA[ >= ]]>
+                #{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND dt.createTime <![CDATA[ <= ]]>
+                #{createTimeTo}
+            </if>
+
+        </where>
+    </sql>
+
+
+    <sql id="deposits_where">
+        <where>
+            <if test="hash != null and hash !=''">
+                AND dt.hash =#{hash}
+            </if>
+            <if test="accountId != null">
+                AND dt.accountId =#{accountId}
+            </if>
+            <if test="id != null">
+                AND dt.id =#{id}
+            </if>
+            <if test="status != null">
+                AND dt.status =#{status}
+            </if>
+            <if test="orderNo != null and orderNo !=''">
+                AND dt.orderno =#{orderNo}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND dt.createTime <![CDATA[ >= ]]>
+                #{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND dt.createTime <![CDATA[ <= ]]>
+                #{createTimeTo}
+            </if>
+
+            <if test="startAuditTime != null and startAuditTime != ''">
+                AND dt.auditTime <![CDATA[ >= ]]>
+                #{startAuditTime}
+            </if>
+            <if test="endAuditTime != null and endAuditTime != ''">
+                AND dt.auditTime <![CDATA[ <= ]]>
+                #{endAuditTime}
+            </if>
+
+            <if test="minDepositAmount != null ">
+                AND dt.depositAmount <![CDATA[ >= ]]> #{minDepositAmount}
+            </if>
+
+            <if test="maxDepositAmount != null ">
+                AND dt.depositAmount <![CDATA[ <= ]]>#{maxDepositAmount}
+            </if>
+
+            <if test="auditUser != null and auditUser != ''">
+                AND dt.auditUser = #{auditUser}
+            </if>
+
+            <if test="depositUser != null and depositUser != ''">
+                AND dt.deposituser = #{depositUser}
+            </if>
+
+            <if test="agyTopAccountIds != null and agyTopAccountIds.size()>0">
+                AND act.tagencyId in
+                <foreach collection="agyTopAccountIds" open="(" close=")" separator="," item="agyTopAccountId">
+                    #{agyTopAccountId}
+                </foreach>
+            </if>
+
+            <if test="accountIds != null and accountIds.size()>0">
+                AND dt.accountId in
+                <foreach collection="accountIds" open="(" close=")" separator="," item="accountId">
+                    #{accountId}
+                </foreach>
+            </if>
+
+            <if test="groupIds != null and groupIds.size()>0">
+                AND act.groupId in
+                <foreach collection="groupIds" open="(" close=")" separator="," item="groupId">
+                    #{groupId}
+                </foreach>
+            </if>
+
+            <if test="statuss != null and statuss !=''">
+                AND dt.status in (${statuss})
+            </if>
+
+            <if test="agyAccountIds != null and agyAccountIds.size()>0">
+                AND act.cagencyId in
+                <foreach item="agyAccountId" collection="agyAccountIds" open="(" separator="," close=")">
+                    #{agyAccountId}
+                </foreach>
+            </if>
+
+            <if test="onlinePayIds != null and onlinePayIds.size()>0">
+                AND dt.onlinePayId in
+                <foreach collection="onlinePayIds" open="(" close=")" separator="," item="onlinePayId">
+                    #{onlinePayId}
+                </foreach>
+            </if>
+            <if test="companyPayIds != null and companyPayIds.size()>0">
+                AND dt.companyPayId in
+                <foreach item="companyPayId" collection="companyPayIds" open="(" separator="," close=")">
+                    #{companyPayId}
+                </foreach>
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND act.loginName =#{loginName}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND agy.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+            </if>
+            <if test="companyPayId != null">
+                AND dt.companyPayId =#{companyPayId}
+            </if>
+            <if test="markStr != null and markStr!=''">
+                AND dt.mark in (${markStr})
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND dt.createTime <![CDATA[ >= ]]>
+                #{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND dt.createTime <![CDATA[ <= ]]>
+                #{createTimeTo}
+            </if>
+            <if test="fundSourceList != null and fundSourceList != ''">
+                AND dt.fundSource in (${fundSourceList})
+            </if>
+            <if test="orderNoStr != null and orderNoStr != ''">
+                AND concat(dt.orderPrefix,dt.orderNo) like concat('%',#{orderNoStr},'%')
+            </if>
+            <if test="isTest == 0">
+                and not exists (
+                select * from agy_tree tree where  tree.childnodeid = act.cagencyid and tree.parentid = 4
+                )
+            </if>
+            <if test="isTest == 1">
+                and  exists (
+                select * from agy_tree tree where  tree.childnodeid = act.cagencyid and tree.parentid = 4
+                )
+            </if>
+            <if test="agyAccountStr != null and agyAccountStr != ''">
+                and  exists (
+                select * from agy_tree tree left join agy_account agy on tree.parentid =agy.id where  tree.childnodeid = act.cagencyid and agy.agyAccount LIKE CONCAT('%',#{agyAccountStr}, '%')
+                )
+            </if>
+            <if test="qrCodePayIds != null and qrCodePayIds.size()>0">
+                AND dt.qrcodeid in
+                <foreach collection="qrCodePayIds" open="(" close=")" separator="," item="qrcodeid">
+                    #{qrcodeid}
+                </foreach>
+            </if>
+            <if test="crIds != null and crIds.size()>0">
+                AND dt.crid in
+                <foreach collection="crIds" open="(" close=")" separator="," item="crid">
+                    #{crid}
+                </foreach>
+            </if>
+            <if test="currencyProtocols != null and currencyProtocols.size()>0">
+                AND cr.currencyProtocol in
+                <foreach collection="currencyProtocols" open="(" close=")" separator="," item="currencyProtocol">
+                    #{currencyProtocol}
+                </foreach>
+            </if>
+            <if test="currencyCodes != null and currencyCodes.size()>0">
+                AND cr.currencyCode in
+                <foreach collection="currencyCodes" open="(" close=")" separator="," item="currencyCode">
+                    #{currencyCode}
+                </foreach>
+            </if>
+        </where>
+    </sql>
+
+    <select id="sumWithDraw" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+		SELECT IFNULL(SUM(actualarrival),0) drawingAmount,count(1)
+		withdrawCount from fund_acc_withdraw
+		WHERE accountId=#{accountId}
+		and `status`=1
+		and createTime <![CDATA[ >= ]]>#{startTime}
+		and createTime <![CDATA[ <= ]]>#{endTime}
+	</select>
+
+    <select id="isFreeFee" resultType="java.lang.Byte">
+		SELECT CASE WHEN COUNT(1) >= #{feeTimes} THEN 0 ELSE 1 END 
+			FROM fund_acc_withdraw 
+		WHERE accountId = #{accountId} AND `status`=1
+			AND createTime <![CDATA[ >= ]]> #{startTime}
+	</select>
+    <select id="sumApplyRec" resultType="java.lang.Integer">
+		SELECT COUNT(1) FROM
+			fund_acc_withdraw WHERE accountId = #{accountId} AND (`status`=2 or
+		`status`=3 OR status =4 OR status=5)
+	</select>
+
+    <select id="findDepositActivity" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT * FROM fund_deposit WHERE accountId =#{accountId} AND status =1
+        <if test="createTime != null and createTime != ''">
+            AND createTime <![CDATA[ < ]]> #{createTime}
+        </if>
+        <if test="createTimeFrom != null and createTimeFrom != ''">
+            AND createTime <![CDATA[ >= ]]> #{createTimeFrom}
+        </if>
+        <if test="createTimeTo != null and createTimeTo != ''">
+            AND createTime <![CDATA[ <= ]]> #{createTimeTo}
+        </if>
+        <if test="auditTime != null and auditTime != ''">
+            AND DATE_FORMAT(auditTime, "%Y-%m-%d") = DATE_FORMAT(#{auditTime}, "%Y-%m-%d")
+        </if>
+        <if test="auditTimeFrom != null and auditTimeFrom != ''">
+            AND DATE_FORMAT(auditTime, "%Y-%m-%d") <![CDATA[ >= ]]> DATE_FORMAT(#{auditTimeFrom}, "%Y-%m-%d")
+        </if>
+        <if test="auditTimeTo != null and auditTimeTo != ''">
+            AND DATE_FORMAT(auditTime, "%Y-%m-%d") <![CDATA[ <= ]]> DATE_FORMAT(#{auditTimeTo}, "%Y-%m-%d")
+        </if>
+        <if test="auditTimeFromStr != null and auditTimeFromStr != ''">
+            AND auditTime <![CDATA[ >= ]]> #{auditTimeFromStr}
+        </if>
+        <if test="auditTimeToStr != null and auditTimeToStr != ''">
+            AND auditTime <![CDATA[ <= ]]> #{auditTimeToStr}
+        </if>
+        <if test="isSign == 3">
+            AND WEEKDAY(createTime) =0
+            GROUP BY DATE_FORMAT(createTime, "%Y-%m-%d")
+            ORDER BY id DESC LIMIT 1
+        </if>
+        <if test="isSign == 1">
+            ORDER BY id LIMIT 1
+        </if>
+        <if test="isSign == 4">
+            ORDER BY id DESC LIMIT 1
+        </if>
+    </select>
+
+    <select id="findDepositActivityCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT IFNULL(count(deposit.id),0)-IFNULL(count(bonus.id),0)
+        FROM fund_deposit deposit
+        LEFT JOIN opr_act_bonus bonus ON bonus.depositId=deposit.id AND bonus.STATUS=0
+        <where>
+            AND deposit.status != 0
+            <if test="accountId != null and accountId != ''">
+                AND deposit.accountId =#{accountId}
+            </if>
+            <if test="activityId != null and activityId != ''">
+                AND deposit.activityId =#{activityId}
+            </if>
+            <if test="depositId != null and depositId != ''">
+                AND deposit.id != #{depositId}
+            </if>
+            <if test="createTime != null and createTime != ''">
+                AND DATE_FORMAT(deposit.createTime,'%Y-%m-%d') =#{createTime}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND DATE_FORMAT(deposit.createTime,'%Y-%m-%d') <![CDATA[ >= ]]>#{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND DATE_FORMAT(deposit.createTime,'%Y-%m-%d') <![CDATA[ <= ]]>#{createTimeTo}
+            </if>
+        </where>
+    </select>
+
+    <select id="findOfflineDepositInfo" resultType="com.wsdy.saasops.api.modules.pay.dto.DepositPostScript">
+		SELECT
+		tb2.bankName,tb2.bankAccount,tb2.realName,tb2.bankBranch,tb1.depositAmount,tb1.depositPostscript
+		FROM fund_deposit tb1,set_basic_sys_deposit tb2 WHERE
+		tb1.companyPayId= tb2.id and tb1.id=#{id}
+	</select>
+
+    <select id="findFundMerchantPayList" resultType="com.wsdy.saasops.modules.fund.entity.FundMerchantPay"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundMerchantPay">
+        SELECT * FROM fund_merchant_pay
+        <where>
+            <if test="merchantNo != null and merchantNo != ''">
+                AND merchantNo LIKE CONCAT('%',#{merchantNo}, '%')
+            </if>
+            <if test="merchantName != null and merchantName != ''">
+                AND merchantName LIKE CONCAT('%',#{merchantName}, '%')
+            </if>
+            <if test="availables != null and availables.size()>0">
+                and available in
+                <foreach item="available" collection="availables" open="(" separator="," close=")">
+                    #{available}
+                </foreach>
+            </if>
+            <if test="devSource != null and devSource != ''">
+                AND devSource LIKE CONCAT('%',#{devSource}, '%')
+            </if>
+            <if test="methodType != null ">
+                AND methodtype = #{methodType}
+            </if>
+            <if test="available != null ">
+                AND available = #{available}
+            </if>
+        </where>
+        order by available desc,sort asc, createTime desc
+    </select>
+
+    <select id="findMerchantPayCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundMerchantPay">
+		SELECT count(*) FROM fund_merchant_scope scope
+		LEFT JOIN fund_merchant_pay pay ON scope.merchantId = pay.id
+		LEFT JOIN mbr_group gp ON scope.groupId = gp.id
+		WHERE pay.available = 1 AND gp.id = (SELECT groupId FROM mbr_account WHERE id =#{accountId})
+	</select>
+
+    <select id="fundAccWithdrawMerchant" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        SELECT withdraw.*,detail.merchantId,detail.transId,detail.id merchantDetailId FROM fund_acc_withdraw withdraw
+        LEFT JOIN fund_merchant_detail detail ON withdraw.id = detail.accWithdrawId
+        WHERE withdraw.`status` = 5
+        <if test="accountId != null">
+            AND withdraw.accountId =#{accountId}
+        </if>
+    </select>
+
+    <select id="findAccountBalance" resultType="com.wsdy.saasops.modules.member.entity.MbrWallet">
+        SELECT t1.id,t1.loginName,t1.freeWalletSwitch,t2.balance FROM mbr_account t1,mbr_wallet t2
+        WHERE t1.id = t2.accountId
+        <if test="loginName != null">
+            AND t1.loginName =#{loginName}
+        </if>
+    </select>
+
+    <select id="queryAccountBalanceByLoginNames" resultType="com.wsdy.saasops.modules.member.entity.MbrWallet">
+        SELECT t1.id,t1.loginName,t1.freeWalletSwitch,t2.balance FROM mbr_account t1,mbr_wallet t2
+        WHERE t1.id = t2.accountId
+        <if test="loginNames != null and loginNames.size()>0">
+            AND t1.loginName in
+            <foreach item="loginName" collection="loginNames" open="(" separator="," close=")">
+                #{loginName}
+            </foreach>
+        </if>
+    </select>
+
+    <select id="listCount" resultType="com.wsdy.saasops.modules.fund.entity.QuickFunction">
+        select '会员入款' quickName, COUNT(*) counts, GROUP_CONCAT(id) ids from fund_deposit where status = 2
+        UNION ALL
+        select '会员提款初审' quickName, COUNT(*) counts, GROUP_CONCAT(id) ids from fund_acc_withdraw where status in (2,4)
+        UNION ALL
+        select '会员提款复审' quickName, COUNT(*) counts, GROUP_CONCAT(id) ids from fund_acc_withdraw where status in (3,5)
+        UNION ALL
+        SELECT '优惠申请' quickName,count(*) counts,GROUP_CONCAT(id) ids FROM opr_act_bonus  where status=2
+        UNION ALL
+        select '会员留言' quickName, COUNT(*) counts, GROUP_CONCAT(id) ids  from mbr_message where isRevert=0
+        UNION ALL
+        select '意见反馈' quickName, COUNT(*) counts, GROUP_CONCAT(id) ids  from mbr_opinion where status=1
+        UNION ALL
+        select '户内转账待处理' quickName, COUNT(*) counts, GROUP_CONCAT(id) ids  from mbr_bill_manage where status = 0
+        UNION ALL
+        select '预警信息' quickName, COUNT(*) counts, GROUP_CONCAT(id) ids  from sys_warning where status = 0;
+    </select>
+
+    <update id="updateMerchantPayAvailable">
+        UPDATE fund_merchant_pay SET available = 0 WHERE available = 1 and methodtype = 0
+    </update>
+
+    <update id="updateMerchantPayAvailableCryptoCurrencies" parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        UPDATE fund_merchant_pay SET available = 0
+        WHERE available = 1 and methodtype = 1 and currencycode= #{currencyCode} and currencyprotocol= #{currencyProtocol}
+    </update>
+
+    <select id="updateMerchantPayLock" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+       SELECT * FROM fund_acc_withdraw WHERE id = #{id} FOR UPDATE
+    </select>
+
+    <select id="findBillRecordList" resultType="com.wsdy.saasops.modules.member.dto.BillRecordDto">
+        select tb.*,
+        ma.loginName accountName,ma.realName realName,ma.loginSource devSource,
+        aa1.agyAccount agyAccount,aa1.id agyAccountId,
+        aa2.agyAccount parentAgyAccount,aa2.id parentAgyAccountId
+        from (
+            -- 取款
+            select faw.accountid,(case faw.type when 0 then '手动出款' when 1 then '自动出款' end) type,mbd.amount
+                amount,mbd.beforeBalance
+                beforeBalance,mbd.afterBalance afterBalance,faw.createTime time ,mbd.opType opType, 0
+                opTypeName ,mbd.orderNo orderNo ,mbd.financialCode financialCode,0 bonusAmount ,0 account,faw.handlingCharge
+                handlingCharge ,faw.actualArrival actualArrival ,faw.auditUser auditUser ,faw.auditTime auditTime ,faw.memo memo
+                ,mb.cardNo cardNo,mb.bankName bankName, mb.address address ,faw.cutAmount cutAmount
+                ,faw.discountAmount discountAmount ,0 auditType ,0 auditMultiple ,0 depotBeforeBalance
+                ,0 depotAfterBalance ,0 tmplName
+            from fund_acc_withdraw faw
+            left join mbr_bill_detail mbd on faw.billDetailId=mbd.id
+            left join mbr_bankcard mb on faw.bankCardId=mb.id
+            where faw.status=1
+            <if test="accountId != null">
+                AND faw.accountid =#{accountId}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND faw.createTime <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND faw.createTime <![CDATA[<=]]> #{endTime}
+            </if>
+
+            union ALL
+            -- 取款失败订单
+            select faw.accountid,'状态变更' type,mbd.amount
+            amount,mbd.beforeBalance
+            beforeBalance,mbd.afterBalance afterBalance,faw.createTime time ,mbd.opType opType, 0
+            opTypeName ,mbd.orderNo orderNo ,mbd.financialCode financialCode,0 bonusAmount ,0 account,faw.handlingCharge
+            handlingCharge ,faw.actualArrival actualArrival ,faw.auditUser auditUser ,faw.auditTime auditTime ,faw.memo memo
+            ,mb.cardNo cardNo,mb.bankName bankName, mb.address address ,faw.cutAmount cutAmount
+            ,faw.discountAmount discountAmount ,0 auditType ,0 auditMultiple ,0 depotBeforeBalance
+            ,0 depotAfterBalance ,0 tmplName
+            from fund_acc_withdraw faw
+            left join mbr_bill_detail mbd on faw.orderNo=mbd.orderNo
+            left join mbr_bankcard mb on faw.bankCardId=mb.id
+            where faw.status=7 and mbd.financialcode='WDCG'
+            <if test="accountId != null">
+                AND faw.accountid =#{accountId}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND faw.createTime <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND faw.createTime <![CDATA[<=]]> #{endTime}
+            </if>
+
+            union ALL
+            -- 存款
+            select fd.accountid,'线上入款' type,mbd.amount amount,mbd.beforeBalance
+                beforeBalance,mbd.afterBalance afterBalance,fd.createTime time ,mbd.opType opType, 1
+                opTypeName ,mbd.orderNo orderNo ,mbd.financialCode financialCode,0 bonusAmount ,sbo.name
+                account,fd.handlingCharge handlingCharge ,fd.actualArrival actualArrival ,fd.auditUser auditUser ,fd.auditTime
+                auditTime ,fd.memo memo ,0 cardNo,0 bankName, 0 address ,0 cutAmount ,0 discountAmount ,0 auditType
+                ,0 auditMultiple,0 depotBeforeBalance ,0 depotAfterBalance
+                ,0 tmplName
+            from fund_deposit fd
+            left join mbr_bill_detail mbd on fd.billDetailId=mbd.id
+            left join set_bacic_onlinePay sbo on fd.onlinePayId=sbo.id
+            where fd.status=1 and fd.mark=0
+            <if test="accountId != null">
+                AND fd.accountid =#{accountId}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND fd.createTime <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND fd.createTime <![CDATA[<=]]> #{endTime}
+            </if>
+
+            union ALL
+            -- 存款
+            select fd.accountid,'公司入款' type,mbd.amount amount,mbd.beforeBalance
+                beforeBalance,mbd.afterBalance afterBalance,fd.createTime time ,mbd.opType opType, 1
+                opTypeName ,mbd.orderNo orderNo ,mbd.financialCode financialCode,0 bonusAmount ,sbsd.bankName
+                account,fd.handlingCharge handlingCharge ,fd.actualArrival actualArrival ,fd.auditUser auditUser ,fd.auditTime
+                auditTime ,fd.memo memo ,0 cardNo,0 bankName, 0 address ,0 cutAmount ,0 discountAmount ,0 auditType
+                ,0 auditMultiple ,0 depotBeforeBalance ,0 depotAfterBalance
+                ,0 tmplName
+            from fund_deposit fd
+            left join mbr_bill_detail mbd on fd.billDetailId=mbd.id
+            left join set_basic_sys_deposit sbsd on fd.companyPayId=sbsd.id
+            left join set_basic_sys_qrcode sbsq on fd.qrcodeid=sbsq.id
+            where fd.status=1 and fd.mark in (1,2,3,4)
+            <if test="accountId != null">
+                AND fd.accountid =#{accountId}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND fd.createTime <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND fd.createTime <![CDATA[<=]]> #{endTime}
+            </if>
+
+            union ALL
+            -- 转账
+            select mbm.accountid,tgd.depotCode type,mbm.amount amount,mbm.beforeBalance
+                beforeBalance,mbm.afterBalance afterBalance,mbm.createTime time ,mbm.opType
+                opType,(case mbm.opType when 0 then 2 when 1 then 3 end) opTypeName ,mbm.orderNo orderNo ,'' financialCode,0
+                bonusAmount ,0 account,0 handlingCharge ,0 actualArrival ,0 auditUser ,mbm.createTime auditTime ,mbm.memo memo
+                ,0 cardNo,0 bankName, 0 address ,0 cutAmount ,0 discountAmount ,0 auditType ,0 auditMultiple
+                ,mbm.depotBeforeBalance depotBeforeBalance ,mbm.depotAfterBalance
+                depotAfterBalance ,0 tmplName
+            from mbr_bill_manage mbm
+            left join t_gm_depot tgd on mbm.depotId=tgd.id
+            where mbm.status=1
+            <if test="accountId != null">
+                AND mbm.accountid =#{accountId}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND mbm.createTime <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND mbm.createTime <![CDATA[<=]]> #{endTime}
+            </if>
+
+            union ALL
+            -- 人工增加/减少
+            select fa.accountid,(case fa.depositType when 0 then '其他' when 1 then '人工调整' when 2 then
+                '优惠活动' when 3 then '推广存入' end) type,mbd.amount amount,mbd.beforeBalance
+                beforeBalance,mbd.afterBalance afterBalance,fa.createTime time ,mbd.opType opType
+                ,(case fa.financialCode when 'AA' then 4 when 'AM' then 5 when 'FA' then 7 end) opTypeName ,mbd.orderNo orderNo
+                ,mbd.financialCode financialCode,0 bonusAmount ,0 account,0 handlingCharge ,0 actualArrival ,0 auditUser ,fa.auditTime
+                auditTime ,fa.memo memo ,0 cardNo,0 bankName, 0 address ,0 cutAmount ,0 discountAmount ,fa.auditType
+                auditType ,fa.auditMultiple auditMultiple ,0 depotBeforeBalance ,0 depotAfterBalance ,0 tmplName
+            from fund_audit fa
+            left join mbr_bill_detail mbd on fa.billDetailId=mbd.id
+            where fa.status=1
+            <if test="accountId != null">
+                AND fa.accountid =#{accountId}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND fa.createTime <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND fa.createTime <![CDATA[<=]]> #{endTime}
+            </if>
+
+            union ALL
+            -- 红利报表
+            select oab.accountid,oaa.activityName type,mbd.amount amount,mbd.beforeBalance
+                beforeBalance,mbd.afterBalance afterBalance,oab.applicationTime time ,mbd.opType opType
+                ,6 opTypeName ,mbd.orderNo orderNo ,'' financialCode,oab.bonusAmount bonusAmount ,0 account,0 handlingCharge ,0
+                actualArrival ,0 auditUser ,oab.auditTime auditTime ,oab.memo memo ,0 cardNo,0 bankName, 0 address ,0
+                cutAmount ,0 discountAmount ,0 auditType ,0 auditMultiple
+                ,0 depotBeforeBalance ,0 depotAfterBalance ,toa.tmplName tmplName
+            from opr_act_bonus oab
+            left join opr_act_activity oaa on oab.activityId=oaa.id
+            left join mbr_bill_detail mbd on oab.billDetailId=mbd.id
+            left join opr_act_rule rule on rule.id = oaa.ruleId
+            left join t_op_acttmpl toa on rule.actTmplId=toa.id
+            where oab.status=1
+            <if test="accountId != null">
+                AND oab.accountid =#{accountId}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND oab.applicationTime <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND oab.applicationTime <![CDATA[<=]]> #{endTime}
+            </if>
+
+            union ALL
+            -- 全民代理
+            select bonus.accountid, '全民代理' type,
+                mbd.amount amount,mbd.beforeBalance beforeBalance,mbd.afterBalance afterBalance,bonus.createTime time ,
+                mbd.opType opType,9 opTypeName ,mbd.orderNo orderNo ,mbd.financialCode,
+                bonus.rebateTotal bonusAmount ,0 account,0 handlingCharge ,0 actualArrival ,bonus.auditUser ,
+                bonus.auditTime auditTime ,bonus.memo memo ,0 cardNo,0 bankName, 0 address ,0 cutAmount ,0 discountAmount ,0 auditType ,
+                0 auditMultiple,0 depotBeforeBalance ,0 depotAfterBalance ,0 tmplName
+            from mbr_rebate_agent_bonus bonus
+            left join mbr_bill_detail mbd on bonus.billDetailId=mbd.id
+            where bonus.status=1 and bonus.billDetailId is not null
+            <if test="startTime != null and startTime != ''">
+                AND bonus.createTime <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND bonus.createTime <![CDATA[<=]]> #{endTime}
+            </if>
+
+            union ALL
+            -- 单一钱包
+            select te.accountid,CONCAT(te.depotcode,de.codename) type,te.amount amount,te.beforeBalance
+            beforeBalance,te.afterBalance afterBalance,te.createTime time ,te.opType opType
+            ,CASE
+                te.financialcode
+                WHEN 'IX' THEN
+                12
+                WHEN 'IP' THEN
+                13
+                WHEN 'IC' THEN
+                14 ELSE 10
+                END opTypeName,te.orderNo orderNo
+            ,te.financialCode financialCode,0 bonusAmount,0 account,0 handlingCharge,
+            0 actualArrival ,0 auditUser ,te.createTime auditTime,'' memo ,0 cardNo,0 bankName, 0 address ,0 cutAmount ,
+            0 discountAmount ,0 auditType ,0 auditMultiple ,0 depotBeforeBalance ,
+            0 depotAfterBalance ,0 tmplName
+            from mbr_depot_trade te
+            LEFT JOIN t_bs_financialcode de ON te.financialcode = de.code
+            <where>
+                <if test="accountId != null">
+                    AND te.accountid =#{accountId}
+                </if>
+                <if test="startTime != null and startTime != ''">
+                    AND te.createTime <![CDATA[>=]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND te.createTime <![CDATA[<=]]> #{endTime}
+                </if>
+            </where>
+
+            union ALL
+            -- 好友推荐
+            SELECT
+                mbd.accountid,
+                '好友返利' type,
+                mbd.amount amount,
+                mbd.beforeBalance beforeBalance,
+                mbd.afterBalance afterBalance,
+                mbd.ordertime time,
+                mbd.opType opType,
+                11 opTypeName,
+                mbd.orderNo orderNo,
+                mbd.financialCode,
+                0 bonusAmount,
+                0 account,
+                0 handlingCharge,
+                0 actualArrival,
+                rfr.creater auditUser,
+                rfr.giveouttime auditTime,
+                rfr.memo memo,
+                0 cardNo,
+                0 bankName,
+                0 address,
+                0 cutAmount,
+                0 discountAmount,
+                0 auditType,
+                0 auditMultiple,
+                0 depotBeforeBalance,
+                0 depotAfterBalance,
+                0 tmplName
+            FROM
+                mbr_bill_detail mbd
+                INNER JOIN mbr_rebate_friends_reward rfr ON mbd.id = rfr.billDetailId
+
+            <where>
+                <if test="accountId != null">
+                    AND mbd.accountid =#{accountId}
+                </if>
+                <if test="startTime != null and startTime != ''">
+                    AND mbd.ordertime <![CDATA[>=]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND mbd.ordertime <![CDATA[<=]]> #{endTime}
+                </if>
+            </where>
+
+            union ALL
+            -- 好友转账
+            SELECT
+                mft.transaccountid accountid, '好友转账' type, mft.transamount amount, mft.transbeforebalance beforeBalance,
+                mft.transafterbalance afterBalance, mft.createtime time, mbd.opType opType, 8 opTypeName, mbd.orderNo orderNo,
+                mbd.financialCode, 0 bonusAmount, 0 account, 0 handlingCharge, 0 actualArrival, mft.transloginname auditUser,
+                mft.createtime auditTime, '' memo, 0 cardNo, 0 bankName, 0 address, 0 cutAmount, 0 discountAmount, 0 auditType,
+                0 auditMultiple, 0 depotBeforeBalance, 0 depotAfterBalance, 0 tmplName
+            FROM mbr_friend_trans_detail mft
+            LEFT JOIN mbr_bill_detail mbd ON mft.mbrbilldetailtransid=mbd.id
+            <where>
+                <if test="accountId != null">
+                    AND mft.transaccountid =#{accountId}
+                </if>
+                <if test="startTime != null and startTime != ''">
+                    AND mft.createtime <![CDATA[>=]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND mft.createtime <![CDATA[<=]]> #{endTime}
+                </if>
+            </where>
+
+            union ALL
+            -- 充值返上级
+            SELECT
+            mbd.accountid,
+            '充值返上级' type,
+            mbd.amount amount,
+            mbd.beforeBalance beforeBalance,
+            mbd.afterBalance afterBalance,
+            mbd.ordertime time,
+            mbd.opType opType,
+            15 opTypeName,
+            mbd.orderNo orderNo,
+            mbd.financialCode,
+            0 bonusAmount,
+            0 account,
+            0 handlingCharge,
+            0 actualArrival,
+            '系统审核'  auditUser,
+            rfr.applicationtime auditTime,
+            '' memo,
+            0 cardNo,
+            0 bankName,
+            0 address,
+            0 cutAmount,
+            0 discountAmount,
+            0 auditType,
+            0 auditMultiple,
+            0 depotBeforeBalance,
+            0 depotAfterBalance,
+            0 tmplName
+            FROM
+            mbr_bill_detail mbd
+            INNER JOIN mbr_rebate_first_charge_reward rfr ON mbd.id = rfr.billDetailId
+
+            <where>
+                <if test="accountId != null">
+                    AND mbd.accountid =#{accountId}
+                </if>
+                <if test="startTime != null and startTime != ''">
+                    AND mbd.ordertime <![CDATA[>=]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND mbd.ordertime <![CDATA[<=]]> #{endTime}
+                </if>
+            </where>
+
+        )tb
+        left join mbr_account ma on tb.accountId=ma.id
+        left join agy_account aa1 on ma.cagencyId=aa1.id
+        INNER JOIN agy_tree agyt2 on agyt2.childnodeid = ma.cagencyId
+        INNER JOIN agy_account aa2 ON agyt2.parentid = aa2.id
+        <if test="(agyAccountId != null and agyAccountId!='') or (parentAgyAccountId != null and parentAgyAccountId!='')">
+            INNER JOIN agy_tree agyt ON agyt.childnodeid = ma.cagencyid
+        </if>
+        <include refid="BillRecord_where"/>
+        <choose>
+            <when test="orderBy != null and orderBy !=''">
+                ORDER BY tb.${orderBy}
+            </when>
+            <otherwise>
+                order by tb.time desc
+            </otherwise>
+        </choose>
+    </select>
+    <sql id="BillRecord_where">
+        <where>
+            agyt2.parentid IN ( SELECT tt.childnodeid FROM ( SELECT MAX( depth ) agentType, childnodeid FROM agy_tree GROUP BY childnodeid HAVING agentType = 1 ) tt )
+
+            <if test="accountName != null and accountName != ''">
+                AND ma.loginname = #{accountName}
+            </if>
+            <choose>
+                <when test="agyAccountId != null and agyAccountId!=''">
+                    AND agyt.parentid in (${agyAccountId})
+                </when>
+                <when test="parentAgyAccountId != null and parentAgyAccountId!=''">
+                    AND agyt.parentid in (${parentAgyAccountId})
+                </when>
+            </choose>
+
+            <if test="opTypeName != null and opTypeName!=''">
+                AND tb.opTypeName in (${opTypeName})
+            </if>
+            <if test="devSource != null and devSource!=''">
+                AND ma.loginSource in (${devSource})
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND tb.time <![CDATA[>=]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND tb.time <![CDATA[<=]]> #{endTime}
+            </if>
+        </where>
+    </sql>
+
+    <select id="fundFundDepositByTime" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT * FROM fund_deposit
+        where createTime <![CDATA[>=]]> CURRENT_TIMESTAMP - INTERVAL 30 MINUTE
+        AND `status`=2
+    </select>
+
+    <select id="findFundMerchantDetailByTransId" resultType="com.wsdy.saasops.modules.fund.entity.FundMerchantDetail">
+        SELECT * FROM fund_merchant_detail where transId = #{orderId}
+    </select>
+
+    <select id="depositCountByStatus" parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            resultType="com.wsdy.saasops.modules.fund.dto.CountEntity">
+        select dt.status conditions,count(dt.status) counts
+        FROM fund_deposit dt
+        LEFT JOIN mbr_account act ON dt.accountId = act.id
+        LEFT JOIN mbr_group gp ON act.groupId = gp.id
+        LEFT JOIN agy_account agy ON act.cagencyId = agy.id
+        LEFT JOIN set_bacic_onlinePay pay ON dt.onlinePayId = pay.id
+        LEFT JOIN t_pay p ON pay.payId = p.id
+        LEFT JOIN set_basic_sys_deposit deposit ON dt.companyPayId = deposit.id
+        <include refid="deposits_where"/>
+        group by dt.status
+    </select>
+
+    <select id="withdrawCountByStatus"  parameterType="com.wsdy.saasops.modules.fund.entity.AccWithdraw"
+            resultType="com.wsdy.saasops.modules.fund.dto.CountEntity">
+        SELECT aw.status conditions,count(aw.status) counts
+            FROM fund_acc_withdraw aw
+            LEFT JOIN mbr_account act ON aw.accountId = act.id
+            LEFT JOIN mbr_group gp ON act.groupId = gp.id
+            LEFT JOIN agy_account agt ON act.cagencyId = agt.id
+            LEFT JOIN agy_account topAgt ON topAgt.id = act.tagencyId
+            LEFT JOIN mbr_bankcard card ON aw.bankCardId = card.id
+            <if test="(agyAccountIds != null and agyAccountIds.size()>0) or (topAgyAccounts != null and topAgyAccounts.size()>0)">
+                INNER JOIN agy_tree agyt  On agyt.childnodeid = act.cagencyid
+            </if>
+        <include refid="accWithdraw_where"/>
+        group by aw.status
+    </select>
+
+
+    <sql id="accWithdrawAll_where">
+        <where>
+            <if test="accountId != null and accountId != ''">
+                aw.accountId =#{accountId}
+            </if>
+            <if test="modifyTime != null and modifyTime != ''">
+                AND aw.modifyTime <![CDATA[ >= ]]> DATE_FORMAT(#{modifyTime},'%Y-%m-%d %H:%i:%S')
+            </if>
+            <if test="modifyTimeEnd != null and modifyTimeEnd!=''">
+                AND aw.modifyTime <![CDATA[ <= ]]>  DATE_FORMAT(#{modifyTimeEnd},'%Y-%m-%d %H:%i:%S')
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND aw.createTime <![CDATA[ >= ]]>#{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND aw.createTime <![CDATA[ <= ]]>#{createTimeTo}
+            </if>
+            <if test="status != null">
+                AND aw.status=#{status}
+            </if>
+        </where>
+    </sql>
+    <select id="findAccWithdrawListAll" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw"
+            parameterType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        SELECT
+        CASE aw.status WHEN 4 THEN 2 WHEN 5 THEN 3 ELSE aw.status
+        END status,aw.id,aw.orderNo,aw.orderPrefix,aw.accountId,aw.drawingAmount,aw.handlingCharge,aw.isExempt,aw.exemptMemo,aw.exemptTime,aw.exemptUser,
+        aw.cutAmount,aw.discountAmount,aw.actualArrival,aw.auditUser,aw.auditTime,aw.passUser,aw.passTime,
+        aw.ip,aw.memo,aw.createUser,aw.createTime,aw.modifyUser,aw.modifyTime,aw.billDetailId,aw.bankCardId,aw.type,aw.memoWithdraw,
+        act.loginName,gp.groupName,agt.agyAccount,card.realName,topAgt.agyAccount
+        topAgyAccount,card.bankName,card.address,aw.withdrawSource withdrawSource, act.tagencyId
+        FROM fund_acc_withdraw aw
+        LEFT JOIN mbr_account act ON aw.accountId = act.id
+        LEFT JOIN mbr_group gp ON act.groupId = gp.id
+        LEFT JOIN agy_account agt ON act.cagencyId = agt.id
+        LEFT JOIN agy_account topAgt ON topAgt.id = act.tagencyId
+        LEFT JOIN mbr_bankcard card ON aw.bankCardId = card.id
+        <include refid="accWithdrawAll_where"/>
+        ORDER BY aw.createTime DESC
+    </select>
+
+    <select id="sumFundDepositByAccountId" resultType="java.math.BigDecimal">
+        SELECT IFNULL(sum(actualArrival),0) FROM fund_deposit
+        WHERE accountId = #{accountId} and `status`=1
+        <if test="startTime != null">
+            AND audittime <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null">
+            AND audittime <![CDATA[ < ]]>#{endTime}
+        </if>
+    </select>
+
+    <select id="findWithdrawAudit" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        SELECT case aw.status when 4 then 2 when 5 then 3 ELSE aw.status
+        end status,aw.orderNo,aw.orderPrefix from fund_acc_withdraw aw
+        WHERE accountId=#{accountId} and (`status`=2 or`status`=3 or status =4 or status=5)
+    </select>
+
+    <select id="findDepositListSum" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT
+        (
+            SELECT if(SUM(depositamount) is null,0,SUM(depositamount))
+            FROM fund_deposit
+            WHERE STATUS = 1 and date_format(auditTime, '%Y-%m-%d') = date_format(now(),'%Y-%m-%d')
+        )as todayDeposit,
+        sum(if(dt.status=1,dt.depositAmount,0)) depositAmount, sum(if(dt.status=1,dt.handlingCharge,0)) handlingCharge, sum(if(dt.status=1,dt.actualArrival,0)) actualArrival
+        FROM fund_deposit dt
+        LEFT JOIN mbr_account act ON dt.accountId = act.id
+        LEFT JOIN set_basic_sys_cryptocurrencies cr on cr.id = dt.crid
+        <include refid="deposits_where"/>
+    </select>
+
+    <select id="findAccWithdrawListSum" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw"
+            parameterType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        SELECT
+        IFNULL(sum(if(aw.status=1,aw.drawingAmount,0)),0) drawingAmount,
+        IFNULL(sum(if(aw.status=1,aw.handlingCharge,0)),0) handlingCharge,
+        IFNULL(sum(if(aw.status=1,aw.actualArrival,0)),0) actualArrival
+        FROM fund_acc_withdraw aw
+        LEFT JOIN mbr_account act ON aw.accountId = act.id
+        LEFT JOIN mbr_bankcard card ON aw.bankCardId = card.id
+        LEFT JOIN mbr_group gp ON act.groupId = gp.id
+        LEFT JOIN mbr_cryptocurrencies cr on aw.cryptocurrenciesid = cr.id
+        <if test="(agyAccountIds != null and agyAccountIds.size()>0) or (topAgyAccounts != null and topAgyAccounts.size()>0)">
+            INNER JOIN agy_tree agyt  On agyt.childnodeid = act.cagencyid
+        </if>
+        <include refid="accWithdraw_where"/>
+    </select>
+
+    <select id="findTodayWithdraw" resultType="java.math.BigDecimal">
+        SELECT if(SUM(drawingAmount) is null,0,SUM(drawingAmount))  FROM fund_acc_withdraw
+         WHERE STATUS = 1 and date_format(passTime, '%Y-%m-%d') = date_format(now(),'%Y-%m-%d')
+    </select>
+
+    <sql id="depositStatistic_where">
+        -- 时间限制
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(dep.auditTime, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND dep.auditTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND dep.auditTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+        -- 代理限制
+        <if test="isTest == 0">
+            and not exists (
+            select * from agy_tree tree where  tree.childnodeid = mbr.cagencyid and tree.parentid = 4
+            )
+        </if>
+        <if test="isTest == 1">
+            and  exists (
+            select * from agy_tree tree where  tree.childnodeid = mbr.cagencyid and tree.parentid = 4
+            )
+        </if>
+        <if test="agyAccountStr != null and agyAccountStr != ''">
+            and  exists (
+            select * from agy_tree tree left join agy_account agy on tree.parentid =agy.id where  tree.childnodeid = mbr.cagencyid and agy.agyAccount LIKE CONCAT('%',#{agyAccountStr}, '%')
+            )
+        </if>
+
+        <if test="agyId != null and agyId !=''">
+            and  exists (
+            select * from agy_tree tree where  tree.childnodeid = mbr.cagencyid and tree.parentid = #{agyId}
+            )
+        </if>
+
+    </sql>
+
+    <select id="depositStatisticByPay" resultType="com.wsdy.saasops.modules.fund.dto.DepositStatisticsByPayDto"
+            parameterType="com.wsdy.saasops.modules.fund.dto.DepositStatisticsByPayDto">
+        select * from (
+        -- 支付宝
+        select dep.onlinepayid id, pay.payname payname,sum(dep.depositAmount) depositAmountTotal, 1 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.status =1 and dep.mark=0
+        and pay.paymentType = 5
+        <include refid="depositStatistic_where"/>
+        group by pay.id
+
+        -- 微信
+        UNION ALL
+        select dep.onlinepayid id, pay.payname payname ,sum(dep.depositAmount) depositAmountTotal, 2 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.status =1 and dep.mark=0
+        and pay.paymentType = 2
+        <include refid="depositStatistic_where"/>
+        group by pay.id
+
+        -- 网银
+        UNION ALL
+        select dep.onlinepayid id, pay.payname payname,sum(dep.depositAmount) depositAmountTotal, 3 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.status =1 and dep.mark=0
+        and pay.paymentType in (4,7,8)
+        <include refid="depositStatistic_where"/>
+        group by pay.id
+
+        -- 极速支付/自动入款
+        UNION ALL
+        select dep.companyPayId id, pay.payname payname,sum(dep.depositAmount) depositAmountTotal, 4 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        LEFT JOIN set_basic_sys_deposit basic ON basic.id = dep.companyPayId
+        LEFT JOIN set_basic_fastpay fastpay ON fastpay.id = basic.fastpayid
+        LEFT JOIN t_pay pay ON pay.id = fastpay.payId
+        WHERE dep.status =1 and dep.mark=1
+        and basic.type=1
+        and pay.paymentType in (6,9,10,13)
+        <include refid="depositStatistic_where"/>
+        group by pay.id
+
+        -- 其他 1.qq
+        UNION ALL
+        select dep.onlinepayid id, pay.payname payname,sum(dep.depositAmount) depositAmountTotal, 5 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.status =1 and dep.mark=0
+        and pay.paymentType = 1
+        <include refid="depositStatistic_where"/>
+        group by pay.id
+
+        -- 其他 2.银行卡--网关银行卡跳转
+        UNION ALL
+        select dep.onlinepayid id, pay.payname payname,sum(dep.depositAmount) depositAmountTotal, 5 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.status =1 and dep.mark=0
+        and pay.paymentType = 11
+        <include refid="depositStatistic_where"/>
+        group by pay.id
+
+        -- 其他 3.普通支付/线下入款
+        UNION ALL
+        select dep.companyPayId id, '线下入款' payname ,sum(dep.depositAmount) depositAmountTotal, 5 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        LEFT JOIN set_basic_sys_deposit basic ON basic.id = dep.companyPayId
+        WHERE dep.status =1 and dep.mark=1
+        and basic.type=0
+        <include refid="depositStatistic_where"/>
+
+        -- 其他 3.个人二维码
+        UNION ALL
+        select dep.qrcodeid id, '个码入款' payname,sum(dep.depositAmount) depositAmountTotal,5 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        INNER JOIN set_basic_sys_qrcode basic ON basic.id = dep.qrcodeid
+        WHERE dep.status =1  and dep.mark=2
+        <include refid="depositStatistic_where"/>
+
+        -- 其他 4.网关卡转卡
+        UNION ALL
+        select dep.onlinepayid id, pay.payname payname,sum(dep.depositAmount) depositAmountTotal, 5 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.status =1 and dep.mark=0
+        and pay.paymentType = 14
+        <include refid="depositStatistic_where"/>
+        group by pay.id
+
+        -- 加密货币 6
+        UNION ALL
+        select dep.crid id, basic.name payname,sum(dep.depositAmount) depositAmountTotal,6 type
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        INNER JOIN set_basic_sys_cryptocurrencies basic ON basic.id = dep.crid
+        WHERE dep.status =1  and dep.mark=3
+        and basic.currencycode='USDT' and currencyprotocol ='ERC20'
+        <include refid="depositStatistic_where"/>
+        ) t  where t.id is not null
+    </select>
+
+    <select id="getRecentDeposit" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+    SELECT t.* FROM fund_deposit t
+    WHERE t.accountId = #{accountId} AND t.status = 1 AND t.isPayment IS TRUE
+	<if test="mark != null and mark != ''">
+        and mark = #{mark}
+    </if>
+    order by id desc limit 1
+    </select>
+
+    <select id="getDepositSumAndDays" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT IFNULL(sum(t.amount),0) depositAmount,count(dayTime) depositCount FROM(
+        SELECT sum(fd.depositamount) amount,date_format(fd.audittime, '%Y-%m-%d') dayTime FROM fund_deposit fd
+        WHERE fd.accountId = #{accountId} AND fd.status = 1
+        <if test="auditTimeFrom != null and auditTimeFrom != ''">
+        AND fd.audittime <![CDATA[ >= ]]> #{auditTimeFrom}
+        </if>
+        <if test="auditTimeTo != null and auditTimeTo != ''">
+        AND fd.audittime <![CDATA[ <= ]]> #{auditTimeTo}
+        </if>
+        group by date_format(fd.audittime, '%Y-%m-%d')) t
+    </select>
+
+    <select id="getMbrContinueDeposit" resultType="com.wsdy.saasops.modules.fund.dto.DepositDaysTotalDto"
+            parameterType="com.wsdy.saasops.modules.fund.dto.DepositDaysTotalDto">
+        SELECT accountid,daycount,totalamount,continuedate FROM (
+        SELECT accountid,
+            @cont_day := (CASE WHEN (@last_uid = accountid AND DATEDIFF(deposit_dt, @last_dt) = -1) THEN (@cont_day + 1) ELSE 1 END) AS daycount,
+            @day_sum := (CASE WHEN (@last_uid = accountid AND DATEDIFF(deposit_dt, @last_dt) = -1) THEN (@day_sum + amount) ELSE amount END) AS totalamount,
+            (@cont_ix := (@cont_ix + IF(@cont_day = 1, 1, 0))) AS cont_ix,
+            @last_uid := accountid ,
+            @last_dt := deposit_dt AS continuedate
+            FROM (
+                SELECT accountid, DATE(audittime) AS deposit_dt ,sum(depositamount) amount
+                    FROM fund_deposit WHERE status = 1 AND accountid = #{accountId}
+                    AND audittime <![CDATA[ >= ]]> #{auditTimeFrom}
+                    AND audittime <![CDATA[ <= ]]> #{auditTimeTo}
+                    group by DATE(audittime)
+                    ORDER BY audittime desc
+                ) AS t,
+                (SELECT @last_uid := '',
+                    @last_dt  := '',
+                    @cont_ix  := 0,
+                    @cont_day := 0,
+                    @day_sum := 0
+                ) AS t1
+            ) AS t2
+        WHERE dayscount <![CDATA[ >= ]]> #{dayCount}
+        <if test="depositMin != null">
+          AND totalamount <![CDATA[ >= ]]> #{depositMin}
+        </if>
+        <if test="depositMax != null">
+          AND totalamount <![CDATA[ < ]]> #{depositMax}
+        </if>
+        LIMIT 1
+    </select>
+
+    <select id="getMerchantPayByOrderno" resultType="com.wsdy.saasops.modules.fund.entity.FundMerchantPay"
+            parameterType="java.lang.String">
+        select p.*
+            from fund_merchant_pay p
+            inner join fund_merchant_detail d on p.id = d.merchantid
+            inner join fund_acc_withdraw w on d.accwithdrawid = w.id
+        <where>
+            <if test="orderNo != null">
+                AND  w.orderno = #{orderNo}
+            </if>
+        </where>
+    </select>
+
+    <update id="updateAllLockStatus">
+        update fund_acc_withdraw set lockstatus=0,lockoperator=null,lastlocktime=null
+        where lockstatus = 1 and  lastlocktime <![CDATA[<]]>CURRENT_TIMESTAMP - INTERVAL 30 MINUTE;
+    </update>
+
+
+    <select id="sumFundDepositVipRed" resultType="java.math.BigDecimal">
+        SELECT IFNULL(sum(depositAmount),0) FROM fund_deposit
+        WHERE accountId = #{accountId} and `status`=1
+        <if test="startTime != null">
+            AND audittime <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null">
+            AND audittime <![CDATA[ <= ]]>#{endTime}
+        </if>
+    </select>
+    
+    <select id="sumAndCountFundDeposit" resultType="com.wsdy.saasops.modules.operate.dto.MemDayRuleScopeDto">
+        SELECT 
+        	IFNULL(SUM(depositAmount),0) lastDepositMin,
+        	count(id) lastDepositMinTimes
+        FROM fund_deposit
+        WHERE accountId = #{accountId} and `status`=1
+        <if test="startTime != null">
+            AND audittime <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null">
+            AND audittime <![CDATA[ <= ]]>#{endTime}
+        </if>
+    </select>
+
+    <select id="findVerifyDeposit" resultType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT * from fund_deposit where date_sub(curdate(), INTERVAL 30 DAY)
+        <![CDATA[<=]]> date(audittime) and `status`=1
+    </select>
+
+    <select id="findSecretDepositOne" resultType="com.wsdy.saasops.modules.member.entity.VerifyDeposit">
+        SELECT * from verify_deposit where depositId=#{depositId} and siteCode =#{siteCode}
+        ORDER BY createtime asc LIMIT 1
+    </select>
+
+
+    <select id="findTotalsDepositCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.fund.entity.FundDeposit">
+        SELECT COUNT(*) FROM fund_deposit deposit
+        WHERE deposit.accountid = #{accountId} AND deposit.status = 1
+    </select>
+    <select id="findLastDepositCount" resultType="java.lang.Integer">
+        SELECT COUNT(*) FROM fund_deposit deposit
+        WHERE deposit.accountid = #{accountId} AND deposit.status = 1 and date_sub(NOW(), interval #{hours} hour)
+    </select>
+
+    <select id="findLastAccWithdraw" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        SELECT * FROM fund_acc_withdraw WHERE accountId = #{accountId} AND `status`=1 order by audittime desc limit 1
+    </select>
+
+
+    <select id="findCuiDanAccWithdraw" resultType="com.wsdy.saasops.modules.fund.entity.AccWithdraw">
+        SELECT * FROM fund_acc_withdraw WHERE accountId = #{accountId}  AND id = #{orderId}
+    </select>
+
+    <update id="updateCuiDanAccWithdraw">
+        update  fund_acc_withdraw set cuicount = cuicount + 1, cuitime = now() where  id = #{orderId}
+    </update>
+
+
+    <select id="getNewCuiDan" resultType="com.wsdy.saasops.modules.fund.dto.CuiDanDto">
+        select fw.id,  ma.loginname, fw.drawingamount  amount from fund_acc_withdraw fw INNER JOIN mbr_account ma  on fw.accountid = ma.id  where fw.cuicount > 0 and fw.cuitime >= DATE_SUB(now(),INTERVAL #{second}	SECOND)
+    </select>
+
+</mapper>

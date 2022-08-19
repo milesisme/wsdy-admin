@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wsdy.saasops.modules.agent.dao.AgyChannelGroupMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        <id column="id" property="id" />
+        <result column="name" property="name" />
+        <result column="updateTime" property="updateTime" />
+        <result column="udapyeBy" property="udapyeBy" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, name, updateTime, udapyeBy
+    </sql>
+    
+    <select id="list" resultType="com.wsdy.saasops.modules.agent.entity.AgyChannelGroup"
+            parameterType="com.wsdy.saasops.modules.agent.dto.AgyChannelGroupDto">
+		SELECT * 
+			FROM agy_channel_group
+		<where>
+			<if test="name != null and name != ''">
+				AND name LIKE CONCAT('%',#{name},'%' )
+			</if>
+			 <if test="startTime != null and startTime != ''">
+                AND updateTime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND updateTime <![CDATA[ <= ]]> #{endTime}
+            </if>
+		</where>
+		ORDER BY updateTime DESC
+    </select>
+
+</mapper>

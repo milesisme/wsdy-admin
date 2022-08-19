@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.sys.dao.SysColumnAuthDao">
+
+    <resultMap id="LscrmFunctionPrivilegeResult" type="com.wsdy.saasops.modules.sys.dto.ColumnAuthTreeDto">
+        <id column="menu_id" property="menuId"></id>
+        <result column="role_id" property="roleId"></result>
+        <result column="parent_id" property="parentId"></result>
+        <result column="name" property="name"></result>
+        <result column="type" property="type"></result>
+        <result column="order_num" property="orderNum"></result>
+        <result column="columnName" property="columnName"></result>
+        <result column="columnKey" property="columnKey"></result>
+        <result column="operate" property="operate"></result>
+    </resultMap>
+
+    <resultMap id="SubPrivilegesResult" type="com.wsdy.saasops.modules.sys.dto.ColumnAuthTreeDto"
+               extends="LscrmFunctionPrivilegeResult">
+        <collection property="childList" javaType="java.util.ArrayList" column="{menu_id=menu_id,role_id=role_id}"
+                    ofType="com.wsdy.saasops.modules.sys.dto.ColumnAuthTreeDto"
+                    select="selectSubPrivileges"></collection>
+    </resultMap>
+
+    <resultMap id="LscrmFunctionPrivilegeTreeResult" type="com.wsdy.saasops.modules.sys.dto.ColumnAuthTreeDto"
+               extends="SubPrivilegesResult">
+        <collection property="childList" javaType="java.util.ArrayList" column="{menu_id=menu_id,role_id=role_id}"
+                    ofType="com.wsdy.saasops.modules.sys.dto.ColumnAuthTreeDto"
+                    select="selectSubPrivileges"></collection>
+    </resultMap>
+
+    <select id="getColumnAuth" resultMap="LscrmFunctionPrivilegeTreeResult">
+     select m.menu_id,m.parent_id,m.name,m.type,m.order_num,m.columnName,m.columnKey,m.operate,u.role_id
+     from sys_menu m INNER JOIN sys_role_menu u ON u.menu_id = m.menu_id
+     WHERE m.parent_id = #{parentId}
+     and m.type=#{type} and u.role_id=#{roleId}
+    </select>
+
+    <select id="getColumnAuthOptimization" resultMap="LscrmFunctionPrivilegeResult">
+     select m.menu_id,m.parent_id,m.name,m.type,m.order_num,m.columnName,m.columnKey,m.operate,u.role_id
+     from sys_menu m LEFT JOIN sys_role_menu u ON u.menu_id = m.menu_id
+     WHERE u.role_id = #{roleId}
+    </select>
+
+    <select id="getRoleColumnAuth" resultType="com.wsdy.saasops.modules.sys.dto.ColumnAuthTreeDto">
+    select t.menu_id,
+        	   t.parent_id,
+        	   t.name,
+        	   t.type,
+        	   t.columnName,
+        	   t.columnKey,
+        	   t.operate
+        from sys_menu t, sys_role_menu m 
+        where t.menu_id = m.menu_id
+          and t.type=#{type}
+          and m.role_id = #{roleId}
+          and t.parent_id = #{menuId}
+    </select>
+
+    <select id="getRoleColumnAuthByFlag" resultType="com.wsdy.saasops.modules.sys.dto.ColumnAuthTreeDto">
+    select t.menu_id,
+        	   t.parent_id,
+        	   t.name,
+        	   t.type,
+        	   t.columnName,
+        	   t.columnKey,
+        	   t.operate,
+        	   t.perms
+        from sys_menu t, sys_role_menu m
+        where t.menu_id = m.menu_id
+          and t.isColum = 1
+          and m.role_id = #{roleId}
+          and t.parent_id = #{menuId}
+    </select>
+
+
+    <select id="selectSubPrivileges" resultMap="SubPrivilegesResult">
+     select m.menu_id,m.parent_id,m.name,m.type,m.order_num,m.columnName,m.columnKey,m.operate,u.role_id
+     from sys_menu m INNER JOIN sys_role_menu u ON u.menu_id = m.menu_id
+     WHERE m.parent_id = #{menu_id} and u.role_id=#{role_id}
+    </select>
+
+    <select id="getRoleAuth" resultType="com.wsdy.saasops.modules.sys.dto.ColumnAuthTreeDto">
+        select t.menu_id,
+        t.parent_id,
+        t.name,
+        t.type,
+        t.columnName,
+        t.columnKey,
+        t.operate from sys_role_menu r,
+        sys_menu t
+        where r.menu_id = t.menu_id
+        and r.role_id=#{roleId}
+        <if test="paramList != null and paramList.size()>0">
+            and t.menu_id in
+            <foreach collection="paramList" open="(" close=")" separator="," item="itemId">
+                #{itemId}
+            </foreach>
+        </if>
+    </select>
+
+
+</mapper>

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.DepartmentMapper">
+
+    <select id="agentShareholderList" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT id,agyAccount from agy_account WHERE parentid=0
+    </select>
+
+    <select id="departmentList" resultType="com.wsdy.saasops.modules.agent.entity.AgentDepartment">
+       SELECT t.*,IFNULL(a.departmentCount,0) agentCount from agy_department t
+       LEFT JOIN (SELECT count(*) departmentCount,o.departmentid from agy_account o GROUP BY departmentid) a
+       ON t.id = a.departmentid
+       <where>
+           <if test="id != null">
+               AND t.id =#{id}
+           </if>
+       </where>
+    </select>
+
+</mapper>

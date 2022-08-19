@@ -1,0 +1,266 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modulesV2.mapper.AgentV2WinLoseMapper">
+
+    <select id="findAgyAccountDepth" resultType="java.lang.String">
+        SELECT max(t.depth) agentType
+        FROM agy_tree t
+        left join agy_account a on t.childnodeid = a.id
+        where a.agyaccount =  #{agyAccount}
+        GROUP BY t.childNodeId
+    </select>
+
+    <sql id="agentSql">
+        EXISTS(
+            SELECT e.childNodeId FROM agy_tree e
+            INNER JOIN agy_account t ON e.parentId = t.id
+            WHERE ma.cagencyId = e.childNodeId and t.agyAccount =  #{agyAccount}
+            <if test="(agentType !=null and agentType !='') and (agentType == '0' or agentType == '1') ">
+                and e.depth > 0
+            </if>
+            )
+    </sql>
+    <select id="findWinLostReportList" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2WinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2WinLostReportDto">
+        select tb2.*, o.agentid, o.realpeople, o.electronic,o.realpeoplewash,o.electronicwash
+        from (
+            select  #{agyAccount} userName, tb1.gamecategory, #{agentType} agentType,
+                sum(tb1.bet) betTotal,sum(tb1.validbet) validbetTotal,  sum(tb1.payout) payoutTotal
+            from (
+                select rbrd.* from rpt_bet_rcd_day rbrd
+                INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+                where
+                EXISTS(
+                    SELECT e.childNodeId FROM agy_tree e
+                    INNER JOIN agy_account t ON e.parentId = t.id
+                    WHERE ma.cagencyId = e.childNodeId and t.agyAccount =  #{agyAccount}
+                    and e.depth > 0
+                )
+                and rbrd.platform = 'EG'
+                <if test="startTime !=null and startTime !='' ">
+                    AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+                </if>
+                <if test="endTime !=null and endTime !='' ">
+                    AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+                </if>
+                <if test="catCodes != null and catCodes.size()>0">
+                    and rbrd.gamecategory  in
+                    <foreach collection="catCodes" open="(" close=")" separator="," item="catCode">
+                        #{catCode}
+                    </foreach>
+                </if>
+            )tb1 group by tb1.gamecategory
+
+            <if test="isContainMbr !=null and isContainMbr == 1 ">
+                union ALL
+                select  #{agyAccount} userName, tb1.gamecategory, -1 agentType,
+                sum(tb1.bet) betTotal,sum(tb1.validbet) validbetTotal,  sum(tb1.payout) payoutTotal
+                from (
+                select rbrd.* from rpt_bet_rcd_day rbrd
+                INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+                where
+                EXISTS(
+                SELECT e.childNodeId FROM agy_tree e
+                INNER JOIN agy_account t ON e.parentId = t.id
+                WHERE ma.cagencyId = e.childNodeId and t.agyAccount =  #{agyAccount}
+                    and e.depth = 0
+                )
+                and rbrd.platform = 'EG'
+                <if test="startTime !=null and startTime !='' ">
+                    AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+                </if>
+                <if test="endTime !=null and endTime !='' ">
+                    AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+                </if>
+                <if test="catCodes != null and catCodes.size()>0">
+                    and rbrd.gamecategory  in
+                    <foreach collection="catCodes" open="(" close=")" separator="," item="catCode">
+                        #{catCode}
+                    </foreach>
+                </if>
+                )tb1 group by tb1.gamecategory
+            </if>
+        ) tb2
+        left join agy_account_other o on tb2.username = o.agyaccount
+        order by tb2.gamecategory
+    </select>
+
+    <select id="findWinLostReportListSum" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2WinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2WinLostReportDto">
+        select  tb2.*, o.agentid, o.realpeople, o.electronic,o.realpeoplewash,o.electronicwash
+        from (
+            select count(tb1.username) total,  #{agyAccount} userName,
+                sum(tb1.bet) betTotal,sum(tb1.validbet) validbetTotal,  sum(tb1.payout) payoutTotal
+            from (
+                select rbrd.username, sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout
+                from rpt_bet_rcd_day rbrd
+                INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+                where  EXISTS(
+                    SELECT e.childNodeId FROM agy_tree e
+                    INNER JOIN agy_account t ON e.parentId = t.id
+                    WHERE ma.cagencyId = e.childNodeId and t.agyAccount =  #{agyAccount}
+                    )
+                and rbrd.platform = 'EG'
+                <if test="startTime !=null and startTime !='' ">
+                    AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+                </if>
+                <if test="endTime !=null and endTime !='' ">
+                    AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+                </if>
+                GROUP BY rbrd.username
+            )tb1
+        ) tb2
+        left join agy_account_other o on tb2.username = o.agyaccount
+    </select>
+
+    <select id="findWinLostReportListMbrSum" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2WinLostReportDto">
+        select count(distinct rbrd.username)
+        from rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        where  EXISTS(
+            SELECT e.childNodeId FROM agy_tree e
+            INNER JOIN agy_account t ON e.parentId = t.id
+            WHERE ma.cagencyId = e.childNodeId and t.agyAccount =  #{agyAccount}
+        )
+        and rbrd.platform = 'EG'
+        <if test="startTime !=null and startTime !='' ">
+            AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime !=null and endTime !='' ">
+            AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+        </if>
+    </select>
+
+
+    <select id="findWinLostListLevel" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2WinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2WinLostReportDto">
+        SELECT t.id, t.agyaccount, r.agentType, a.gamecategory,
+            sum(a.bet) betTotal,sum(a.validbet) validbetTotal,sum(a.payout) payoutTotal,
+            o.agentid, o.realpeople, o.electronic,o.realpeoplewash,o.electronicwash
+        FROM(
+            -- 4. 获取归类于直属代理的投注：直属代理cparentid - 投注代理 -- 会员--注单
+            select f.cparentid as childNodeId,g.* from (
+                -- 1. 查出该代理名下代理的所有会员投注：名下所有代理-会员-注单-注单
+                SELECT a.childNodeId cagentId,rbrd.*
+                FROM rpt_bet_rcd_day rbrd
+                INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+                INNER JOIN (
+                    SELECT e.childNodeId
+                    FROM agy_tree e
+                    INNER JOIN agy_account t ON e.parentId = t.id
+                    WHERE t.agyAccount=#{agyAccount}  and depth !=0
+                )a ON a.childNodeId = ma.cagencyId
+                where rbrd.platform = 'EG'
+                    <if test="startTime !=null and startTime !='' ">
+                        AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+                    </if>
+                    <if test="endTime !=null and endTime !='' ">
+                        AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+                    </if>
+                    <if test="catCodes != null and catCodes.size()>0">
+                        and rbrd.gamecategory  in
+                        <foreach collection="catCodes" open="(" close=")" separator="," item="catCode">
+                            #{catCode}
+                        </foreach>
+                    </if>
+            )g
+            left join (
+                -- 3. 找到这些直属代理的子代理(涵盖自己)
+                select parentid as cparentid, childnodeid cchildnodeid,depth
+                from agy_tree e
+                where e.parentid in(
+                    -- 2. 找到该代理下的直属代理的id
+                    SELECT e.childNodeId
+                    FROM agy_tree e
+                    INNER JOIN agy_account t ON e.parentId = t.id
+                    WHERE t.agyAccount=#{agyAccount} and depth =1
+                )
+                ORDER BY parentid
+            )f on g.cagentId = f.cchildnodeid
+        ) a
+        LEFT JOIN agy_account t ON a.childNodeId = t.id
+        left join agy_account_other o on t.id = o.agentid
+        LEFT JOIN (
+            SELECT max(depth) agentType,childNodeId
+            FROM agy_tree GROUP BY childNodeId
+        )r ON r.childNodeId = t.id
+        GROUP BY a.childNodeId, a.gamecategory
+    </select>
+
+    <select id="findWinLostListLevelMbr" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2WinLostReportDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2WinLostReportDto">
+        select ma.id, rbrd.username,rbrd.gamecategory, -1 agentType,
+        sum(rbrd.bet) betTotal,sum(rbrd.validbet) validbetTotal,sum(rbrd.payout) payoutTotal,
+        o.realpeoplewash,o.electronicwash
+        FROM rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        INNER JOIN agy_account t on ma.cagencyid = t.id
+        INNER JOIN mbr_account_other o on o.accountid = ma.id
+        where rbrd.platform = 'EG'
+            <if test="startTime !=null and startTime !='' ">
+                AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime !=null and endTime !='' ">
+                AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+            </if>
+            <if test="catCodes != null and catCodes.size()>0">
+                and rbrd.gamecategory  in
+                <foreach collection="catCodes" open="(" close=")" separator="," item="catCode">
+                    #{catCode}
+                </foreach>
+            </if>
+            and t.agyaccount = #{agyAccount}
+        group by rbrd.username, rbrd.gamecategory
+    </select>
+
+    <select id="getWinLosePayoutAgent" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2LoginLogDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2LoginLogDto">
+        -- 输赢金额 代理
+        select  #{searchName} searchName, sum(rbrd.payout) payoutTotal
+        from rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        INNER join agy_account agy on ma.cagencyid = agy.id
+        where  EXISTS(
+            -- 属于登录代理的子代
+            SELECT e.childNodeId FROM agy_tree e
+            INNER JOIN agy_account t ON e.parentId = t.id
+            WHERE ma.cagencyId = e.childNodeId and t.id =  #{agyId}
+        )
+        and  EXISTS(
+            -- 属于查询代理的子代
+            SELECT e.childNodeId FROM agy_tree e
+            INNER JOIN agy_account t ON e.parentId = t.id
+            WHERE ma.cagencyId = e.childNodeId and t.agyAccount = #{searchName}
+        )
+        and rbrd.platform = 'EG'
+        <if test="startTime !=null and startTime !='' ">
+            AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime !=null and endTime !='' ">
+            AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+        </if>
+    </select>
+    <select id="getWinLosePayoutMbr" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2LoginLogDto"
+            parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2LoginLogDto">
+        -- 输赢金额 会员
+        select #{searchName} searchName, sum(rbrd.payout) payoutTotal
+        from rpt_bet_rcd_day rbrd
+        INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+        where  EXISTS(
+            -- 属于登录代理的子代
+            SELECT e.childNodeId FROM agy_tree e
+            INNER JOIN agy_account t ON e.parentId = t.id
+            WHERE ma.cagencyId = e.childNodeId and t.id = #{agyId}
+        )
+        and username = #{searchName}
+        and rbrd.platform = 'EG'
+        <if test="startTime !=null and startTime !='' ">
+            AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime !=null and endTime !='' ">
+            AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+        </if>
+    </select>
+</mapper>

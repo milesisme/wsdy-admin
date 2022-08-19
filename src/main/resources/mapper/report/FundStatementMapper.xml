@@ -1,0 +1,4211 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.analysis.mapper.FundStatementMapper">
+
+    <select id="findFundReportPage" resultType="com.wsdy.saasops.modules.analysis.entity.FundStatementModel">
+    select ttt.createTime,
+        (IF(SIGN(ttt.totalPayout)=-1, ABS(ttt.totalPayout), -1*ttt.totalPayout)-ttt.totalBonusAmount-ttt.totalRebate - ttt.totalTaskBonus - ttt.calculateProfit) totalProfit,
+        ttt.totalDepositBalance,
+        (ttt.fundAdd-ttt.fundLissen) fundAdjust,
+        ttt.totalRebate,
+        ttt.totalDrawAmount,
+        ttt.totalBonusAmount,
+        ttt.totalPayout,
+        ttt.totalBonusAmountOnline,
+        ttt.totalBonusAmountOffline,
+        (0-ttt.friendsTransAmountTotal) friendsTransAmountTotal ,
+        ttt.friendsRecepitAmountTotal ,
+        ttt.totalJackpotPayout,
+        ttt.totalTaskBonus,
+        ttt.totalActualReward,
+        ttt.totalHuPengReward
+        FROM (
+            select tt.createTime,
+            SUM(tt.calculateProfit) calculateProfit,
+            SUM(tt.totalDepositBalance) totalDepositBalance,
+            SUM(tt.fundAdd) fundAdd,
+            SUM(tt.totalBonusAmountOnline) totalBonusAmountOnline,
+            SUM(tt.totalBonusAmountOffline) totalBonusAmountOffline,
+            SUM(tt.fundLissen) fundLissen,
+            SUM(tt.totalRebate) totalRebate,
+            SUM(tt.totalDrawAmount) totalDrawAmount,
+            SUM(tt.totalBonusAmount) totalBonusAmount,
+            SUM(tt.totalPayout) totalPayout,
+            SUM(tt.friendsTransAmountTotal) friendsTransAmountTotal,
+            SUM(tt.friendsRecepitAmountTotal) friendsRecepitAmountTotal,
+            SUM(tt.totalJackpotPayout) totalJackpotPayout,
+            IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus,
+            SUM(tt.totalActualReward) totalActualReward,
+            SUM(tt.totalHuPengReward) totalHuPengReward
+            FROM (
+                (
+                    -- 存款
+                    select tt.* FROM (
+                        select DATE_FORMAT(t.auditTime,'%Y%m%d') createTime,
+                        0 calculateProfit,
+                        SUM(t.actualArrival) totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 friendsTransAmountTotal,
+                        0 friendsRecepitAmountTotal,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalJackpotPayout,
+                        0 totalTaskBonus,
+                        0 totalBonusAmountOnline,
+                        0 totalBonusAmountOffline,
+                        0 totalActualReward,
+                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN fund_deposit t on mbr.id = t.accountId
+                        where t.status = 1
+                        <include refid="list_member_where"/>
+                        <include refid="auditTime_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.auditTime)
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 人工资金调整
+                    SELECT tt.* FROM (
+                        select DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+                  		SUM(IF(t.financialCode = 'AM', -1 * amount, amount)) calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 friendsTransAmountTotal,
+                        0 friendsRecepitAmountTotal,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalJackpotPayout,
+                        0 totalTaskBonus,
+                        0 totalBonusAmountOnline,
+                        0 totalBonusAmountOffline,
+                        0 totalActualReward,
+                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN fund_audit t on mbr.id = t.accountId
+                        where t.status = 1
+                        <include refid="list_member_where"/>
+                         AND t.isCalculateProfit = 1
+                        <include refid="createTime_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.createTime)
+                    ) tt
+                )
+                
+                UNION ALL
+                (
+                    -- 调整增加
+                    select tt.* FROM (
+                        select DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        SUM(t.amount) fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 friendsTransAmountTotal,
+                        0 friendsRecepitAmountTotal,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalJackpotPayout,
+                        0 totalTaskBonus,
+                        0 totalBonusAmountOnline,
+                        0 totalBonusAmountOffline,
+                        0 totalActualReward,
+                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN fund_audit t on mbr.id = t.accountId
+                        where t.status = 1
+                        <include refid="list_member_where"/>
+                        and t.financialCode = 'AA'
+                        <include refid="createTime_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.createTime)
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 调整减少
+                    select tt.* FROM (
+                        select DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        SUM(t.amount) fundLissen,
+                        0 totalRebate,
+                        0 friendsTransAmountTotal,
+                        0 friendsRecepitAmountTotal,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalJackpotPayout,
+                        0 totalTaskBonus,
+                        0 totalBonusAmountOnline,
+                        0 totalBonusAmountOffline,
+                        0 totalActualReward,
+                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN fund_audit t on mbr.id = t.accountId
+                        where t.status = 1
+                        <include refid="list_member_where"/>
+                        and t.financialCode = 'AM'
+                        <include refid="createTime_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.createTime)
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 返利
+                    select tt.* FROM (
+                        select DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        SUM(t.rebateTotal) totalRebate,
+                        0 friendsTransAmountTotal,
+                        0 friendsRecepitAmountTotal,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalJackpotPayout,
+                        0 totalTaskBonus,
+                        0 totalBonusAmountOnline,
+                        0 totalBonusAmountOffline,
+                        0 totalActualReward,
+                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN mbr_rebate_agent_bonus t on mbr.id = t.accountId
+                        where t.status = 1
+                        <include refid="list_member_where"/>
+                        <include refid="createTime_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.createTime)
+                    ) tt
+                )
+
+                UNION ALL
+
+                (
+                    -- 取款
+                    select tt.* FROM (
+                        select DATE_FORMAT(t.passTime,'%Y%m%d') createTime,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 friendsTransAmountTotal,
+                        0 friendsRecepitAmountTotal,
+                        SUM(t.actualarrival) totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalJackpotPayout,
+                        0 totalTaskBonus,
+                        0 totalBonusAmountOnline,
+                        0 totalBonusAmountOffline,
+                        0 totalActualReward,
+                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN fund_acc_withdraw t on mbr.id = t.accountId
+                        where t.status = 1
+                        <include refid="list_member_where"/>
+                        <include refid="passTime_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.passTime)
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 红利(活动+反水)
+                    select tt.* FROM (
+                        select DATE_FORMAT(t.applicationTime,'%Y%m%d') createTime,
+	                        0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 fundAdd,
+	                        0 fundLissen,
+	                        0 totalRebate,
+	                        0 friendsTransAmountTotal,
+	                        0 friendsRecepitAmountTotal,
+	                        0 totalDrawAmount,
+	                        SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalJackpotPayout,
+	                        0 totalTaskBonus,
+	                        0 totalBonusAmountOnline,
+	                        0 totalBonusAmountOffline,
+	                        0 totalActualReward,
+	                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN opr_act_bonus t on mbr.id = t.accountId
+                        where t.status = 1
+                        <include refid="list_member_where"/>
+                        <include refid="applicationTime_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.applicationTime)
+                    ) tt
+                )
+                  UNION ALL
+								
+				(
+                    -- 红利(活动+反水)
+                    SELECT tt.* FROM (
+                        SELECT DATE_FORMAT(t.applicationTime,'%Y%m%d') createTime,
+                        	0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 fundAdd,
+	                        0 fundLissen,
+	                        0 totalRebate,
+	                        0 friendsTransAmountTotal,
+	                        0 friendsRecepitAmountTotal,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalJackpotPayout,
+	                        0 totalTaskBonus,
+	                        SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmountOnline,
+	                        0 totalBonusAmountOffline,
+                            0 totalActualReward,
+                            0 totalHuPengReward
+                        FROM mbr_account mbr
+                        LEFT JOIN opr_act_bonus t on mbr.id = t.accountId
+						LEFT JOIN opr_act_activity activity ON activity.id = t.activityid
+                        WHERE t.status = 1 AND activity.isonline = 1
+                        <include refid="list_member_where"/>
+                        <include refid="applicationTime_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.applicationTime)
+                    ) tt
+                )
+                
+                  UNION ALL
+								
+				(
+                    SELECT tt.* FROM (
+                        SELECT DATE_FORMAT(t.applicationTime,'%Y%m%d') createTime,
+                        	0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 fundAdd,
+	                        0 fundLissen,
+	                        0 totalRebate,
+	                        0 friendsTransAmountTotal,
+	                        0 friendsRecepitAmountTotal,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalJackpotPayout,
+	                        0 totalTaskBonus,
+                       		0 totalBonusAmountOnline,
+                       		SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmountOffline,
+                            0 totalActualReward,
+                            0 totalHuPengReward
+                        FROM mbr_account mbr
+                        LEFT JOIN opr_act_bonus t on mbr.id = t.accountId
+						LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+                        WHERE t.status = 1 AND activity.isonline = 0
+                        <include refid="list_member_where"/>
+                        <include refid="applicationTime_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.applicationTime)
+                    ) tt
+                )
+
+                UNION ALL
+
+                (
+                    -- 派彩
+                    select tt.* FROM (
+                        select DATE_FORMAT(t.startday,'%Y%m%d') createTime,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 friendsTransAmountTotal,
+                        0 friendsRecepitAmountTotal,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        SUM(t.payout) totalPayout,
+                        0 totalJackpotPayout,
+                        0 totalTaskBonus,
+                        0 totalBonusAmountOnline,
+                        0 totalBonusAmountOffline,
+                        0 totalActualReward,
+                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN rpt_bet_rcd_day t on mbr.loginName = t.username
+                        <include refid="startday_where"/>
+                        <include refid="list_member_where"/>
+                        <include refid="agent_where"/>
+                        and t.payout != 0
+                        GROUP BY TO_DAYS(t.startday)
+                    ) tt
+                )
+
+                UNION ALL
+
+                (select tt.* FROM (
+                select DATE_FORMAT(t.startday,'%Y%m%d') createTime,
+                0 calculateProfit,
+                0 totalDepositBalance,
+                0 fundAdd,
+                0 fundLissen,
+                0 totalRebate,
+                0 friendsTransAmountTotal,
+                0 friendsRecepitAmountTotal,
+                0 totalDrawAmount,
+                0 totalBonusAmount,
+                0 totalPayout,
+                SUM(t.jackpotPayout) totalJackpotPayout,
+                0 totalTaskBonus,
+                0 totalBonusAmountOnline,
+                0 totalBonusAmountOffline,
+                0 totalActualReward,
+                0 totalHuPengReward
+                from mbr_account mbr
+                LEFT JOIN rpt_bet_rcd_day t on mbr.loginName = t.username
+                <include refid="startday_where"/>
+                <include refid="list_member_where"/>
+                <include refid="agent_where"/>
+                and	t.jackpotPayout != 0
+                GROUP BY TO_DAYS(t.startday)
+                ) tt )
+
+                UNION ALL
+
+                (
+                    -- 任务
+                    select tt.* FROM (
+                        select DATE_FORMAT(t.time,'%Y%m%d') createTime,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 friendsTransAmountTotal,
+                        0 friendsRecepitAmountTotal,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalJackpotPayout,
+                        SUM(t.bonusamount) totalTaskBonus,
+                        0 totalBonusAmountOnline,
+                        0 totalBonusAmountOffline,
+                        0 totalActualReward,
+                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN task_bonus t on mbr.id = t.accountid
+                        where 1=1
+                        <include refid="time_where"/>
+                        <include refid="list_member_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.time)
+                    ) tt
+                )
+
+                UNION ALL
+
+                    (
+                        -- 好友返利
+                        select tt.* FROM (
+                        select DATE_FORMAT(t.incomeTime,'%Y%m%d') createTime,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 friendsTransAmountTotal,
+                        0 friendsRecepitAmountTotal,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalJackpotPayout,
+                        0 totalTaskBonus,
+                        0 totalBonusAmountOnline,
+                        0 totalBonusAmountOffline,
+                        SUM( CASE WHEN t.type = 3  OR t.type = 4 OR t.type = 5 OR t.type = 6 THEN t.reward END ) totalActualReward,
+                        0 totalHuPengReward
+                        from mbr_account mbr
+                        LEFT JOIN mbr_rebate_friends_reward t on mbr.id = t.accountid
+                        where 1=1
+                        <include refid="incomeTime_where"/>
+                        <include refid="list_member_where"/>
+                        <include refid="agent_where"/>
+                        GROUP BY TO_DAYS(t.incomeTime)
+                        ) tt
+                    )
+
+                    UNION ALL
+
+                    (
+                    -- 呼朋唤友返利
+                    select tt.* FROM (
+                    select DATE_FORMAT(t.incomeTime,'%Y%m%d') createTime,
+                    0 calculateProfit,
+                    0 totalDepositBalance,
+                    0 fundAdd,
+                    0 fundLissen,
+                    0 totalRebate,
+                    0 friendsTransAmountTotal,
+                    0 friendsRecepitAmountTotal,
+                    0 totalDrawAmount,
+                    0 totalBonusAmount,
+                    0 totalPayout,
+                    0 totalJackpotPayout,
+                    0 totalTaskBonus,
+                    0 totalBonusAmountOnline,
+                    0 totalBonusAmountOffline,
+                    0 totalActualReward,
+                    SUM(t.reward)  totalHuPengReward
+                    from mbr_account mbr
+                    LEFT JOIN mbr_rebate_hupeng_reward t on mbr.id = t.accountid
+                    where 1=1
+                    <include refid="incomeTime_where"/>
+                    <include refid="list_member_where"/>
+                    <include refid="agent_where"/>
+                    GROUP BY TO_DAYS(t.incomeTime)
+                    ) tt
+                    )
+            )tt
+            where tt.createTime is not NULL
+            GROUP BY createTime
+            order by createTime desc
+        )ttt
+        <include refid="order_total"/>
+    </select>
+
+    <sql id="order_total">
+        <if test="orderBy != null and orderBy !=''">
+           order by ${orderBy}
+        </if>
+    </sql>
+
+    <sql id="agent_where">
+        <if test="agyId != null and agyId !=''">
+            and  exists (
+            select * from agy_tree tree where  tree.childnodeid = mbr.cagencyid and tree.parentid = #{agyId}
+            )
+        </if>
+    </sql>
+
+    <sql id="list_member_where">
+        <if test="loginName != null and loginName !=''">
+            and mbr.loginName = #{loginName}
+        </if>
+    </sql>
+
+    <sql id="passTime_where">
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(t.passTime, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND t.passTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.passTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </sql>
+
+    <sql id="auditTime_where">
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(t.auditTime, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND t.auditTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.auditTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </sql>
+
+    <sql id="createTime_where">
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(t.createTime, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND t.createTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.createTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </sql>
+
+
+    <sql id="incomeTime_where">
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(t.incomeTime, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND t.incomeTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.incomeTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </sql>
+
+    <sql id="createTime_where_ft">
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(t.orderTime, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND t.orderTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.orderTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </sql>
+
+    <sql id="applicationTime_where">
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(t.applicationTime, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND t.applicationTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.applicationTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </sql>
+
+    <sql id="startday_where">
+        <where>
+            <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+                and DATE_ADD(DATE_FORMAT(t.startday,'%Y%m%d'), interval 7 DAY) >= now()
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND t.startday <![CDATA[ >= ]]> str_to_date(#{startTime}, '%Y-%m-%d')
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND t.startday <![CDATA[ <= ]]> str_to_date(#{endTime}, '%Y-%m-%d')
+            </if>
+        </where>
+    </sql>
+
+    <sql id="agy_startday_where">
+        <where>
+            <if test="startTime == null and endTime == null">
+                and DATE_ADD(DATE_FORMAT(t.startday,'%Y%m%d'), interval 7 DAY) >= now()
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND t.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime}, '%Y-%m-%d')
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND t.startday <![CDATA[ <= ]]> DATE_FORMAT(#{endTime}, '%Y-%m-%d')
+            </if>
+        </where>
+    </sql>
+
+    <sql id="member_startday_where">
+        <if test="startTime == null and endTime == null">
+            and DATE_ADD(DATE_FORMAT(t.startday,'%Y%m%d'), interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND t.startday <![CDATA[ >= ]]> str_to_date(#{startTime}, '%Y-%m-%d %H:%i:%s')
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.startday <![CDATA[ <= ]]> str_to_date(#{endTime}, '%Y-%m-%d %H:%i:%s')
+        </if>
+    </sql>
+
+    <sql id="time_where">
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(t.time, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND t.time <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.time <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </sql>
+
+    <sql id="time_where2">
+        <where>
+            <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+                and DATE_ADD(t.time, interval 7 DAY) >= now()
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND t.time <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND t.time <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+    </sql>
+
+
+    <sql id="registerTime_where">
+        <where>
+            <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+                and DATE_ADD(t.registerTime, interval 7 DAY) >= now()
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND t.registerTime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND t.registerTime <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+    </sql>
+
+    <sql id="agy_where2">
+        <where>
+            <if test="isCagency == 0">
+                and mbr.tagencyId = agy.id
+            </if>
+            <if test="isCagency == 1">
+                and mbr.cagencyId = agy.id
+            </if>
+            <if test="loginName != null and loginName !=''">
+                and mbr.loginName = #{loginName}
+            </if>
+            <if test="isCagency==0 and isTest == false">
+                and agy.id not in(
+                    select childnodeid from agy_tree
+                    where parentid = 4)
+            </if>
+            <if test="isCagency==0 and isTest == true">
+                and agy.id in(
+                    select childnodeid from agy_tree
+                    where parentid = 4
+                )
+            </if>
+            <if test="agyId!=null">
+                and agy.id = #{agyId}
+            </if>
+            <if test="agyIds != null and agyIds.size()>0">
+                and agy.id in
+                <foreach item="agyId" collection="agyIds" open="(" separator="," close=")">
+                    #{agyId}
+                </foreach>
+            </if>
+        </where>
+    </sql>
+
+    <sql id="agy_where">
+        select mbr.id, mbr.loginName,t.id agyId,t.agyaccount agyAccount,mbr.tagencyid parentId
+        from mbr_account mbr
+        inner join (
+            <if test="isCagency == 1">
+                SELECT ct.id pid, t.*,ct2.id,ct2.agyaccount
+                from agy_account ct
+                LEFT JOIN agy_tree e ON ct.id = e.parentid
+                LEFT JOIN agy_tree t ON e.childnodeid = t.parentid
+                LEFT JOIN agy_account ct2 on ct2.id = t.parentid
+                WHERE ct.id = #{agyId} and e.depth = 1
+            </if>
+            <if test="isCagency == 0">
+                select e.*,ct.agyaccount,e.parentid id
+                from agy_account ct
+                LEFT JOIN agy_tree e ON ct.id = e.parentid
+                where ct.parentid = 0
+            </if>
+        )t on  t.childnodeid = mbr.cagencyId
+        <where>
+            <if test="isTest == false">
+                and not exists (
+                select * from agy_tree tree where  tree.childnodeid = mbr.cagencyid and tree.parentid = 4
+                )
+            </if>
+            <if test="isTest == true">
+                and  exists (
+                select * from agy_tree tree where  tree.childnodeid = mbr.cagencyid and tree.parentid = 4
+                )
+            </if>
+        </where>
+    </sql>
+
+    <sql id="agy_fund_where">
+        select mbr.id, mbr.loginName,t.id agyId,t.agyaccount agyAccount,mbr.tagencyid parentId
+        from mbr_account mbr
+        inner join (
+            select e.*,ct.agyaccount,e.parentid id
+            from agy_account ct
+            LEFT JOIN agy_tree e ON ct.id = e.parentid
+            where ct.parentid = 0
+        )t on  t.childnodeid = mbr.cagencyId
+    </sql>
+
+
+    <sql id="agent_type_fund_where">
+        select mbr.id, mbr.loginName,t.id agyId,t.agyaccount agyAccount,mbr.tagencyid parentId, t.parentAgent
+        from mbr_account mbr
+                 inner join (
+                    (SELECT
+                        ct.id, ct.agyaccount, ty.agentType, ct2.agyaccount parentAgent
+                    FROM
+                        agy_account ct
+                    INNER JOIN ( SELECT max( depth ) agentType, childnodeid FROM agy_tree GROUP BY childnodeid ) ty on ct.id = ty.childnodeid
+                    LEFT  JOIN agy_account ct2 on ct.parentid = ct2.id)
+        )t on  t.id = mbr.cagencyId
+
+        <if test="agentType != null">
+            where t.agentType = #{agentType}
+        </if>
+    </sql>
+
+    <sql id="one_mbr_where">
+        SELECT ma.id, ma.loginName, ma.registerTime, agy.agyaccount
+        FROM mbr_account ma LEFT JOIN agy_account agy ON agy.id = ma.cagencyid
+        <where>
+            <if test="loginName != null and loginName != ''">
+                and ma.loginName = #{loginName}
+            </if>
+        </where>
+    </sql>
+
+    <sql id="mbr_where">
+        SELECT ma.id parentId,ma.loginName parentLoginName,act.id childId, act.loginName childLoginName, ma.registertime, t.agyaccount
+        FROM mbr_account ma
+        inner JOIN agy_account t ON t.id = ma.cagencyId
+        inner JOIN mbr_tree e ON e.parentId = ma.id
+        inner JOIN mbr_account act ON act.id = e.childNodeId
+        <where>
+            <if test="agyId != null">
+                and t.id = #{agyId}
+            </if>
+            <if test="isMbrAgyQry != null and isMbrAgyQry == 1">
+                and ma.agyflag = 1
+            </if>
+            <if test="loginName != null and loginName != ''">
+                and ma.loginName = #{loginName}
+            </if>
+        </where>
+    </sql>
+
+    <sql id="mbr_where2">
+        SELECT ma.id parentId,ma.loginName parentLoginName,act.id childId, act.loginName childLoginName
+        FROM mbr_account ma
+        inner JOIN mbr_tree e ON e.parentId = ma.id
+        inner JOIN mbr_account act ON act.id = e.childNodeId
+        WHERE ma.loginName = #{loginName}
+    </sql>
+
+    <sql id="subMbr_where">
+        SELECT childMa.id parentId,childMa.loginName parentLoginName,childMa.agyflag,act.id childId,act.loginName childLoginName
+        FROM mbr_account ma
+        INNER JOIN mbr_tree e ON e.parentId = ma.id and e.depth=1
+        inner join mbr_account childMa on e.childNodeId = childMa.id
+        INNER JOIN mbr_tree e1 ON e1.parentId = e.childNodeId
+        INNER JOIN mbr_account act ON act.id = e1.childNodeId
+        WHERE ma.loginName = #{loginName}
+        <if test="isMbrAgyQry != null and isMbrAgyQry == 1">
+            and childMa.agyflag = 1
+        </if>
+        <if test="isMbrAgyQry != null and isMbrAgyQry == 0">
+            and childMa.agyflag = 0
+        </if>
+    </sql>
+
+    <sql id="member_agy_where">
+        <where>
+            1=1
+            <if test="agyId != null and isCagency == 0">
+                and (mbr.tagencyId = #{agyId} or mbr.cagencyId = #{agyId})
+            </if>
+            <if test="agyId != null and isCagency == 1">
+                and mbr.cagencyId = #{agyId}
+            </if>
+            <if test="loginName != null and loginName !=''">
+                and mbr.loginName = #{loginName}
+                <include refid="agent_where"/>
+            </if>
+            <if test="agyIds != null and agyIds.size()>0">
+                and (agy.id = mbr.tagencyId or agy.id = mbr.cagencyId)
+                and agy.id in
+                <foreach item="agyId" collection="agyIds" open="(" separator="," close=")">
+                    #{agyId}
+                </foreach>
+            </if>
+            <if test="isMbrAgyQry != null and isMbrAgyQry == 1">
+                and mbr.agyflag = 1
+            </if>
+        </where>
+    </sql>
+
+
+    <select id="findFundTotalInfo" resultType="com.wsdy.saasops.modules.analysis.entity.FundStatementModel">
+        SELECT ttt.createTime,
+	        (IF(SIGN(SUM(ttt.totalPayout))=-1, ABS(SUM(ttt.totalPayout)), -1*SUM(ttt.totalPayout))-SUM(ttt.totalBonusAmount)-SUM(ttt.totalRebate) - SUM(ttt.totalTaskBonus) - SUM(ttt.calculateProfit)) totalProfit,
+	        SUM(ttt.totalDepositBalance) totalDepositBalance,
+	        (SUM(ttt.fundAdd)-SUM(ttt.fundLissen)) fundAdjust,
+	        SUM(ttt.totalRebate) totalRebate,
+	        SUM(ttt.totalDrawAmount) totalDrawAmount,
+	        SUM(ttt.totalBonusAmount) totalBonusAmount,
+	        SUM(ttt.totalBonusAmountOnline) totalBonusAmountOnline,
+	      	SUM(ttt.totalBonusAmountOffline) totalBonusAmountOffline,
+	        SUM(ttt.totalPayout) totalPayout,
+	        SUM(ttt.totalJackpotPayout) totalJackpotPayout,
+	        IFNULL(SUM(ttt.totalTaskBonus),0) totalTaskBonus,
+	        IFNULL(SUM(ttt.totalActualReward), 0)  totalActualReward,
+            IFNULL(SUM(ttt.totalHuPengReward), 0)  totalHuPengReward
+        FROM (
+        SELECT tt.createTime,
+	        SUM(tt.totalDepositBalance) totalDepositBalance,
+	        SUM(tt.fundAdd) fundAdd,
+	       	SUM(tt.calculateProfit) calculateProfit,
+	        SUM(tt.fundLissen) fundLissen,
+	        SUM(tt.totalRebate) totalRebate,
+	        SUM(tt.totalDrawAmount) totalDrawAmount,
+	        SUM(tt.totalBonusAmount) totalBonusAmount,
+	        SUM(tt.totalBonusAmountOnline) totalBonusAmountOnline,
+	        SUM(tt.totalBonusAmountOffline) totalBonusAmountOffline,
+	        SUM(tt.totalPayout) totalPayout,
+	        SUM(tt.totalJackpotPayout) totalJackpotPayout,
+	        SUM(tt.totalTaskBonus) totalTaskBonus,
+	        SUM(tt.totalActualReward)  totalActualReward,
+            SUM(tt.totalHuPengReward)  totalHuPengReward
+        FROM (
+        (SELECT tt.* FROM (
+        	SELECT DATE_FORMAT(t.auditTime,'%Y%m%d') createTime,
+		        SUM(t.actualArrival) totalDepositBalance,
+		        0 fundAdd,
+		        0 calculateProfit,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		        0 totalBonusAmountOffline,
+		        0 totalActualReward,
+                0 totalHuPengReward
+	        FROM mbr_account mbr
+	        LEFT JOIN fund_deposit t ON mbr.id = t.accountId
+	        WHERE t.status = 1
+	        <include refid="auditTime_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+        )
+        tt )
+
+        UNION ALL
+		-- 手动调整金额计入到净盈利
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+		        0 totalDepositBalance,
+		        0 fundAdd,
+		        SUM(IF(t.financialCode = 'AM', -1 * amount, amount)) calculateProfit,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		        0 totalBonusAmountOffline,
+		        0 totalActualReward,
+                0 totalHuPengReward
+	        FROM mbr_account mbr
+	        LEFT JOIN fund_audit t on mbr.id = t.accountId
+	        WHERE t.status = 1 AND isCalculateProfit = 1
+	        <include refid="createTime_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+        )
+        tt )
+
+        UNION ALL
+
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+		        0 totalDepositBalance,
+		        SUM(t.amount) fundAdd,
+		        0 calculateProfit,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		        0 totalBonusAmountOffline,
+		        0 totalActualReward,
+                0 totalHuPengReward
+	        FROM mbr_account mbr
+	        LEFT JOIN fund_audit t on mbr.id = t.accountId
+	        WHERE t.status = 1
+	        AND t.financialCode = 'AA'
+	        <include refid="createTime_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+        )
+        tt )
+
+        UNION ALL
+
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+		        0 totalDepositBalance,
+		        0 fundAdd,
+		        0 calculateProfit,
+		        SUM(t.amount) fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		    	0 totalBonusAmountOffline,
+		        0 totalActualReward,
+                0 totalHuPengReward
+		        FROM mbr_account mbr
+	        LEFT JOIN fund_audit t on mbr.id = t.accountId
+	        WHERE t.status = 1
+	        AND t.financialCode = 'AM'
+	        <include refid="createTime_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+        )
+        tt )
+
+        UNION ALL
+
+        (
+        -- 返利
+        SELECT tt.* FROM (
+            SELECT DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+	            0 totalDepositBalance,
+	            0 fundAdd,
+	            0 calculateProfit,
+	            0 fundLissen,
+	            SUM(t.rebateTotal) totalRebate,
+	            0 totalDrawAmount,
+	            0 totalBonusAmount,
+	            0 totalPayout,
+	            0 totalJackpotPayout,
+	            0 totalTaskBonus,
+	            0 totalBonusAmountOnline,
+	            0 totalBonusAmountOffline,
+	            0 totalActualReward,
+	            0 totalHuPengReward
+            FROM mbr_account mbr
+            LEFT JOIN mbr_rebate_agent_bonus t on mbr.id = t.accountId
+            where t.status = 1
+            <include refid="createTime_where"/>
+            <include refid="agent_where"/>
+            <include refid="list_member_where"/>
+        ) tt
+        )
+
+        UNION ALL
+
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.passTime,'%Y%m%d') createTime,
+		        0 totalDepositBalance,
+		        0 fundAdd,
+		        0 calculateProfit,
+		        0 fundLissen,
+		        0 totalRebate,
+		        SUM(t.actualarrival) totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		        0 totalBonusAmountOffline,
+		        0 totalActualReward,
+                0 totalHuPengReward
+	        FROM mbr_account mbr
+	        LEFT JOIN fund_acc_withdraw t on mbr.id = t.accountId
+	        WHERE t.status = 1
+	        <include refid="passTime_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+        )
+        tt )
+
+        UNION ALL
+
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.applicationTime,'%Y%m%d') createTime,
+		        0 totalDepositBalance,
+		        0 fundAdd,
+		        0 calculateProfit,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		        0 totalBonusAmountOffline,
+		        0 totalActualReward,
+                0 totalHuPengReward
+	        FROM mbr_account mbr
+	        LEFT JOIN opr_act_bonus t ON mbr.id = t.accountId
+	        WHERE t.status = 1
+	        <include refid="applicationTime_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+        )
+        tt )
+
+ 		UNION ALL
+				
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.applicationTime,'%Y%m%d') createTime,
+	        0 totalDepositBalance,
+	        0 fundAdd,
+	        0 calculateProfit,
+	        0 fundLissen,
+	        0 totalRebate,
+	        0 totalDrawAmount,
+	        0 totalBonusAmount,
+	        0 totalPayout,
+	        0 totalJackpotPayout,
+	        0 totalTaskBonus,
+	        SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmountOnline,
+       		0 totalBonusAmountOffline,
+            0 totalActualReward,
+            0 totalHuPengReward
+        FROM mbr_account mbr
+        LEFT JOIN opr_act_bonus t on mbr.id = t.accountId
+		LEFT JOIN opr_act_activity activity ON activity.id = t.activityid
+        	WHERE t.status = 1
+			AND activity.isonline = 1
+        <include refid="applicationTime_where"/>
+        <include refid="agent_where"/>
+        <include refid="list_member_where"/>
+        )
+        tt )
+        
+        UNION ALL
+				
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.applicationTime,'%Y%m%d') createTime,
+	        0 totalDepositBalance,
+	        0 fundAdd,
+	        0 calculateProfit,
+	        0 fundLissen,
+	        0 totalRebate,
+	        0 totalDrawAmount,
+	        0 totalBonusAmount,
+	        0 totalPayout,
+	        0 totalJackpotPayout,
+	        0 totalTaskBonus,
+	        0 totalBonusAmountOnline,
+	        SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount))  totalBonusAmountOffline,
+            0 totalActualReward,
+            0 totalHuPengReward
+        FROM mbr_account mbr
+        LEFT JOIN opr_act_bonus t on mbr.id = t.accountId
+		LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+        	WHERE t.status = 1
+			AND activity.isonline = 0
+        <include refid="applicationTime_where"/>
+        <include refid="agent_where"/>
+        <include refid="list_member_where"/>
+        )
+        tt )
+        
+        UNION ALL
+
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.startday,'%Y%m%d') createTime,
+		        0 totalDepositBalance,
+		        0 fundAdd,
+		        0 calculateProfit,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        SUM(t.payout) totalPayout,
+		        0 totalJackpotPayout,
+		        0 totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		        0 totalBonusAmountOffline,
+		        0 totalActualReward,
+                0 totalHuPengReward
+	        FROM mbr_account mbr
+	        LEFT JOIN rpt_bet_rcd_day t on mbr.loginName = t.username
+	        <include refid="startday_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+        )
+        tt )
+
+        UNION ALL
+
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.startday,'%Y%m%d') createTime,
+		        0 totalDepositBalance,
+		        0 fundAdd,
+		        0 calculateProfit,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        SUM(t.jackpotPayout) totalJackpotPayout,
+		        0 totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		        0 totalBonusAmountOffline,
+		        0 totalActualReward,
+                0 totalHuPengReward
+	        FROM mbr_account mbr
+	        LEFT JOIN rpt_bet_rcd_day t on mbr.loginName = t.username
+	        <include refid="startday_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+	        AND t.jackpotPayout != 0
+        )
+        tt )
+
+        UNION ALL
+
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.time,'%Y%m%d') createTime,
+		        0 totalDepositBalance,
+		        0 fundAdd,
+		        0 calculateProfit,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        SUM(t.bonusamount) totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		        0 totalBonusAmountOffline,
+		        0 totalActualReward,
+                0 totalHuPengReward
+	        FROM mbr_account mbr
+	        LEFT JOIN task_bonus t on mbr.id = t.accountid
+	        where 1=1
+	        <include refid="time_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+        )
+        tt )
+
+        UNION ALL
+
+        (SELECT tt.* FROM (
+	        SELECT DATE_FORMAT(t.incomeTime,'%Y%m%d') createTime,
+		        0 totalDepositBalance,
+		        0 fundAdd,
+		        0 calculateProfit,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 totalTaskBonus,
+		        0 totalBonusAmountOnline,
+		        0 totalBonusAmountOffline,
+	            SUM( CASE WHEN t.type = 3 OR t.type = 4 OR t.type = 5 OR t.type = 6  THEN t.reward END ) totalActualReward,
+                0 totalHuPengReward
+	        FROM mbr_account mbr
+	        LEFT JOIN mbr_rebate_friends_reward t on mbr.id = t.accountid
+	        where 1=1
+	        <include refid="incomeTime_where"/>
+	        <include refid="agent_where"/>
+	        <include refid="list_member_where"/>
+        )
+        tt )
+
+            UNION ALL
+
+            (SELECT tt.* FROM (
+            SELECT DATE_FORMAT(t.incomeTime,'%Y%m%d') createTime,
+            0 totalDepositBalance,
+            0 fundAdd,
+            0 calculateProfit,
+            0 fundLissen,
+            0 totalRebate,
+            0 totalDrawAmount,
+            0 totalBonusAmount,
+            0 totalPayout,
+            0 totalJackpotPayout,
+            0 totalTaskBonus,
+            0 totalBonusAmountOnline,
+            0 totalBonusAmountOffline,
+            0  totalActualReward,
+            SUM( t.reward  ) totalHuPengReward
+            FROM mbr_account mbr
+            LEFT JOIN mbr_rebate_hupeng_reward t on mbr.id = t.accountid
+            where 1=1
+            <include refid="incomeTime_where"/>
+            <include refid="agent_where"/>
+            <include refid="list_member_where"/>
+            )
+            tt )
+
+        )tt GROUP BY tt.createTime
+        )ttt
+    </select>
+
+    <select id="findTagencyList" resultType="com.wsdy.saasops.modules.analysis.entity.FundStatementModel">
+        SELECT ttt.agyId,
+            ttt.agyAccount,
+            ttt.parentId,
+            (IF(SIGN(ttt.totalPayout)=-1, ABS(ttt.totalPayout), -1*ttt.totalPayout)-ttt.totalBonusAmount-ttt.totalRebate - ttt.totalTaskBonus - ttt.calculateProfit) totalProfit,
+            ttt.totalDepositBalance,
+            (ttt.fundAdd-ttt.fundLissen) fundAdjust,
+            ttt.totalRebate,
+            ttt.totalDrawAmount,
+            ttt.totalBonusAmount,
+            ttt.totalPayout,
+            ttt.totalJackpotPayout,
+            ttt.totalBonusAmountOnline totalBonusAmountOnline,
+      		ttt.totalBonusAmountOffline totalBonusAmountOffline,
+            ttt.friendsRecepitAmountTotal,
+            (0-ttt.friendsTransAmountTotal) friendsTransAmountTotal,
+            ttt.totalTaskBonus,
+            ttt.totalActualReward
+        FROM (
+            SELECT tt.agyId,
+                tt.agyAccount,
+                tt.parentId,
+                IFNULL(SUM(tt.totalDepositBalance),0) totalDepositBalance,
+                IFNULL(SUM(tt.fundAdd),0)  fundAdd,
+                IFNULL(SUM(tt.calculateProfit),0)  calculateProfit,
+                IFNULL(SUM(tt.fundLissen),0)  fundLissen,
+                IFNULL(SUM(tt.totalRebate),0)  totalRebate,
+                IFNULL(SUM(tt.totalDrawAmount),0)  totalDrawAmount,
+                IFNULL(SUM(tt.totalBonusAmount),0)  totalBonusAmount,
+                IFNULL(SUM(tt.totalPayout),0)  totalPayout,
+                IFNULL(SUM(tt.totalJackpotPayout),0)  totalJackpotPayout,
+                IFNULL(SUM(tt.friendsRecepitAmountTotal),0)  friendsRecepitAmountTotal,
+                IFNULL(SUM(tt.friendsTransAmountTotal),0)  friendsTransAmountTotal,
+                IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus,
+                IFNULL(SUM(tt.totalBonusAmountOnline),0) totalBonusAmountOnline,
+        		IFNULL(SUM(tt.totalBonusAmountOffline),0) totalBonusAmountOffline,
+                IFNULL(SUM(tt.totalActualReward),0) totalActualReward
+            FROM (
+                SELECT acc.agyId, acc.agyAccount,acc.parentId, tt.*
+                FROM (
+                    <include refid="agy_where"/>
+                ) acc
+                LEFT JOIN (
+                    (
+                        SELECT tt.* FROM (
+                            SELECT 
+                            	null createTime,
+                            	t.accountId,
+                                t.actualArrival totalDepositBalance,
+                                0 fundAdd,
+                                0 calculateProfit,
+                                0 fundLissen,
+                                0 totalRebate,
+                                0 totalDrawAmount,
+                                0 totalBonusAmount,
+                                0 totalPayout,
+                                0 totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                0 totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            from fund_deposit t
+                            where t.status = 1
+                            <include refid="auditTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+
+                    (
+                        select tt.* FROM (
+                            select 
+                            	null createTime,
+                            	t.accountId,
+                                0 totalDepositBalance,
+                                t.amount fundAdd,
+                                0 calculateProfit,
+                                0 fundLissen,
+                                0 totalRebate,
+                                0 totalDrawAmount,
+                                0 totalBonusAmount,
+                                0 totalPayout,
+                                0 totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                0 totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            from fund_audit t
+                            where t.status = 1 and t.financialCode = 'AA'
+                            <include refid="createTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+
+                    (
+                        SELECT tt.* FROM (
+                            SELECT 
+                            	NULL createTime,
+                            	t.accountId,
+                                0 totalDepositBalance,
+                                t.amount fundAdd,
+                         		SUM(IF(t.financialCode = 'AM', -1 * amount, amount)) calculateProfit,
+                                0 fundLissen,
+                                0 totalRebate,
+                                0 totalDrawAmount,
+                                0 totalBonusAmount,
+                                0 totalPayout,
+                                0 totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                0 totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            FROM fund_audit t
+                            WHERE t.status = 1 and t.isCalculateProfit = 1
+                            <include refid="createTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+
+                    (
+                        select tt.* FROM (
+                            select 
+                            	null createTime,
+                            	t.accountId,
+                                0 totalDepositBalance,
+                                0 fundAdd,
+                                0 calculateProfit,
+                                t.amount fundLissen,
+                                0 totalRebate,
+                                0 totalDrawAmount,
+                                0 totalBonusAmount,
+                                0 totalPayout,
+                                0 totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                0 totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            from fund_audit t
+                            where t.status = 1 and t.financialCode = 'AM'
+                            <include refid="createTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+
+                    (
+                        -- 返利
+                        select tt.* FROM (
+                            select 
+                           		null createTime,
+                            	t.accountId,
+                                0 totalDepositBalance,
+                                0 fundAdd,
+                                0 calculateProfit,
+                                0 fundLissen,
+                                t.rebateTotal totalRebate,
+                                0 totalDrawAmount,
+                                0 totalBonusAmount,
+                                0 totalPayout,
+                                0 totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                0 totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            from mbr_rebate_agent_bonus t
+                            where t.status = 1
+                            <include refid="createTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+
+                    (
+                        select tt.* FROM (
+                            select
+                            	null createTime, 
+                            	t.accountId,
+                                0 totalDepositBalance,
+                                0 fundAdd,
+                                0 calculateProfit,
+                                0 fundLissen,
+                                0 totalRebate,
+                                t.actualarrival totalDrawAmount,
+                                0 totalBonusAmount,
+                                0 totalPayout,
+                                0 totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                0 totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            from fund_acc_withdraw t
+                            where t.status = 1
+                            <include refid="passTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+
+                    (select tt.* FROM (
+                            select 
+                            	null createTime,
+                            	t.accountId,
+                                0 totalDepositBalance,
+                                0 fundAdd,
+                                0 calculateProfit,
+                                0 fundLissen,
+                                0 totalRebate,
+                                0 totalDrawAmount,
+                                IF(t.source = 3, -1 * t.bonusamount, t.bonusamount) totalBonusAmount,
+                                0 totalPayout,
+                                0 totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                0 totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            from opr_act_bonus t
+                            where t.status = 1
+                            <include refid="applicationTime_where"/>
+                        ) tt
+                    )
+
+					UNION ALL
+							
+			        (SELECT tt.* FROM (
+				        SELECT 
+					        DATE_FORMAT(t.applicationTime,'%Y%m%d') createTime,
+					        t.accountId,
+					        0 totalDepositBalance,
+					        0 fundAdd,
+					        0 calculateProfit,
+					        0 fundLissen,
+					        0 totalRebate,
+					        0 totalDrawAmount,
+					        0 totalBonusAmount,
+					        0 totalPayout,
+					        0 totalJackpotPayout,
+					        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+					        0 totalTaskBonus,
+					        IF(t.source = 3, -1 * t.bonusamount, t.bonusamount) totalBonusAmountOnline,
+					        0 totalBonusAmountOffline,
+	                        0 totalActualReward
+				        FROM opr_act_bonus t
+						LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+				        	WHERE t.status = 1 AND activity.isonline = 1
+				        <include refid="applicationTime_where"/>
+			        )
+			        tt )
+			        
+			        UNION ALL
+							
+			        (SELECT tt.* FROM (
+				        SELECT DATE_FORMAT(t.applicationTime,'%Y%m%d') createTime,
+				       	t.accountId,
+				        0 totalDepositBalance,
+				        0 fundAdd,
+				        0 calculateProfit,
+				        0 fundLissen,
+				        0 totalRebate,
+				        0 totalDrawAmount,
+				        0 totalBonusAmount,
+				        0 totalPayout,
+				        0 totalJackpotPayout,
+				        0 friendsRecepitAmountTotal,
+                        0 friendsTransAmountTotal,
+				        0 totalTaskBonus,
+				        0 totalBonusAmountOnline,
+				       	IF(t.source = 3, -1 * t.bonusamount, t.bonusamount) totalBonusAmountOffline,
+                        0 totalActualReward
+			        FROM opr_act_bonus t 
+					LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+			        	WHERE t.status = 1 AND activity.isonline = 0
+			        <include refid="applicationTime_where"/>
+			        )
+			        tt )
+        
+                    UNION ALL
+
+                    (
+                        SELECT tt.* FROM (
+                            SELECT 
+                           		NULL createTime,
+                            	m.id accountid,
+                                0 totalDepositBalance,
+                                0 fundAdd,
+                                0 calculateProfit,
+                                0 fundLissen,
+                                0 totalRebate,
+                                0 totalDrawAmount,
+                                0 totalBonusAmount,
+                                t.payout totalPayout,
+                                0 totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                0 totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            FROM rpt_bet_rcd_day t
+                            LEFT JOIN mbr_account m on t.username = m.loginname
+                            <include refid="agy_startday_where"/>
+                            AND t.payout != 0
+                        ) tt
+                    )
+
+                    UNION ALL
+
+                    (
+                        select tt.* FROM (
+                            select 
+                            	null createTime,
+                            	m.id accountid,
+                                0 totalDepositBalance,
+                                0 fundAdd,
+                                0 calculateProfit,
+                                0 fundLissen,
+                                0 totalRebate,
+                                0 totalDrawAmount,
+                                0 totalBonusAmount,
+                                0 totalPayout,
+                                t.jackpotPayout totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                0 totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            from rpt_bet_rcd_day t
+                            LEFT JOIN mbr_account m on t.username = m.loginname
+                            <include refid="agy_startday_where"/>
+                            and t.jackpotPayout != 0
+                        ) tt
+                    )
+
+                    UNION ALL
+
+                    (
+                        select tt.* FROM (
+                            select 
+                            	null createTime,
+                            	t.accountid,
+                                0 totalDepositBalance,
+                                0 fundAdd,
+                                0 calculateProfit,
+                                0 fundLissen,
+                                0 totalRebate,
+                                0 totalDrawAmount,
+                                0 totalBonusAmount,
+                                0 totalPayout,
+                                0 totalJackpotPayout,
+                                0 friendsRecepitAmountTotal,
+                                0 friendsTransAmountTotal,
+                                t.bonusamount totalTaskBonus,
+                                0 totalBonusAmountOnline,
+       							0 totalBonusAmountOffline,
+                                0 totalActualReward
+                            from task_bonus t
+                            <include refid="time_where2"/>
+                        ) tt
+                    )
+                    UNION ALL
+                    (
+                        -- 好友返利
+                        select tt.* FROM (
+                        select
+                            null createTime,
+                            t.accountId,
+                            0 totalDepositBalance,
+                            0 fundAdd,
+                            0 calculateProfit,
+                            0 fundLissen,
+                            0 totalRebate,
+                            0 totalDrawAmount,
+                            0 totalBonusAmount,
+                            0 totalPayout,
+                            0 totalJackpotPayout,
+                            0 friendsRecepitAmountTotal,
+                            0 friendsTransAmountTotal,
+                            0 totalTaskBonus,
+                            0 totalBonusAmountOnline,
+                            0 totalBonusAmountOffline,
+                            SUM( CASE WHEN t.type = 3 OR t.type = 4 OR t.type = 5 OR t.type = 6  THEN t.reward END ) totalActualReward
+                        from mbr_rebate_friends_reward t
+                        where 1 = 1
+                        <include refid="incomeTime_where"/>
+                        ) tt
+                    )
+        )tt  ON acc.id = tt.accountId
+            )tt GROUP BY tt.agyId, tt.agyAccount order by tt.agyId asc
+        )ttt
+        <include refid="order_detail"/>
+    </select>
+
+    <sql id="order_detail">
+        <if test="orderBy != null and orderBy !=''">
+            order by ${orderBy}
+        </if>
+    </sql>
+
+    <select id="findMemberList" resultType="com.wsdy.saasops.modules.analysis.entity.FundStatementModel">
+    	SELECT 
+	    	ttt.id,
+	        ttt.friendsRecepitAmountTotal,
+	        (0-ttt.friendsTransAmountTotal) friendsTransAmountTotal,
+	        ttt.loginName,
+	        ttt.tagencyId,
+	        (IF(SIGN(ttt.totalPayout)=-1, ABS(ttt.totalPayout), -1*ttt.totalPayout)-ttt.totalBonusAmount-ttt.totalRebate - ttt.totalTaskBonus - ttt.calculateProfit) totalProfit,
+	        ttt.totalDepositBalance,
+	        (ttt.fundAdd-ttt.fundLissen) fundAdjust,
+	        ttt.totalRebate,
+	        ttt.totalDrawAmount,
+	        ttt.totalBonusAmount,
+	        ttt.totalPayout,
+	        ttt.totalJackpotPayout,
+	        ttt.totalTaskBonus,
+	        ttt.totalBonusAmountOnline,
+	        ttt.totalBonusAmountOffline
+        FROM (
+            SELECT tt.id,
+	            tt.loginName,
+	            tt.tagencyId,
+	            SUM(tt.totalDepositBalance) totalDepositBalance,
+	            SUM(tt.fundAdd) fundAdd,
+	            SUM(tt.calculateProfit) calculateProfit,
+	            SUM(tt.fundLissen) fundLissen,
+	            SUM(tt.totalRebate) totalRebate,
+	            SUM(tt.totalDrawAmount) totalDrawAmount,
+	            SUM(tt.totalBonusAmount) totalBonusAmount,
+	            SUM(tt.totalPayout) totalPayout,
+	            SUM(tt.totalJackpotPayout) totalJackpotPayout,
+	            SUM(tt.friendsRecepitAmountTotal) friendsRecepitAmountTotal,
+	            SUM(tt.friendsTransAmountTotal) friendsTransAmountTotal,
+	            IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus,
+	            SUM(tt.totalBonusAmountOnline) totalBonusAmountOnline,
+	            SUM(tt.totalBonusAmountOffline) totalBonusAmountOffline
+            FROM (
+                (SELECT tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                SUM(t.actualArrival) totalDepositBalance,
+		                0 fundAdd,
+		                0 calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                FROM fund_deposit t LEFT JOIN mbr_account mbr on t.accountId = mbr.id LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+	                <include refid="member_agy_where"/>
+	                and t.status = 1
+	                <include refid="auditTime_where"/>
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+
+                UNION ALL
+
+                (SELECT tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                0 fundAdd,
+		                SUM(IF(t.financialCode = 'AM', -1 * amount, amount)) calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                FROM fund_audit t LEFT JOIN mbr_account mbr on t.accountId = mbr.id LEFT JOIN agy_account agy ON mbr.cagencyId = agy.id
+	                <include refid="member_agy_where"/>
+	                AND t.status = 1 AND t.isCalculateProfit = 1
+	                <include refid="createTime_where"/>
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+                
+                UNION ALL
+
+                (SELECT tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                SUM(t.amount) fundAdd,
+		                0 calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                FROM fund_audit t LEFT JOIN mbr_account mbr on t.accountId = mbr.id LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+	                <include refid="member_agy_where"/>
+	                AND t.status = 1
+	                AND t.financialCode = 'AA'
+	                <include refid="createTime_where"/>
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+
+                UNION ALL
+
+                (select tt.* FROM (
+	                select mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                0 fundAdd,
+		                0 calculateProfit,
+		                SUM(t.amount) fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                FROM fund_audit t LEFT JOIN mbr_account mbr on t.accountId = mbr.id LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+	                <include refid="member_agy_where"/>
+	                AND t.status = 1
+	                AND t.financialCode = 'AM'
+	                <include refid="createTime_where"/>
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+
+                UNION ALL
+
+                (
+                -- 返利
+                SELECT tt.* FROM (
+                    SELECT mbr.id,
+	                    mbr.loginName,
+	                    mbr.tagencyId,
+	                    0 totalDepositBalance,
+	                    0 fundAdd,
+	                    0 calculateProfit,
+	                    0 fundLissen,
+	                    SUM(t.rebateTotal) totalRebate,
+	                    0 totalDrawAmount,
+	                    0 totalBonusAmount,
+	                    0 totalPayout,
+	                    0 totalJackpotPayout,
+	                    0 friendsRecepitAmountTotal,
+	                    0 friendsTransAmountTotal,
+	                    0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+                    FROM mbr_rebate_agent_bonus t
+                    LEFT JOIN mbr_account mbr on t.accountId = mbr.id
+                    LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+                    <include refid="member_agy_where"/>
+                    and t.status = 1
+                    <include refid="createTime_where"/>
+                    GROUP BY mbr.id, mbr.loginName
+                ) tt
+                )
+
+                UNION ALL
+
+                (select tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                0 fundAdd,
+		                0 calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                SUM(t.actualarrival) totalDrawAmount,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                FROM fund_acc_withdraw t LEFT JOIN mbr_account mbr on t.accountId = mbr.id LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+	                <include refid="member_agy_where"/>
+	                AND t.status = 1
+	                <include refid="passTime_where"/>
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+
+                UNION ALL
+
+                (select tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                0 fundAdd,
+		                0 calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmount,
+		                0 totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                FROM opr_act_bonus t 
+	                LEFT JOIN mbr_account mbr on t.accountId = mbr.id 
+	                LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+	                <include refid="member_agy_where"/>
+	                and t.status = 1
+	                <include refid="applicationTime_where"/>
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+
+                UNION ALL
+
+                (SELECT tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                0 fundAdd,
+		                0 calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                FROM opr_act_bonus t 
+	                LEFT JOIN mbr_account mbr on t.accountId = mbr.id 
+	                LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+	                LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+	                <include refid="member_agy_where"/>
+	                AND t.status = 1
+	                AND activity.isonline = 1
+	                <include refid="applicationTime_where"/>
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+                
+                UNION ALL
+
+                (SELECT tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                0 fundAdd,
+		                0 calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmountOffline
+	                FROM opr_act_bonus t 
+	                LEFT JOIN mbr_account mbr on t.accountId = mbr.id 
+	                LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+	                LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+	                <include refid="member_agy_where"/>
+	                AND t.status = 1
+	                AND activity.isonline = 0
+	                <include refid="applicationTime_where"/>
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+
+                UNION ALL
+
+                (SELECT tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                0 fundAdd,
+		                0 calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                0 totalBonusAmount,
+		                SUM(t.payout) totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                FROM rpt_bet_rcd_day t LEFT JOIN mbr_account mbr on t.username = mbr.loginName LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+	                <include refid="member_agy_where"/>
+	                <include refid="member_startday_where"/>
+	                AND t.payout != 0
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+                UNION ALL
+
+                (SELECT tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                0 fundAdd,
+		                0 calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                SUM(t.jackpotPayout) totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                from rpt_bet_rcd_day t LEFT JOIN mbr_account mbr on t.username = mbr.loginName LEFT JOIN agy_account agy on mbr.cagencyId = agy.id
+	                <include refid="member_agy_where"/>
+	                <include refid="member_startday_where"/>
+	                and t.jackpotPayout != 0
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+
+                UNION ALL
+
+                (SELECT tt.* FROM (
+	                SELECT mbr.id,
+		                mbr.loginName,
+		                mbr.tagencyId,
+		                0 totalDepositBalance,
+		                0 fundAdd,
+		                0 calculateProfit,
+		                0 fundLissen,
+		                0 totalRebate,
+		                0 totalDrawAmount,
+		                0 totalBonusAmount,
+		                0 totalPayout,
+		                0 totalJackpotPayout,
+		                0 friendsRecepitAmountTotal,
+		                0 friendsTransAmountTotal,
+		                SUM(t.bonusamount) totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline
+	                FROM task_bonus t LEFT JOIN mbr_account mbr on mbr.id = t.accountid LEFT JOIN agy_account agy ON mbr.cagencyId = agy.id
+	                <include refid="member_agy_where"/>
+	                <include refid="time_where"/>
+	                GROUP BY mbr.id, mbr.loginName
+                )
+                tt )
+            )tt GROUP BY tt.id, tt.loginName order by tt.id asc
+        )ttt
+        <include refid="order_detail"/>
+    </select>
+
+    <select id="findDepotPayoutList" resultType="com.wsdy.saasops.modules.analysis.entity.FundStatementModel">
+        select t.platform,
+        SUM(t.jackpotPayout) totalJackpotPayout
+        from rpt_bet_rcd_day t LEFT JOIN mbr_account mbr on t.username = mbr.loginName
+        <include refid="startday_where"/>
+        <include refid="agent_where"/>
+        and t.jackpotPayout !=0
+        GROUP BY t.platform
+    </select>
+
+    <select id="agentSubMbrList" resultType="com.wsdy.saasops.modules.analysis.entity.FundStatementModel">
+        select ttt.id,
+            ttt.loginName,
+            (IF(SIGN(ttt.totalPayout)=-1, ABS(ttt.totalPayout), -1*ttt.totalPayout)-ttt.totalBonusAmount-ttt.totalRebate - ttt.totalTaskBonus - ttt.calculateProfit) totalProfit,
+            ttt.totalDepositBalance,
+            (ttt.fundAdd-ttt.fundLissen) fundAdjust,
+            ttt.totalRebate,
+            ttt.totalDrawAmount,
+            ttt.totalBonusAmount,
+            ttt.totalPayout,
+            ttt.totalValidBet,
+            ttt.totalJackpotPayout,
+            ttt.friendsRecepitAmountTotal,
+            (0-ttt.friendsTransAmountTotal) friendsTransAmountTotal,
+            ttt.totalTaskBonus,
+	        ttt.totalBonusAmountOnline,
+	        ttt.totalBonusAmountOffline,
+            ttt.totalActualReward
+        FROM (
+            select tt.parentId id, tt.parentLoginName loginName,
+            IFNULL(SUM(tt.calculateProfit),0) calculateProfit,
+            IFNULL(SUM(tt.totalDepositBalance),0) totalDepositBalance,
+            IFNULL(SUM(tt.fundAdd),0)  fundAdd,
+            IFNULL(SUM(tt.fundLissen),0)  fundLissen,
+            IFNULL(SUM(tt.totalRebate),0)  totalRebate,
+            IFNULL(SUM(tt.totalDrawAmount),0)  totalDrawAmount,
+            IFNULL(SUM(tt.totalBonusAmount),0)  totalBonusAmount,
+            IFNULL(SUM(tt.totalPayout),0)  totalPayout,
+            IFNULL(SUM(tt.totalValidBet),0)  totalValidBet,
+            IFNULL(SUM(tt.totalJackpotPayout),0)  totalJackpotPayout,
+            IFNULL(SUM(tt.friendsRecepitAmountTotal),0)  friendsRecepitAmountTotal,
+            IFNULL(SUM(tt.friendsTransAmountTotal),0)  friendsTransAmountTotal,
+            IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus,
+            IFNULL(SUM(tt.totalBonusAmountOnline),0) totalBonusAmountOnline,
+            IFNULL(SUM(tt.totalBonusAmountOffline),0) totalBonusAmountOffline,
+            IFNULL(SUM(tt.totalActualReward),0) totalActualReward
+
+            FROM (
+                select  acc.parentId,acc.parentLoginName,acc.childId, acc.childLoginName,tt.*
+                FROM (
+                    -- 查询含自己会员及下级所有会员
+                    <include refid="mbr_where"/>
+                ) acc
+                LEFT JOIN (
+                (
+                    -- 总存款
+                    select tt.* FROM (
+                        select t.accountId,
+                        0 calculateProfit,
+                        t.actualArrival totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalValidBet,
+                        0 totalJackpotPayout,
+                        0 friendsRecepitAmountTotal,
+                        0 friendsTransAmountTotal,
+                        0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline,
+                        0 totalActualReward
+                        from fund_deposit t
+                        where t.status = 1
+                        <include refid="auditTime_where"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                   -- 人工资金调整
+                    SELECT tt.* FROM (
+                        SELECT t.accountId,
+	                    	IF(t.financialCode = 'AM', -1 * amount, amount) calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 fundAdd,
+	                        0 fundLissen,
+	                        0 totalRebate,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+	                        0 totalActualReward
+                        from fund_audit t
+                        where t.status = 1 AND t.isCalculateProfit = 1
+                        <include refid="createTime_where"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 资金调整-增加
+                    select tt.* FROM (
+                        select t.accountId,
+	                        0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        t.amount fundAdd,
+	                        0 fundLissen,
+	                        0 totalRebate,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+	                        0 totalActualReward
+                        from fund_audit t
+                        where t.status = 1 and t.financialCode = 'AA'
+                        <include refid="createTime_where"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 资金调整-减少
+                    select tt.* FROM (
+                        select t.accountId,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        t.amount fundLissen,
+                        0 totalRebate,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalValidBet,
+                        0 totalJackpotPayout,
+                        0 friendsRecepitAmountTotal,
+                        0 friendsTransAmountTotal,
+                        0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline,
+                        0 totalActualReward
+                        from fund_audit t
+                        where t.status = 1 and t.financialCode = 'AM'
+                        <include refid="createTime_where"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 返利
+                    select tt.* FROM (
+                        select t.accountId,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        t.rebateTotal totalRebate,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalValidBet,
+                        0 totalJackpotPayout,
+                        0 friendsRecepitAmountTotal,
+                        0 friendsTransAmountTotal,
+                        0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline,
+                        0 totalActualReward
+                        from mbr_rebate_agent_bonus t
+                        where t.status = 1
+                        <include refid="createTime_where"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 总提款
+                    select tt.* FROM (
+                        select t.accountId,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        t.actualarrival totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalValidBet,
+                        0 totalJackpotPayout,
+                        0 friendsRecepitAmountTotal,
+                        0 friendsTransAmountTotal,
+                        0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline,
+                        0 totalActualReward
+                        from fund_acc_withdraw t
+                        where t.status = 1
+                        <include refid="passTime_where"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 总红利
+                    select tt.* FROM (
+                        select t.accountId,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 totalDrawAmount,
+                        t.bonusAmount totalBonusAmount,
+                        0 totalPayout,
+                        0 totalValidBet,
+                        0 totalJackpotPayout,
+                        0 friendsRecepitAmountTotal,
+                        0 friendsTransAmountTotal,
+                        0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline,
+                        0 totalActualReward
+                        from opr_act_bonus t
+                        where t.status = 1
+                        <include refid="applicationTime_where"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 线上总红利
+                    SELECT tt.* FROM (
+                        SELECT t.accountId,
+                        	0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 fundAdd,
+	                        0 fundLissen,
+	                        0 totalRebate,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                t.bonusAmount totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+                            0 totalActualReward
+                        FROM opr_act_bonus t
+                        LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+                        WHERE t.status = 1
+                        AND activity.isonline = 1 
+                        <include refid="applicationTime_where"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 线下总红利
+                    SELECT tt.* FROM (
+                        SELECT t.accountId,
+                       		0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 fundAdd,
+	                        0 fundLissen,
+	                        0 totalRebate,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                t.bonusAmount totalBonusAmountOffline,
+                            0 totalActualReward
+                        FROM opr_act_bonus t
+                        LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+                        WHERE t.status = 1
+                        AND activity.isonline = 0 
+                        <include refid="applicationTime_where"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 派彩
+                    SELECT tt.* FROM (
+                        SELECT 
+	                        m.id accountid,
+	                        0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 fundAdd,
+	                        0 fundLissen,
+	                        0 totalRebate,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        t.payout totalPayout,
+	                        t.validbet totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+	                        0 totalActualReward
+                        from rpt_bet_rcd_day t
+                        LEFT JOIN mbr_account m on t.username = m.loginname
+                        <include refid="agy_startday_where"/>
+                        AND t.payout != 0
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 奖池金额
+                    select tt.* FROM (
+                        select m.id accountid,
+                        0 calculateProfit,
+                        0 totalDepositBalance,
+                        0 fundAdd,
+                        0 fundLissen,
+                        0 totalRebate,
+                        0 totalDrawAmount,
+                        0 totalBonusAmount,
+                        0 totalPayout,
+                        0 totalValidBet,
+                        t.jackpotPayout totalJackpotPayout,
+                        0 friendsRecepitAmountTotal,
+                        0 friendsTransAmountTotal,
+                        0 totalTaskBonus,
+		                0 totalBonusAmountOnline,
+		                0 totalBonusAmountOffline,
+                        0 totalActualReward
+                        from rpt_bet_rcd_day t
+                        LEFT JOIN mbr_account m on t.username = m.loginname
+                        <include refid="agy_startday_where"/>
+                        and t.jackpotPayout != 0
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 任务
+                    select tt.* FROM (
+	                    select 
+	                    	t.accountid,
+		                    0 calculateProfit,
+		                    0 totalDepositBalance,
+		                    0 fundAdd,
+		                    0 fundLissen,
+		                    0 totalRebate,
+		                    0 totalDrawAmount,
+		                    0 totalBonusAmount,
+		                    0 totalPayout,
+		                    0 totalValidBet,
+		                    0 totalJackpotPayout,
+		                    0 friendsRecepitAmountTotal,
+		                    0 friendsTransAmountTotal,
+		                    t.bonusamount totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+		                    0 totalActualReward
+	                    from task_bonus t
+	                    <include refid="time_where2"/>
+                    ) tt
+                )
+
+                UNION ALL
+                (
+                    -- 好友返利
+                    select tt.* FROM (
+                        select 
+                        	t.accountid,
+	                        0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 fundAdd,
+	                        0 fundLissen,
+	                        0 totalRebate,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+	                        0 totalBonusAmountOnline,
+	                        0 totalBonusAmountOffline,
+	                        SUM( CASE WHEN t.type = 3 OR t.type = 4 OR t.type = 5 OR t.type = 6  THEN t.reward END ) totalActualReward
+                        from mbr_rebate_friends_reward t
+                        WHERE 1 = 1
+                        <include refid="incomeTime_where"/>
+                    ) tt
+                )
+                )tt  on acc.childId = tt.accountId
+            )tt GROUP BY tt.parentId, tt.parentLoginName
+            order by tt.parentId asc
+        )ttt
+        <include refid="order_detail"/>
+    </select>
+    
+    <select id="fundMbrList" resultType="com.wsdy.saasops.modules.analysis.entity.FundStatementModel">
+        SELECT ttt.id,
+            ttt.loginName,
+            (IF(SIGN(ttt.totalPayout)=-1, ABS(ttt.totalPayout), -1*ttt.totalPayout)-ttt.totalBonusAmount-ttt.totalRebate - ttt.totalTaskBonus - ttt.calculateProfit) totalProfit,
+            ttt.totalDepositBalance,
+            ttt.totalRebate,
+            ttt.totalDrawAmount,
+            ttt.totalBonusAmount,
+            ttt.totalPayout,
+            ttt.totalValidBet,
+            ttt.totalJackpotPayout,
+            ttt.friendsRecepitAmountTotal,
+            (0-ttt.friendsTransAmountTotal) friendsTransAmountTotal,
+            ttt.totalTaskBonus,
+	        ttt.totalBonusAmountOnline,
+	        ttt.totalBonusAmountOffline,
+            ttt.totalActualReward,
+            ttt.agyaccount,
+            ttt.registerTime,
+            ttt.calculateProfit fundAdjust,
+            ttt.audittime depositTime
+        FROM (
+            SELECT 
+	            tt.id, tt.loginName,
+	            tt.agyaccount,tt.registerTime,
+	            IFNULL(SUM(tt.calculateProfit),0) calculateProfit,
+	            IFNULL(SUM(tt.totalDepositBalance),0) totalDepositBalance,
+	            IFNULL(SUM(tt.totalRebate),0)  totalRebate,
+	            IFNULL(SUM(tt.totalDrawAmount),0)  totalDrawAmount,
+	            IFNULL(SUM(tt.totalBonusAmount),0)  totalBonusAmount,
+	            IFNULL(SUM(tt.totalPayout),0)  totalPayout,
+	            IFNULL(SUM(tt.totalValidBet),0)  totalValidBet,
+	            IFNULL(SUM(tt.totalJackpotPayout),0)  totalJackpotPayout,
+	            IFNULL(SUM(tt.friendsRecepitAmountTotal),0)  friendsRecepitAmountTotal,
+	            IFNULL(SUM(tt.friendsTransAmountTotal),0)  friendsTransAmountTotal,
+	            IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus,
+	            IFNULL(SUM(tt.totalBonusAmountOnline),0) totalBonusAmountOnline,
+	            IFNULL(SUM(tt.totalBonusAmountOffline),0) totalBonusAmountOffline,
+	            IFNULL(SUM(tt.totalActualReward),0) totalActualReward,
+				tt.audittime
+            FROM (
+                SELECT acc.id,acc.loginname,acc.agyaccount,acc.registerTime,tt.*,fd.audittime FROM
+               	(
+	                (
+	                    -- 总存款
+	                    select tt.* FROM (
+	                        select t.accountId,
+	                        0 calculateProfit,
+	                        t.actualArrival totalDepositBalance,
+	                        0 totalRebate,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+	                        0 totalActualReward
+	                        from fund_deposit t
+	                        where t.status = 1
+	                        <include refid="auditTime_where"/>
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                   -- 人工资金调整
+	                    SELECT tt.* FROM (
+	                        SELECT t.accountId,
+		                    	IF(t.financialCode = 'AM', -1 * amount, amount) calculateProfit,
+		                        0 totalDepositBalance,
+		                        0 totalRebate,
+		                        0 totalDrawAmount,
+		                        0 totalBonusAmount,
+		                        0 totalPayout,
+		                        0 totalValidBet,
+		                        0 totalJackpotPayout,
+		                        0 friendsRecepitAmountTotal,
+		                        0 friendsTransAmountTotal,
+		                        0 totalTaskBonus,
+				                0 totalBonusAmountOnline,
+				                0 totalBonusAmountOffline,
+		                        0 totalActualReward
+	                        from fund_audit t
+	                        where t.status = 1 AND t.isCalculateProfit = 1
+	                        <include refid="createTime_where"/>
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                    -- 返利
+	                    select tt.* FROM (
+	                        select t.accountId,
+	                        0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        t.rebateTotal totalRebate,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+	                        0 totalActualReward
+	                        from mbr_rebate_agent_bonus t
+	                        where t.status = 1
+	                        <include refid="createTime_where"/>
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                    -- 总提款
+	                    select tt.* FROM (
+	                        select t.accountId,
+	                        0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 totalRebate,
+	                        t.actualarrival totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+	                        0 totalActualReward
+	                        from fund_acc_withdraw t
+	                        where t.status = 1
+	                        <include refid="passTime_where"/>
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                    -- 总红利
+	                    select tt.* FROM (
+	                        select t.accountId,
+	                        0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 totalRebate,
+	                        0 totalDrawAmount,
+	                        IF(t.source = 3, t.bonusAmount * -1, t.bonusAmount) totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        0 totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+	                        0 totalActualReward
+	                        from opr_act_bonus t
+	                        where t.status = 1
+	                        <include refid="applicationTime_where"/>
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                    -- 线上总红利
+	                    SELECT tt.* FROM (
+	                        SELECT t.accountId,
+	                        	0 calculateProfit,
+		                        0 totalDepositBalance,
+		                        0 totalRebate,
+		                        0 totalDrawAmount,
+		                        0 totalBonusAmount,
+		                        0 totalPayout,
+		                        0 totalValidBet,
+		                        0 totalJackpotPayout,
+		                        0 friendsRecepitAmountTotal,
+		                        0 friendsTransAmountTotal,
+		                        0 totalTaskBonus,
+				                IF(t.source = 3, t.bonusAmount * -1, t.bonusAmount) totalBonusAmountOnline,
+				                0 totalBonusAmountOffline,
+	                            0 totalActualReward
+	                        FROM opr_act_bonus t
+	                        LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+	                        WHERE t.status = 1
+	                        AND activity.isonline = 1 
+	                        <include refid="applicationTime_where"/>
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                    -- 线下总红利
+	                    SELECT tt.* FROM (
+	                        SELECT t.accountId,
+	                       		0 calculateProfit,
+		                        0 totalDepositBalance,
+		                        0 totalRebate,
+		                        0 totalDrawAmount,
+		                        0 totalBonusAmount,
+		                        0 totalPayout,
+		                        0 totalValidBet,
+		                        0 totalJackpotPayout,
+		                        0 friendsRecepitAmountTotal,
+		                        0 friendsTransAmountTotal,
+		                        0 totalTaskBonus,
+				                0 totalBonusAmountOnline,
+				                IF(t.source = 3, t.bonusAmount * -1, t.bonusAmount) totalBonusAmountOffline,
+	                            0 totalActualReward
+	                        FROM opr_act_bonus t
+	                        LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+	                        WHERE t.status = 1
+	                        AND activity.isonline = 0 
+	                        <include refid="applicationTime_where"/>
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                    -- 派彩
+	                    SELECT tt.* FROM (
+	                        SELECT 
+		                        m.id accountid,
+		                        0 calculateProfit,
+		                        0 totalDepositBalance,
+		                        0 totalRebate,
+		                        0 totalDrawAmount,
+		                        0 totalBonusAmount,
+		                        t.payout totalPayout,
+		                        t.bet totalValidBet,
+		                        0 totalJackpotPayout,
+		                        0 friendsRecepitAmountTotal,
+		                        0 friendsTransAmountTotal,
+		                        0 totalTaskBonus,
+				                0 totalBonusAmountOnline,
+				                0 totalBonusAmountOffline,
+		                        0 totalActualReward
+	                        from rpt_bet_rcd_day t
+	                        LEFT JOIN mbr_account m on t.username = m.loginname
+	                        <include refid="agy_startday_where"/>
+	                        AND t.payout != 0
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                    -- 奖池金额
+	                    select tt.* FROM (
+	                        select m.id accountid,
+	                        0 calculateProfit,
+	                        0 totalDepositBalance,
+	                        0 totalRebate,
+	                        0 totalDrawAmount,
+	                        0 totalBonusAmount,
+	                        0 totalPayout,
+	                        0 totalValidBet,
+	                        t.jackpotPayout totalJackpotPayout,
+	                        0 friendsRecepitAmountTotal,
+	                        0 friendsTransAmountTotal,
+	                        0 totalTaskBonus,
+			                0 totalBonusAmountOnline,
+			                0 totalBonusAmountOffline,
+	                        0 totalActualReward
+	                        from rpt_bet_rcd_day t
+	                        LEFT JOIN mbr_account m on t.username = m.loginname
+	                        <include refid="agy_startday_where"/>
+	                        and t.jackpotPayout != 0
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                    -- 任务
+	                    select tt.* FROM (
+		                    select 
+		                    	t.accountid,
+			                    0 calculateProfit,
+			                    0 totalDepositBalance,
+			                    0 totalRebate,
+			                    0 totalDrawAmount,
+			                    0 totalBonusAmount,
+			                    0 totalPayout,
+			                    0 totalValidBet,
+			                    0 totalJackpotPayout,
+			                    0 friendsRecepitAmountTotal,
+			                    0 friendsTransAmountTotal,
+			                    t.bonusamount totalTaskBonus,
+				                0 totalBonusAmountOnline,
+				                0 totalBonusAmountOffline,
+			                    0 totalActualReward
+		                    from task_bonus t
+		                    <include refid="time_where2"/>
+	                    ) tt
+	                )
+	
+	                UNION ALL
+	                (
+	                    -- 好友返利
+	                    select tt.* FROM (
+	                        select 
+	                        	t.accountid,
+		                        0 calculateProfit,
+		                        0 totalDepositBalance,
+		                        0 totalRebate,
+		                        0 totalDrawAmount,
+		                        0 totalBonusAmount,
+		                        0 totalPayout,
+		                        0 totalValidBet,
+		                        0 totalJackpotPayout,
+		                        0 friendsRecepitAmountTotal,
+		                        0 friendsTransAmountTotal,
+		                        0 totalTaskBonus,
+		                        0 totalBonusAmountOnline,
+		                        0 totalBonusAmountOffline,
+		                        SUM( CASE WHEN t.type = 3 OR t.type = 4 OR t.type = 5 OR t.type = 6  THEN t.reward END ) totalActualReward
+	                        from mbr_rebate_friends_reward t
+	                        WHERE 1 = 1
+	                        <include refid="incomeTime_where"/>
+	                    ) tt
+	                )
+                )tt  
+                INNER JOIN ( <include refid="one_mbr_where"/> ) acc ON acc.id = tt.accountId
+                LEFT JOIN (
+                	SELECT fd.accountid,fd.id,audittime FROM fund_deposit fd INNER JOIN (
+							SELECT accountid,MIN(id) id,depositamount,actualArrival
+							FROM fund_deposit
+							WHERE status = 1
+							GROUP BY accountid) t ON t.id = fd.id 
+               	) fd on fd.accountid = acc.id
+                WHERE 
+		            ( tt.totalDepositBalance != 0
+		              OR  tt.totalRebate != 0
+		              OR  tt.calculateProfit != 0
+		              OR tt.totalDrawAmount != 0
+		              OR tt.totalBonusAmount != 0
+		              OR tt.totalPayout != 0
+		              OR tt.totalValidBet != 0
+		              OR tt.totalJackpotPayout != 0
+		              OR tt.friendsRecepitAmountTotal != 0
+		              OR tt.friendsTransAmountTotal != 0
+		              OR tt.totalTaskBonus != 0
+		              OR tt.totalBonusAmountOnline != 0
+		              OR tt.totalBonusAmountOffline != 0
+		              OR tt.totalActualReward!= 0
+		              )
+		                
+            )tt
+            GROUP BY tt.id, tt.loginName
+            ORDER BY tt.id ASC
+        )ttt 
+        <include refid="order_detail"/>
+    </select>
+    
+    <select id="mbrSubList" resultType="com.wsdy.saasops.modules.analysis.entity.FundStatementModel">
+        select ttt.id,
+	        ttt.loginName,
+	        ttt.agyflag,
+	        (IF(SIGN(ttt.totalPayout)=-1, ABS(ttt.totalPayout), -1*ttt.totalPayout)-ttt.totalBonusAmount-ttt.totalRebate - ttt.totalTaskBonus - SUM(ttt.calculateProfit)) totalProfit,
+	        ttt.totalDepositBalance,
+	        (ttt.fundAdd-ttt.fundLissen) fundAdjust,
+	        ttt.totalRebate,
+	        ttt.totalDrawAmount,
+	        ttt.totalBonusAmount,
+	        ttt.totalPayout,
+	        ttt.totalJackpotPayout,
+	        ttt.friendsRecepitAmountTotal,
+	        (0-ttt.friendsTransAmountTotal) friendsTransAmountTotal,
+	        ttt.totalTaskBonus
+	        FROM (
+	        select tt.parentId id, tt.parentLoginName loginName,tt.agyflag,tt.calculateProfit,
+	        IFNULL(SUM(tt.totalDepositBalance),0) totalDepositBalance,
+	        IFNULL(SUM(tt.fundAdd),0)  fundAdd,
+	        IFNULL(SUM(tt.fundLissen),0)  fundLissen,
+	        IFNULL(SUM(tt.totalRebate),0)  totalRebate,
+	        IFNULL(SUM(tt.totalDrawAmount),0)  totalDrawAmount,
+	        IFNULL(SUM(tt.totalBonusAmount),0)  totalBonusAmount,
+	        IFNULL(SUM(tt.totalPayout),0)  totalPayout,
+	        IFNULL(SUM(tt.totalJackpotPayout),0)  totalJackpotPayout,
+	        IFNULL(SUM(tt.friendsRecepitAmountTotal),0)  friendsRecepitAmountTotal,
+	        IFNULL(SUM(tt.friendsTransAmountTotal),0)  friendsTransAmountTotal,
+	        IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus
+        FROM (
+	        select  acc.parentId,acc.parentLoginName,acc.childId, acc.childLoginName,acc.agyflag, tt.*
+	        FROM (
+	            -- 查询指定会员的下级(不含自己)
+	            <include refid="subMbr_where"/>
+        ) acc
+        LEFT JOIN (
+        (
+        -- 总存款
+        select tt.* FROM (
+	        select t.accountId,
+		        0 calculateProfit,
+		        t.actualArrival totalDepositBalance,
+		        0 fundAdd,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 friendsRecepitAmountTotal,
+		        0 friendsTransAmountTotal,
+		        0 totalTaskBonus
+	        from fund_deposit t
+	        where t.status = 1
+	        <include refid="auditTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+        -- 人工资金调整
+        SELECT tt.* FROM (
+	        SELECT t.accountId,
+	        	IF(t.financialCode = 'AM', -1 * amount, amount) calculateProfit,
+		        0 totalDepositBalance,
+		        0 fundAdd,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 friendsRecepitAmountTotal,
+		        0 friendsTransAmountTotal,
+		        0 totalTaskBonus
+	        from fund_audit t
+	        where t.status = 1 AND t.isCalculateProfit = 1
+	        <include refid="createTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+        -- 资金调整-增加
+        select tt.* FROM (
+	        select t.accountId,
+		        0 calculateProfit,
+		        0 totalDepositBalance,
+		        t.amount fundAdd,
+		        0 fundLissen,
+		        0 totalRebate,
+		        0 totalDrawAmount,
+		        0 totalBonusAmount,
+		        0 totalPayout,
+		        0 totalJackpotPayout,
+		        0 friendsRecepitAmountTotal,
+		        0 friendsTransAmountTotal,
+		        0 totalTaskBonus
+	        from fund_audit t
+	        where t.status = 1 and t.financialCode = 'AA'
+	        <include refid="createTime_where"/>
+        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 资金调整-减少
+	        select tt.* FROM (
+		        select t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 fundAdd,
+			        t.amount fundLissen,
+			        0 totalRebate,
+			        0 totalDrawAmount,
+			        0 totalBonusAmount,
+			        0 totalPayout,
+			        0 totalJackpotPayout,
+			        0 friendsRecepitAmountTotal,
+			        0 friendsTransAmountTotal,
+			        0 totalTaskBonus
+		        from fund_audit t
+		        where t.status = 1 and t.financialCode = 'AM'
+		        <include refid="createTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 返利
+	        select tt.* FROM (
+		        select t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 fundAdd,
+			        0 fundLissen,
+			        t.rebateTotal totalRebate,
+			        0 totalDrawAmount,
+			        0 totalBonusAmount,
+			        0 totalPayout,
+			        0 totalJackpotPayout,
+			        0 friendsRecepitAmountTotal,
+			        0 friendsTransAmountTotal,
+			        0 totalTaskBonus
+		        from mbr_rebate_agent_bonus t
+		        where t.status = 1
+		        <include refid="createTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 总提款
+	        select tt.* FROM (
+		        select t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 fundAdd,
+			        0 fundLissen,
+			        0 totalRebate,
+			        t.actualarrival totalDrawAmount,
+			        0 totalBonusAmount,
+			        0 totalPayout,
+			        0 totalJackpotPayout,
+			        0 friendsRecepitAmountTotal,
+			        0 friendsTransAmountTotal,
+			        0 totalTaskBonus
+		        from fund_acc_withdraw t
+		        where t.status = 1
+		        <include refid="passTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 总红利
+	        select tt.* FROM (
+		        select 
+		        	t.accountId,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 fundAdd,
+			        0 fundLissen,
+			        0 totalRebate,
+			        0 totalDrawAmount,
+			        IF(t.source = 3, -1 * t.bonusamount, t.bonusamount) totalBonusAmount,
+			        0 totalPayout,
+			        0 totalJackpotPayout,
+			        0 friendsRecepitAmountTotal,
+			        0 friendsTransAmountTotal,
+			        0 totalTaskBonus
+		        from opr_act_bonus t
+		        where t.status = 1
+		        <include refid="applicationTime_where"/>
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 派彩
+	        select tt.* FROM (
+		        select m.id accountid,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 fundAdd,
+			        0 fundLissen,
+			        0 totalRebate,
+			        0 totalDrawAmount,
+			        0 totalBonusAmount,
+			        t.payout totalPayout,
+			        0 totalJackpotPayout,
+			        0 friendsRecepitAmountTotal,
+			        0 friendsTransAmountTotal,
+			        0 totalTaskBonus
+		        from rpt_bet_rcd_day t
+		        LEFT JOIN mbr_account m on t.username = m.loginname
+		        <include refid="agy_startday_where"/>
+		        AND t.payout != 0
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 奖池金额
+	        select tt.* FROM (
+		        select m.id accountid,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 fundAdd,
+			        0 fundLissen,
+			        0 totalRebate,
+			        0 totalDrawAmount,
+			        0 totalBonusAmount,
+			        0 totalPayout,
+			        t.jackpotPayout totalJackpotPayout,
+			        0 friendsRecepitAmountTotal,
+			        0 friendsTransAmountTotal,
+			        0 totalTaskBonus
+		        from rpt_bet_rcd_day t
+		        LEFT JOIN mbr_account m on t.username = m.loginname
+		        <include refid="agy_startday_where"/>
+		        and t.jackpotPayout != 0
+	        ) tt
+        )
+
+        UNION ALL
+        (
+	        -- 任务
+	        SELECT tt.* FROM (
+		        SELECT t.accountid,
+			        0 calculateProfit,
+			        0 totalDepositBalance,
+			        0 fundAdd,
+			        0 fundLissen,
+			        0 totalRebate,
+			        0 totalDrawAmount,
+			        0 totalBonusAmount,
+			        0 totalPayout,
+			        0 totalJackpotPayout,
+			        0 friendsRecepitAmountTotal,
+			        0 friendsTransAmountTotal,
+			        t.bonusamount totalTaskBonus
+		        FROM task_bonus t
+		        <include refid="time_where2"/>
+	        ) tt
+        )
+        )tt  on acc.childId = tt.accountId
+        )tt GROUP BY tt.parentId, tt.parentLoginName
+        order by tt.parentId asc
+        )ttt
+        <include refid="order_detail"/>
+    </select>
+
+    <select id="findFundReportMbrPage" resultType="com.wsdy.saasops.modules.analysis.entity.FundStatementModel">
+        select ttt.createTime,
+        (IF(SIGN(ttt.totalPayout)=-1, ABS(ttt.totalPayout), -1*ttt.totalPayout)-ttt.totalBonusAmount-ttt.totalRebate - ttt.totalTaskBonus - ttt.calculateProfit) totalProfit,
+        ttt.totalDepositBalance,
+        (ttt.fundAdd-ttt.fundLissen) fundAdjust,
+        ttt.totalRebate,
+        ttt.totalDrawAmount,
+        ttt.totalBonusAmount,
+        ttt.totalPayout,
+        (0-ttt.friendsTransAmountTotal) friendsTransAmountTotal ,
+        ttt.friendsRecepitAmountTotal ,
+        ttt.totalJackpotPayout,
+        ttt.totalTaskBonus
+        FROM (
+            select tt.createTime,
+            SUM(tt.totalDepositBalance) totalDepositBalance,
+            SUM(tt.fundAdd) fundAdd,
+            SUM(tt.fundLissen) fundLissen,
+            SUM(tt.totalRebate) totalRebate,
+            SUM(tt.totalDrawAmount) totalDrawAmount,
+            SUM(tt.totalBonusAmount) totalBonusAmount,
+            SUM(tt.totalPayout) totalPayout,
+            SUM(tt.friendsTransAmountTotal) friendsTransAmountTotal,
+            SUM(tt.friendsRecepitAmountTotal) friendsRecepitAmountTotal,
+            SUM(tt.totalJackpotPayout) totalJackpotPayout,
+            IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus,
+            IFNULL(SUM(tt.calculateProfit),0) calculateProfit
+            FROM (
+                select  acc.parentId,acc.parentLoginName,acc.childId, acc.childLoginName,tt.*
+                FROM (
+                    -- 查询含自己会员及下级所有会员
+                    <include refid="mbr_where2"/>
+                ) acc
+                LEFT JOIN (
+                    (
+                        -- 存款
+                        select tt.* FROM (
+                            select
+                            t.accountId,
+                            0 calculateProfit,
+                            DATE_FORMAT(t.auditTime,'%Y%m%d') createTime,
+                            t.actualArrival totalDepositBalance,
+                            0 fundAdd,
+                            0 fundLissen,
+                            0 totalRebate,
+                            0 friendsTransAmountTotal,
+                            0 friendsRecepitAmountTotal,
+                            0 totalDrawAmount,
+                            0 totalBonusAmount,
+                            0 totalPayout,
+                            0 totalJackpotPayout,
+                            0 totalTaskBonus
+                            from fund_deposit t
+                            where t.status = 1
+                            <include refid="auditTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+                    (
+                        --  人工资金调整
+                        select tt.* FROM (
+                            select
+	                            t.accountId,
+	                            IF(t.financialCode = 'AM', -1 * amount, amount) calculateProfit,
+	                            DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+	                            0 totalDepositBalance,
+	                            0 fundAdd,
+	                            0 fundLissen,
+	                            0 totalRebate,
+	                            0 friendsTransAmountTotal,
+	                            0 friendsRecepitAmountTotal,
+	                            0 totalDrawAmount,
+	                            0 totalBonusAmount,
+	                            0 totalPayout,
+	                            0 totalJackpotPayout,
+	                            0 totalTaskBonus
+                            from fund_audit t
+                            where t.status = 1 AND t.isCalculateProfit = 1
+                            <include refid="createTime_where"/>
+                        ) tt
+                    )
+                    
+                    UNION ALL
+                    (
+                        -- 调整增加
+                        select tt.* FROM (
+                            select
+                            t.accountId,
+                            0 calculateProfit,
+                            DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+                            0 totalDepositBalance,
+                            t.amount fundAdd,
+                            0 fundLissen,
+                            0 totalRebate,
+                            0 friendsTransAmountTotal,
+                            0 friendsRecepitAmountTotal,
+                            0 totalDrawAmount,
+                            0 totalBonusAmount,
+                            0 totalPayout,
+                            0 totalJackpotPayout,
+                            0 totalTaskBonus
+                            from fund_audit t
+                            where t.status = 1 and t.financialCode = 'AA'
+                            <include refid="createTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+                    (
+                        -- 调整减少
+                        select tt.* FROM (
+                            select t.accountId,
+                            0 calculateProfit,
+                            DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+                            0 totalDepositBalance,
+                            0 fundAdd,
+                            t.amount fundLissen,
+                            0 totalRebate,
+                            0 friendsTransAmountTotal,
+                            0 friendsRecepitAmountTotal,
+                            0 totalDrawAmount,
+                            0 totalBonusAmount,
+                            0 totalPayout,
+                            0 totalJackpotPayout,
+                            0 totalTaskBonus
+                            from fund_audit t
+                            where t.status = 1 and t.financialCode = 'AM'
+                            <include refid="createTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+                    (
+                        -- 返利
+                        select tt.* FROM (
+                            select t.accountId,
+                            0 calculateProfit,
+                            DATE_FORMAT(t.createTime,'%Y%m%d') createTime,
+                            0 totalDepositBalance,
+                            0 fundAdd,
+                            0 fundLissen,
+                            t.rebateTotal totalRebate,
+                            0 friendsTransAmountTotal,
+                            0 friendsRecepitAmountTotal,
+                            0 totalDrawAmount,
+                            0 totalBonusAmount,
+                            0 totalPayout,
+                            0 totalJackpotPayout,
+                            0 totalTaskBonus
+                            from mbr_rebate_agent_bonus t
+                            where t.status = 1
+                            <include refid="createTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+                    (
+                        -- 取款
+                        select tt.* FROM (
+                            select t.accountId,
+                            0 calculateProfit,
+                            DATE_FORMAT(t.passTime,'%Y%m%d') createTime,
+                            0 totalDepositBalance,
+                            0 fundAdd,
+                            0 fundLissen,
+                            0 totalRebate,
+                            0 friendsTransAmountTotal,
+                            0 friendsRecepitAmountTotal,
+                            t.actualarrival totalDrawAmount,
+                            0 totalBonusAmount,
+                            0 totalPayout,
+                            0 totalJackpotPayout,
+                            0 totalTaskBonus
+                            from fund_acc_withdraw t
+                            where t.status = 1
+                            <include refid="passTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+                    (
+                        -- 红利(活动+反水)
+                        select tt.* FROM (
+                            select t.accountId,
+                            0 calculateProfit,
+                            DATE_FORMAT(t.applicationTime,'%Y%m%d') createTime,
+                            0 totalDepositBalance,
+                            0 fundAdd,
+                            0 fundLissen,
+                            0 totalRebate,
+                            0 friendsTransAmountTotal,
+                            0 friendsRecepitAmountTotal,
+                            0 totalDrawAmount,
+                            t.bonusAmount totalBonusAmount,
+                            0 totalPayout,
+                            0 totalJackpotPayout,
+                            0 totalTaskBonus
+                            from opr_act_bonus t
+                            where t.status = 1
+                            <include refid="applicationTime_where"/>
+                        ) tt
+                    )
+
+                    UNION ALL
+                    (
+                        -- 派彩
+                        select tt.* FROM (
+                            select  m.id accountid,
+                            0 calculateProfit,
+                            DATE_FORMAT(t.startday,'%Y%m%d') createTime,
+                            0 totalDepositBalance,
+                            0 fundAdd,
+                            0 fundLissen,
+                            0 totalRebate,
+                            0 friendsTransAmountTotal,
+                            0 friendsRecepitAmountTotal,
+                            0 totalDrawAmount,
+                            0 totalBonusAmount,
+                            t.payout totalPayout,
+                            t.jackpotPayout totalJackpotPayout,
+                            0 totalTaskBonus
+                            from rpt_bet_rcd_day t
+                            LEFT JOIN mbr_account m on t.username = m.loginname
+                            <include refid="startday_where"/>
+                            and t.payout != 0
+                        ) tt
+                    )
+
+                    UNION ALL
+                    (
+                        -- 任务
+                        select tt.* FROM (
+                            select t.accountid,
+                            0 calculateProfit,
+                            DATE_FORMAT(t.time,'%Y%m%d') createTime,
+                            0 totalDepositBalance,
+                            0 fundAdd,
+                            0 fundLissen,
+                            0 totalRebate,
+                            0 friendsTransAmountTotal,
+                            0 friendsRecepitAmountTotal,
+                            0 totalDrawAmount,
+                            0 totalBonusAmount,
+                            0 totalPayout,
+                            0 totalJackpotPayout,
+                            SUM(t.bonusamount) totalTaskBonus
+                            from task_bonus t
+                            <include refid="time_where2"/>
+                        ) tt
+                    )
+                )tt on acc.childId = tt.accountId
+                )tt
+                where tt.createTime is not NULL
+                GROUP BY createTime
+            )ttt
+            where tt.createTime is not NULL
+            <if test="orderBy != null and orderBy !=''">
+                order by ${orderBy}
+            </if>
+            <if test="orderBy == null or orderBy ==''">
+                order by createTime desc
+            </if>
+    </select>
+
+
+    <select id="agentList" resultType="com.wsdy.saasops.modules.analysis.dto.FundStatementDto">
+            <include refid="agentListSql"></include>
+    </select>
+
+
+    <select id="agentListSum" resultType="com.wsdy.saasops.modules.analysis.dto.FundStatementDto">
+            select
+                '总计' time,
+                IFNULL(SUM(tt.totalProfit),0) totalProfit,
+                IFNULL(SUM(tt.fundAdjust),0)  fundAdjust,
+                IFNULL(SUM(tt.totalDepositBalance),0) totalDepositBalance,
+                IFNULL(SUM(tt.totalDrawAmount),0)  totalDrawAmount,
+                IFNULL(SUM(tt.totalBonusAmountOnline),0) totalBonusAmountOnline,
+                IFNULL(SUM(tt.totalBonusAmountOffline),0) totalBonusAmountOffline,
+                IFNULL(SUM(tt.totalPayout),0)  totalPayout,
+                IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus,
+                IFNULL(SUM(tt.totalBonusAmount),0)  totalBonusAmount,
+                IFNULL(SUM(tt.totalRebate),0)  totalRebate,
+                IFNULL(SUM(tt.totalDepositNum),0)  totalDepositNum,
+                IFNULL(SUM(tt.totalDrawNum),0) totalDrawNum,
+                IFNULL(SUM(tt.registerNum),0) registerNum,
+                IFNULL(SUM(tt.firstDepositNum),0) firstDepositNum,
+                IF(tt.totalDepositNum=0, 0, tt.totalDepositBalance/totalDepositNum ) averageDeposit,
+                IFNULL(SUM(tt.betNum),0) betNum,
+                IFNULL(SUM(tt.activeNum),0) activeNum
+            from
+            (<include refid="agentListSql"></include>) tt
+    </select>
+
+    <sql id="agentListSql">
+        SELECT
+        ttt.createTime time,
+        (IF(SIGN(ttt.totalPayout)=-1, ABS(ttt.totalPayout), -1*ttt.totalPayout)-ttt.totalBonusAmount-ttt.totalRebate - ttt.totalTaskBonus - (ttt.fundAdd - ttt.fundLissen)) totalProfit,
+        (ttt.fundAdd-ttt.fundLissen) fundAdjust,
+        ttt.totalDepositBalance,
+        ttt.totalDrawAmount,
+        ttt.totalBonusAmountOnline totalBonusAmountOnline,
+        ttt.totalBonusAmountOffline totalBonusAmountOffline,
+        ttt.totalPayout,
+        ttt.totalTaskBonus,
+        ttt.totalBonusAmount + ttt.totalTaskBonus totalBonusAmount,
+        ttt.totalRebate,
+        ttt.totalDepositNum,
+        ttt.totalDrawNum,
+        ttt.registerNum,
+        ttt.firstDepositNum,
+        IF(ttt.totalDepositNum=0, 0, ttt.totalDepositBalance/totalDepositNum ) averageDeposit,
+        ttt.betNum,
+        ttt.activeNum
+        FROM (
+        SELECT
+        tt.createTime,
+        IFNULL(SUM(tt.totalDepositBalance),0) totalDepositBalance,
+        IFNULL(SUM(tt.fundAdd),0)  fundAdd,
+        IFNULL(SUM(tt.calculateProfit),0)  calculateProfit,
+        IFNULL(SUM(tt.fundLissen),0)  fundLissen,
+        IFNULL(SUM(tt.totalRebate),0)  totalRebate,
+        IFNULL(SUM(tt.totalDrawAmount),0)  totalDrawAmount,
+        IFNULL(SUM(tt.totalPayout),0)  totalPayout,
+        IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus,
+        (IFNULL(SUM(tt.totalBonusAmountOnline),0) + IFNULL(SUM(tt.totalBonusAmountOffline),0))  totalBonusAmount,
+        IFNULL(SUM(tt.totalBonusAmountOnline),0) totalBonusAmountOnline,
+        IFNULL(SUM(tt.totalBonusAmountOffline),0) totalBonusAmountOffline,
+        IFNULL(SUM(tt.totalDepositNum),0) totalDepositNum,
+        IFNULL(SUM(tt.totalDrawNum),0) totalDrawNum,
+        IFNULL(SUM(tt.registerNum),0) registerNum,
+        IFNULL(SUM(tt.firstDepositNum),0) firstDepositNum,
+        IFNULL(SUM(betNum),0) betNum,
+        IFNULL(SUM(activeNum),0) activeNum
+        FROM (
+            (
+                SELECT
+                DATE_FORMAT(t.auditTime, '%Y/%m/%d') createTime,
+                SUM(t.actualArrival) totalDepositBalance,
+                COUNT( distinct (CASE WHEN t.actualArrival > 0 THEN t.accountId  END )) totalDepositNum,
+                0 fundAdd,
+                0 calculateProfit,
+                0 fundLissen,
+                0 totalRebate,
+                0 totalDrawAmount,
+                0 totalDrawNum,
+                0 totalPayout,
+                0 betNum,
+                0 activeNum,
+                0 totalTaskBonus,
+                0 totalBonusAmountOnline,
+                0 totalBonusAmountOffline,
+                0 registerNum,
+                0 firstDepositNum
+                from fund_deposit t
+                INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+                <include refid="join_agent"></include>
+                where t.status = 1
+                <include refid="auditTime_where"/>
+                GROUP BY DATE_FORMAT(t.auditTime, '%Y/%m/%d')
+            )
+        -- 首存
+        UNION ALL
+        (
+            SELECT
+            DATE_FORMAT(t.auditTime, '%Y/%m/%d') createTime,
+            0 totalDepositBalance,
+            0 totalDepositNum,
+            0 fundAdd,
+            0 calculateProfit,
+            0 fundLissen,
+            0 totalRebate,
+            0 totalDrawAmount,
+            0 totalDrawNum,
+            0 totalPayout,
+            0 betNum,
+            0 activeNum,
+            0 totalTaskBonus,
+            0 totalBonusAmountOnline,
+            0 totalBonusAmountOffline,
+            0 registerNum,
+            COUNT(t.accountId) firstDepositNum
+            from fund_deposit t
+            INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+            <include refid="join_agent"></include>
+            where t.status = 1
+            AND ( SELECT count(*) FROM fund_deposit fd2  WHERE  fd2.audittime  <![CDATA[ < ]]> t.audittime AND fd2.accountid = t.accountid AND fd2.STATUS =1)   =  0
+            <include refid="auditTime_where"/>
+            GROUP BY  DATE_FORMAT(t.auditTime, '%Y/%m/%d')
+            )
+
+        UNION ALL
+        (
+        SELECT
+            DATE_FORMAT(t.auditTime, '%Y/%m/%d') createTime,
+            0 totalDepositBalance,
+            0 totalDepositNum,
+            SUM(t.amount) fundAdd,
+            0 calculateProfit,
+            0 fundLissen,
+            0 totalRebate,
+            0 totalDrawAmount,
+            0 totalDrawNum,
+            0 totalPayout,
+            0 betNum,
+            0 activeNum,
+            0 totalTaskBonus,
+            0 totalBonusAmountOnline,
+            0 totalBonusAmountOffline,
+            0 registerNum,
+            0 firstDepositNum
+            from fund_audit t
+            INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+            <include refid="join_agent"></include>
+            where t.status = 1
+            and t.financialCode = 'AA'
+            and t.isCalculateProfit = 1
+            <include refid="createTime_where"/>
+            GROUP BY DATE_FORMAT(t.auditTime, '%Y/%m/%d')
+        )
+
+        UNION ALL
+        (
+            select
+            DATE_FORMAT(t.createTime, '%Y/%m/%d') createTime,
+            0 totalDepositBalance,
+            0 totalDepositNum,
+            0 fundAdd,
+            0 calculateProfit,
+            SUM(t.amount) fundLissen,
+            0 totalRebate,
+            0 totalDrawAmount,
+            0 totalDrawNum,
+            0 totalPayout,
+            0 betNum,
+            0 activeNum,
+            0 totalTaskBonus,
+            0 totalBonusAmountOnline,
+            0 totalBonusAmountOffline,
+            0 registerNum,
+            0 firstDepositNum
+            from fund_audit t
+            INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+            <include refid="join_agent"></include>
+            where t.status = 1
+            and t.financialCode = 'AM'
+            and t.isCalculateProfit = 1
+            <include refid="createTime_where"/>
+            GROUP BY  DATE_FORMAT(t.createTime, '%Y/%m/%d')
+        )
+
+        UNION ALL
+
+        (
+        -- 返利
+        select
+        DATE_FORMAT(t.createTime, '%Y/%m/%d') createTime,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        SUM(t.rebateTotal) totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        from mbr_rebate_agent_bonus t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent"></include>
+        where t.status = 1
+        <include refid="createTime_where"/>
+        GROUP  BY  DATE_FORMAT(t.createTime, '%Y/%m/%d')
+        )
+
+        UNION ALL
+
+        (
+        select
+        DATE_FORMAT(t.passTime, '%Y/%m/%d') createTime,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        SUM(t.actualarrival) totalDrawAmount,
+        COUNT( distinct (CASE WHEN t.actualarrival > 0 THEN t.accountId  END )) totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        from fund_acc_withdraw t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent"></include>
+        where t.status = 1
+        <include refid="passTime_where"/>
+        GROUP  BY  DATE_FORMAT(t.passTime, '%Y/%m/%d')
+        )
+
+        UNION ALL
+        (
+            SELECT
+            DATE_FORMAT(t.applicationTime,'%Y/%m/%d') createTime,
+            0 totalDepositBalance,
+            0 totalDepositNum,
+            0 fundAdd,
+            0 calculateProfit,
+            0 fundLissen,
+            0 totalRebate,
+            0 totalDrawAmount,
+            0 totalDrawNum,
+            0 totalPayout,
+            0 betNum,
+            0 activeNum,
+            0 totalTaskBonus,
+            SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmountOnline,
+            0 totalBonusAmountOffline,
+            0 registerNum,
+            0 firstDepositNum
+            FROM opr_act_bonus t
+            INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+            <include refid="join_agent"></include>
+            LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+            WHERE t.status = 1 AND activity.isonline = 1
+            <include refid="applicationTime_where"/>
+            GROUP  BY  DATE_FORMAT(t.applicationTime,'%Y/%m/%d')
+        )
+
+        UNION ALL
+
+        (
+        SELECT DATE_FORMAT(t.applicationTime,'%Y/%m/%d') createTime,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        FROM opr_act_bonus t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent"></include>
+        LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+        WHERE t.status = 1 AND activity.isonline = 0
+        <include refid="applicationTime_where"/>
+        GROUP BY  DATE_FORMAT(t.applicationTime,'%Y/%m/%d')
+        )
+        UNION ALL
+        (
+        SELECT
+        REPLACE(t.startday, "-", "/") createTime,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        SUM(t.payout) totalPayout,
+        COUNT( distinct (CASE WHEN t.bet > 0 THEN mbr.id  END )) betNum,
+        COUNT( distinct (CASE WHEN t.bet > 99 THEN mbr.id  END )) activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        FROM rpt_bet_rcd_day t
+        INNER JOIN mbr_account mbr on t.username = mbr.loginname
+        <include refid="join_agent"></include>
+        <include refid="agy_startday_where"/>
+        GROUP BY t.startday
+        )
+
+        UNION ALL
+        (
+
+        select
+        DATE_FORMAT(t.time, '%Y/%m/%d') createTime,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        SUM(t.bonusamount) totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        from task_bonus t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent"></include>
+        <include refid="time_where2"/>
+        GROUP BY DATE_FORMAT(t.time, '%Y/%m/%d')
+        )
+
+        -- 注册人数
+        UNION ALL
+        (
+        select
+        DATE_FORMAT(t.registerTime, '%Y/%m/%d') createTime,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        COUNT( t.id) registerNum,
+        0 firstDepositNum
+        from  mbr_account t
+        INNER JOIN
+        (SELECT
+        e.*,
+        ct.agyaccount,
+        e.parentid id
+        FROM
+        agy_account ct
+        INNER  JOIN agy_tree e ON ct.id = e.parentid
+        WHERE
+        ct.parentid = 0 ) tt on tt.childnodeid = t.cagencyId
+        <include refid="registerTime_where"/>
+        GROUP BY DATE_FORMAT(t.registerTime, '%Y/%m/%d')
+        )
+        )tt GROUP BY tt.createTime
+        )ttt ORDER BY ttt.createTime ASC
+    </sql>
+
+    <sql id = "join_agent">
+        INNER JOIN
+        (SELECT
+                e.*,
+                ct.agyaccount,
+                e.parentid id
+            FROM
+                agy_account ct
+                INNER  JOIN agy_tree e ON ct.id = e.parentid
+            WHERE
+                ct.parentid = 0 ) tt on tt.childnodeid = mbr.cagencyId
+
+    </sql>
+
+    <select id="tagencyFundList" resultType="com.wsdy.saasops.modules.analysis.dto.FundAgentStatementDto">
+        <include refid="tagencyFundListSql"></include>
+    </select>
+
+
+    <sql id="tagencyFundListSql">
+        SELECT
+        ttt.agyId,
+        ttt.agyAccount,
+        ttt.parentAgent,
+        (IF(SIGN(ttt.totalPayout)=-1, ABS(ttt.totalPayout), -1*ttt.totalPayout)-ttt.totalBonusAmount-ttt.totalRebate - ttt.totalTaskBonus - (ttt.fundAdd-ttt.fundLissen)) totalProfit,
+        (ttt.fundAdd-ttt.fundLissen) fundAdjust,
+        ttt.totalDepositBalance,
+        ttt.totalDrawAmount,
+        ttt.totalBonusAmountOnline totalBonusAmountOnline,
+        ttt.totalBonusAmountOffline totalBonusAmountOffline,
+        ttt.totalPayout,
+        ttt.totalTaskBonus,
+        ttt.totalBonusAmount + ttt.totalTaskBonus totalBonusAmount,
+        ttt.totalRebate,
+        ttt.totalDepositNum,
+        ttt.totalDrawNum,
+        ttt.registerNum,
+        ttt.firstDepositNum,
+        IF(ttt.totalDepositNum=0, 0, ttt.totalDepositBalance/totalDepositNum ) averageDeposit,
+        ttt.betNum,
+        ttt.activeNum
+        FROM (
+        SELECT
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        IFNULL(SUM(tt.totalDepositBalance),0) totalDepositBalance,
+        IFNULL(SUM(tt.fundAdd),0)  fundAdd,
+        IFNULL(SUM(tt.calculateProfit),0)  calculateProfit,
+        IFNULL(SUM(tt.fundLissen),0)  fundLissen,
+        IFNULL(SUM(tt.totalRebate),0)  totalRebate,
+        IFNULL(SUM(tt.totalDrawAmount),0)  totalDrawAmount,
+        IFNULL(SUM(tt.totalPayout),0)  totalPayout,
+        IFNULL(SUM(tt.totalTaskBonus),0) totalTaskBonus,
+        (IFNULL(SUM(tt.totalBonusAmountOnline),0) + IFNULL(SUM(tt.totalBonusAmountOffline),0))  totalBonusAmount,
+        IFNULL(SUM(tt.totalBonusAmountOnline),0) totalBonusAmountOnline,
+        IFNULL(SUM(tt.totalBonusAmountOffline),0) totalBonusAmountOffline,
+        IFNULL(SUM(tt.totalDepositNum),0) totalDepositNum,
+        IFNULL(SUM(tt.totalDrawNum),0) totalDrawNum,
+        IFNULL(SUM(tt.registerNum),0) registerNum,
+        IFNULL(SUM(tt.firstDepositNum),0) firstDepositNum,
+        IFNULL(SUM(betNum),0) betNum,
+        IFNULL(SUM(activeNum),0) activeNum
+        FROM (
+        (
+        SELECT
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        SUM(t.actualArrival) totalDepositBalance,
+        COUNT( distinct (CASE WHEN t.actualArrival > 0 THEN t.accountId  END )) totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        from fund_deposit t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent_level"></include>
+        where t.status = 1
+        <include refid="auditTime_where"/>
+        <include refid="group_by_agent"></include>
+        )
+        -- 首存
+        UNION ALL
+        (
+        SELECT
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        COUNT(t.accountId) firstDepositNum
+        from fund_deposit t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent_level"></include>
+        where t.status = 1
+        AND ( SELECT count(*) FROM fund_deposit fd2  WHERE  fd2.audittime  <![CDATA[ < ]]> t.audittime AND fd2.accountid = t.accountid AND fd2.STATUS =1)   =  0
+        <include refid="auditTime_where"/>
+        <include refid="group_by_agent"></include>
+        )
+
+        UNION ALL
+        (
+        SELECT
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        SUM(t.amount) fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        from fund_audit t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent_level"></include>
+        where t.status = 1
+        and t.financialCode = 'AA'
+        and t.isCalculateProfit = 1
+        <include refid="createTime_where"/>
+        <include refid="group_by_agent"></include>
+        )
+
+
+        UNION ALL
+        (
+        select
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        SUM(t.amount) fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        from fund_audit t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent_level"></include>
+        where t.status = 1
+        and t.financialCode = 'AM'
+        and t.isCalculateProfit = 1
+        <include refid="createTime_where"/>
+        <include refid="group_by_agent"></include>
+        )
+
+        UNION ALL
+
+        (
+        -- 返利
+        select
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        SUM(t.rebateTotal) totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        from mbr_rebate_agent_bonus t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent_level"></include>
+        where t.status = 1
+        <include refid="createTime_where"/>
+        <include refid="group_by_agent"></include>
+        )
+
+        UNION ALL
+
+        (
+        select
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        SUM(t.actualarrival) totalDrawAmount,
+        COUNT( distinct (CASE WHEN t.actualarrival > 0 THEN t.accountId  END )) totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        from fund_acc_withdraw t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent_level"></include>
+        where t.status = 1
+        <include refid="passTime_where"/>
+        <include refid="group_by_agent"></include>
+        )
+
+        UNION ALL
+        (
+        SELECT
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        FROM opr_act_bonus t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent_level"></include>
+        LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+        WHERE t.status = 1 AND activity.isonline = 1
+        <include refid="applicationTime_where"/>
+        <include refid="group_by_agent"></include>
+        )
+
+        UNION ALL
+
+        (
+        SELECT
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        SUM(IF(t.source = 3, -1 * t.bonusamount, t.bonusamount)) totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        FROM opr_act_bonus t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent_level"></include>
+        LEFT JOIN opr_act_activity activity on activity.id = t.activityid
+        WHERE t.status = 1 AND activity.isonline = 0
+        <include refid="applicationTime_where"/>
+        <include refid="group_by_agent"></include>
+        )
+        UNION ALL
+        (
+        SELECT
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        SUM(t.payout) totalPayout,
+        COUNT( distinct (CASE WHEN t.bet > 0 THEN mbr.id  END )) betNum,
+        COUNT( distinct (CASE WHEN t.bet > 99 THEN mbr.id  END )) activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        FROM rpt_bet_rcd_day t
+        INNER JOIN mbr_account mbr on t.username = mbr.loginname
+        <include refid="join_agent_level"></include>
+        <include refid="agy_startday_where"/>
+        <include refid="group_by_agent"></include>
+        )
+
+        UNION ALL
+        (
+
+        select
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        SUM(t.bonusamount) totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        0 registerNum,
+        0 firstDepositNum
+        from task_bonus t
+        INNER JOIN mbr_account mbr  on mbr.id = t.accountid
+        <include refid="join_agent_level"></include>
+        <include refid="time_where2"/>
+        <include refid="group_by_agent"></include>
+        )
+
+        -- 注册人数
+        UNION ALL
+        (
+        select
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent,
+        0 totalDepositBalance,
+        0 totalDepositNum,
+        0 fundAdd,
+        0 calculateProfit,
+        0 fundLissen,
+        0 totalRebate,
+        0 totalDrawAmount,
+        0 totalDrawNum,
+        0 totalPayout,
+        0 betNum,
+        0 activeNum,
+        0 totalTaskBonus,
+        0 totalBonusAmountOnline,
+        0 totalBonusAmountOffline,
+        COUNT( t.id) registerNum,
+        0 firstDepositNum
+        from  mbr_account t
+        INNER JOIN
+        (SELECT
+        ct.id agyId,
+        ct.agyaccount agyAccount,
+        gt.childnodeid,
+        ct2.agyaccount parentAgent
+        FROM
+        agy_account ct
+        INNER  JOIN ( SELECT max( depth ) agentLevel, childnodeid FROM agy_tree GROUP BY childnodeid ) ar ON ct.id = ar.childnodeid
+        INNER JOIN agy_tree gt ON ct.id = gt.parentid
+        INNER JOIN  agy_account ct2 ON ct2.id = ct.parentid
+        WHERE ar.agentLevel = #{agentType}) tt  on tt.childnodeid = t.cagencyId
+        <include refid="registerTime_where"/>
+        <include refid="group_by_agent"></include>
+        )
+        )tt <include refid="group_by_agent"></include>
+        )ttt
+    </sql>
+
+    <sql id = "join_agent_level">
+        INNER JOIN
+        (SELECT
+            ct.id agyId,
+            ct.agyaccount agyAccount,
+            gt.childnodeid,
+            ct2.agyaccount parentAgent
+        FROM
+            agy_account ct
+                INNER  JOIN ( SELECT max( depth ) agentLevel, childnodeid FROM agy_tree GROUP BY childnodeid ) ar ON ct.id = ar.childnodeid
+                INNER JOIN agy_tree gt ON ct.id = gt.parentid
+                INNER JOIN  agy_account ct2 ON ct2.id = ct.parentid
+            WHERE ar.agentLevel = #{agentType}) tt ON tt.childnodeid = mbr.cagencyId
+    </sql>
+
+
+    <sql id = "group_by_agent">
+        GROUP BY
+        tt.agyId,
+        tt.agyAccount,
+        tt.parentAgent
+    </sql>
+
+</mapper>

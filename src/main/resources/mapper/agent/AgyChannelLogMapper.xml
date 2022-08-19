@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wsdy.saasops.modules.agent.dao.AgyChannelLogMapper">
+
+	<select id="list" resultType="com.wsdy.saasops.modules.agent.dto.AgyChannelLogDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.AgyChannelLogDto">
+		 SELECT t.* ,
+			TRUNCATE(IFNULL(SUM(dep.depositAmount) , 0), 2 ) rechargeTotal,
+			TRUNCATE(IFNULL(SUM(dep.depositAmount) - SUM(dep.depositAmount), 0), 2) viceRechargeTotal
+			FROM (
+				SELECT 
+					SUM(r.registerTotal) registerTotal,
+					SUM(registerVirtualTotal) registerVirtualTotal,
+					SUM(registerEmulatorTotal) registerEmulatorTotal,
+					SUM(viceRegisterTotal) viceRegisterTotal,
+					SUM(viceRegisterVirtualTotal) viceRegisterVirtualTotal,
+					SUM(viceRegisterEmulatorTotal) viceRegisterEmulatorTotal,
+					r.masterNum,
+					r.viceNum,
+					r.name,
+					r.groupId,
+					r.deductRate,
+					r.isOpen,
+					r.updateTime,
+					r.groupName,
+					r.accountid,
+					r.deviceuuid,
+					r.id
+					FROM (
+						SELECT  
+							ch.*, clog.deviceuuid,cgroup.name groupName,clog.accountid,
+							IFNULL(count(clog.id) , 0) registerTotal,
+							IFNULL(SUM(clog.isVrtual) , 0) registerVirtualTotal,
+							IFNULL(SUM(clog.isEmulator) , 0) registerEmulatorTotal,
+							
+							0 viceRegisterTotal,
+							0 viceRegisterVirtualTotal,
+							0 viceRegisterEmulatorTotal
+						FROM agy_channel ch 
+							LEFT JOIN agy_channel_log clog ON clog.channelid = ch.id AND clog.isMasterNum = 1
+							LEFT JOIN agy_channel_group cgroup ON cgroup.id = ch.groupId
+							<where>
+								<if test="masterNum != null and masterNum != ''">
+									AND ch.masterNum = #{masterNum}
+								</if>
+								<if test="viceNum != null and viceNum != ''">
+									AND ch.viceNum = #{viceNum}
+								</if>
+								<if test="groupName != null and groupName != ''">
+									AND cgroup.name LIKE CONCAT('%',#{groupName},'%' )
+								</if>
+								<if test="groupId != null">
+									AND ch.groupId = #{groupId}
+								</if>
+								<if test="isOpen != null">
+									AND ch.isOpen = #{isOpen}
+								</if>
+								<if test="name != null and name != ''">
+									AND ch.name LIKE CONCAT('%',#{name},'%' )
+								</if>
+								 <if test="startTime != null and startTime != ''">
+					                AND clog.registertime <![CDATA[ >= ]]> #{startTime}
+					            </if>
+					            <if test="endTime != null and endTime != ''">
+					                AND clog.registertime <![CDATA[ <= ]]> #{endTime}
+					            </if>
+				            </where>
+							GROUP BY ch.id
+							
+							UNION all 
+							
+						SELECT  
+							ch.*, clog.deviceuuid,cgroup.name groupName,clog.accountid,
+							0 registerTotal,
+							0 registerVirtualTotal,
+							0 registerEmulatorTotal,
+							
+							IFNULL(COUNT(clog.id) , 0) viceRegisterTotal,
+							IFNULL(SUM(clog.isVrtual) , 0) viceRegisterVirtualTotal,
+							IFNULL(SUM(clog.isEmulator) , 0) viceRegisterEmulatorTotal
+						FROM agy_channel ch 
+							LEFT JOIN agy_channel_log clog ON clog.channelid = ch.id AND clog.isMasterNum = 0
+							LEFT JOIN agy_channel_group cgroup ON cgroup.id = ch.groupId
+							<where>
+								<if test="masterNum != null and masterNum != ''">
+									AND ch.masterNum = #{masterNum}
+								</if>
+								<if test="viceNum != null and viceNum != ''">
+									AND ch.viceNum = #{masterNum}
+								</if>
+								<if test="groupName != null and groupName != ''">
+									AND cgroup.name LIKE CONCAT('%',#{groupName},'%' )
+								</if>
+								<if test="groupId != null">
+									AND ch.groupId = #{groupId}
+								</if>
+								<if test="isOpen != null">
+									AND ch.isOpen = #{isOpen}
+								</if>
+								<if test="name != null and name != ''">
+									AND ch.name LIKE CONCAT('%',#{name},'%' )
+								</if>
+								 <if test="startTime != null and startTime != ''">
+					                AND clog.registertime <![CDATA[ >= ]]> #{startTime}
+					            </if>
+					            <if test="endTime != null and endTime != ''">
+					                AND clog.registertime <![CDATA[ <= ]]> #{endTime}
+					            </if>
+				            </where>
+							GROUP BY ch.id
+						)r GROUP BY r.id
+				 ) t
+				LEFT JOIN mbr_account_device device on device.deviceuuid = t.deviceuuid
+				LEFT JOIN fund_deposit dep ON dep.accountid = device.accountid AND dep.`status` = 1 AND dep.accountid = t.accountid
+			GROUP BY t.id  ORDER BY t.updateTime DESC
+    </select>
+	
+</mapper>

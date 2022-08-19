@@ -1,0 +1,87 @@
+########################################################
+##请注意：application-dev.properties里的选项会覆盖本文件的配置
+##这里请配置一些不会随环境变化而变化的配置项
+##和环境相关的配置项，请在application-dev.properties里配置
+########################################################
+server:
+  rootPath: /
+  staticPath: /
+  context-path: /
+
+spring:
+  profiles:
+    active: env
+  thymeleaf:
+    cache: false
+    mode: LEGACYHTML5
+    prefix: classpath:/templates
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+  # jackson时间格式化
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+  http:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+      enabled: true
+  resources: # 指定静态资源的路径
+    static-locations: classpath:/static/,classpath:/templates/,classpath:/META-INF/resources/,classpath:/META-INF/resources/webjars/
+  cache:
+    type: redis
+  redis:
+    open: true  # 是否开启redis缓存  true开启   false关闭
+    host: 192.168.5.30
+    port: 6379
+    timeout: 6000  # 连接超时时长（毫秒）
+    pool:
+      max-active: 1000  # 连接池最大连接数（使用负值表示没有限制）
+      max-wait: -1      # 连接池最大阻塞等待时间（使用负值表示没有限制）
+      max-idle: 10      # 连接池中的最大空闲连接
+      min-idle: 5       # 连接池中的最小空闲连接
+    #mail:
+    #default-encoding: UTF-8
+    #host: smtp.gmail.com
+    #username: opssysadm@gmail.com
+    #password: Eveb5290
+    #port: 465
+    #protocol: smtp
+    #test-connection: false
+# springboot upload file size
+
+# Mybatis配置
+mybatis:
+  mapperLocations: classpath:mapper/**/*.xml
+  configLocation: classpath:mybatis.xml
+
+mapper:
+  mappers:
+    - com.wsdy.saasops.modules.base.mapper.MyMapper
+    - com.wsdy.saasops.modules.operate.dao.OprNoticeMapper
+  style: normal
+  not-empty: false
+  identity: MYSQL
+
+logging:
+  config: classpath:logback-admin.xml
+log:
+  level:
+    root: info
+    mylog: debug
+  file: /var/log/saasops-v2/
+  maxsize: 1024MB
+
+wsdy:
+  jwt:
+    # 加密秘钥
+    secret: WSDY12345678990
+    # token有效时长，半个小时，单位秒
+    expire: 2592000
+    # 找回密码秘钥
+    secretFindPwd: WSDY0987654321
+    # 找回密码秘钥token有效时长，半个小时，单位秒
+    expireFindPwd: 86400
+    header: token

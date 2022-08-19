@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrRebateFriendsRewardMapper">
+    <select id="getMbrRebateFriendsRewardCount" resultType="java.lang.Integer">
+        SELECT
+            count(*)
+        FROM
+        mbr_rebate_friends_reward mfr
+        WHERE
+            mfr.accountId = #{accountId}
+            AND mfr.activityid = #{activityId}
+        <if test="calcDay != null and calcDay != ''">
+            AND date_format( mfr.incomeTime, '%Y-%m-%d' ) = #{calcDay}
+        </if>
+            AND type = #{type}
+            AND operationtype = 0
+            <if test="content != null and content != ''">
+                AND content = #{content}
+            </if>
+
+    </select>
+</mapper>

@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.sys.dao.SysUserDao">
+	<select id="queryObject" resultType="com.wsdy.saasops.modules.sys.entity.SysUserEntity" parameterType="object">
+		select distinct A.*,B.role_id from sys_user A LEFT JOIN sys_user_role B ON A.user_id = B.user_id where A.user_id = #{value}
+	</select>
+	
+	<select id="selectOne" resultType="com.wsdy.saasops.modules.sys.entity.SysUserEntity" parameterType="long">
+		select * from sys_user  where user_id = #{userId}
+	</select>
+	<select id="queryList" resultType="com.wsdy.saasops.modules.sys.entity.SysUserEntity" parameterType="com.wsdy.saasops.modules.sys.entity.SysUserEntity">
+		select * from sys_user user
+		LEFT JOIN  
+			sys_user_role ur 
+		ON user.user_id = ur.user_id
+		<where>
+			<if test="createUserId != null">
+			   	and user.createUserId = #{createUserId}
+			</if>
+			<if test="username != null and username.trim() != ''">
+				and user.username like concat('%',#{username},'%') 
+			</if>
+			<if test="status!=null">
+				and user.status = #{status}
+			</if>
+			<if test="roleId!=null">
+				and ur.role_id = #{roleId}
+			</if>
+		</where>
+		<choose>
+			<when test="sidx != null and sidx.trim() != ''">
+				order by ${sidx} ${order}
+			</when>
+			<otherwise>
+				order by user_id desc
+			</otherwise>
+		</choose>
+		<if test="offset != null and limit != null">
+			limit #{offset}, #{limit}
+		</if>
+	</select>
+	<resultMap id="queryConditions" type="com.wsdy.saasops.modules.sys.entity.SysUserEntity">
+		<id property="userId" column="user_id" />
+		<result property="telExtNo" column="telExtNo" />
+		<result property="username"  column="username" />
+		<result property="email"  column="email" />
+		<result property="mobile"  column="mobile" />
+		<result property="status"  column="status" />
+		<result property="deptId"  column="deptId" />
+		<result property="createTime"  column="createTime" />
+		<result property="createUserId"  column="createUserId" />
+		<result property="expireTime"  column="expireTime" />
+		<result property="realName"  column="realName" />
+		<result property="roleName"  column="roleName" />
+		<result property="roleId"  column="roleId" />
+		<result property="userAgyAccountAuth" column="userAgyAccountAuth" />
+		<result property="userMbrGroupAuth" column="userMbrGroupAuth" />
+		<collection property="mbrGroups" ofType="com.wsdy.saasops.modules.sys.entity.SysUserMbrgrouprelation" >
+			<id property="id" column="sumId" />
+			<result property="mbrGroupId" column="mbrGroupId" />
+			<result property="userId" column="userId" />
+		</collection>
+		<collection property="agyAccounts" ofType="com.wsdy.saasops.modules.sys.entity.SysUserAgyaccountrelation" >
+			<id property="id" column="suaId" />
+			<result property="agyAccountId" column="agyAccountId" />
+			<result property="agyAccountType" column="agyAccountType" />
+			<result property="disabled" column="disabled" />
+			<result property="userId" column="userId" />
+		</collection>
+	</resultMap>
+
+	<select id="queryConditions" resultMap="queryConditions" parameterType="com.wsdy.saasops.modules.sys.entity.SysUserEntity">
+		select A.user_id,A.username,A.email,A.mobile,A.status,A.dept_id deptId,A.create_time createTime,A.telExtNo,
+		A.createUserId,A.expireTime,A.realName,A.userAgyAccountAuth,
+		A.userMbrGroupAuth,C.role_name roleName,C.role_id roleId,
+		D.agyAccountId,D.agyAccountType agyAccountType,D.disabled,E.mbrGroupId,D.id suaId,E.id sumId
+		from sys_user A
+		LEFT join sys_user_role B on A.user_id =B.user_id
+		LEFT join sys_role C on C.role_id =B.role_id
+        LEFT JOIN sys_user_agyAccountRelation D on D.userId = A.user_id
+		LEFT JOIN sys_user_mbrGroupRelation E ON E.userID = A.user_id
+		<where>
+			<if test="createUserId != null and roleId != 1">
+				and A.createUserId = #{createUserId}
+			</if>
+			<if test="username != null and username.trim() != ''">
+				and A.username like concat('%',#{username},'%')
+			</if>
+			<if test="roleNameList != null and roleNameList.size()>0">
+                AND C.role_id in 
+                <foreach collection="roleNameList" open="(" close=")" separator="," item="roleId">
+                    #{roleId}
+                </foreach>
+            </if>
+			<!-- <if test="roleName != null and roleName.trim() != ''">
+				and C.role_name like concat('%',#{roleName},'%')
+			</if> -->
+			<if test="isDelete != null">
+				and A.isDelete =#{isDelete}
+			</if>
+			<if test="statusList != null and statusList.size()>0">
+                AND A.status in 
+                <foreach collection="statusList" open="(" close=")" separator="," item="status">
+                    #{status}
+                </foreach>
+            </if>
+			<!-- <if test="status != null and status != '' ">
+				and A.status =#{status}
+			</if> -->
+			<if test="userId != null">
+				and A.user_id =#{userId}
+			</if>
+		</where>
+		group by A.user_id 
+		<choose>
+			<when test="sidx != null and sidx.trim() != ''">
+				order by ${sidx} ${order}
+			</when>
+			<otherwise>
+				order by A.user_id desc
+			</otherwise>
+		</choose>
+		<!--<if test="offset != null and limit != null">
+			limit #{offset}, #{limit}
+		</if>-->
+	</select>
+
+
+	<select id="queryTotal" resultType="int">
+		select count(*) from sys_user
+		WHERE
+			isDelete = 1
+			<if test="createUserId != null and roleId != 1">
+				and `createUserId` = #{createUserId}
+			</if>
+			<if test="username != null and username.trim() != ''">
+				and `username` like concat('%',#{username},'%') 
+			</if>
+			<if test="status!=null and status != '' ">
+				and status = #{status}
+			</if>
+			<if test="userId!=null ">
+				and user_id = #{userId}
+			</if>
+	</select>
+	
+	<!-- 查询用户的所有权限 -->
+	<select id="queryAllPerms" resultType="java.lang.String">
+		select m.perms from sys_user_role ur 
+			LEFT JOIN sys_role_menu rm on ur.role_id = rm.role_id 
+			LEFT JOIN sys_menu m on rm.menu_id = m.menu_id 
+		where ur.user_id = #{userId}
+	</select>
+	
+	<!-- 查询用户的所有菜单ID --> 
+	<select id="queryAllMenuId" resultType="java.lang.Long">
+		select distinct rm.menu_id from sys_user_role ur 
+			LEFT JOIN sys_role_menu rm on ur.role_id = rm.role_id 
+		where ur.user_id = #{userId}
+	</select>
+	
+	<select id="queryByUserName" resultType="com.wsdy.saasops.modules.sys.entity.SysUserEntity">
+		select * from sys_user where username = #{value} and isDelete = 1
+	</select>
+	
+	<select id="queryByUserNameList" resultType="com.wsdy.saasops.modules.sys.entity.SysUserEntity">
+		SELECT us.*,usr.role_id FROM sys_user us LEFT JOIN sys_user_role usr ON us.user_id = usr.user_id WHERE us.username IN
+			<foreach item="userId" collection="usernameList" open="(" separator="," close=")">
+				#{userId}
+			</foreach>
+			AND us.isDelete = 1
+	</select>
+	
+	<insert id="save" parameterType="com.wsdy.saasops.modules.sys.entity.SysUserEntity" useGeneratedKeys="true" keyProperty="userId">
+		insert into sys_user
+		(
+			`user_id`, 
+			`username`, 
+			`password`,
+			`securepwd`,
+			`salt`,
+			`email`, 
+			`mobile`, 
+			`status`, 
+			`create_time`,
+			createUserId,
+			expireTime,
+			realName,
+			userAgyAccountAuth,
+			userMbrGroupAuth,
+			telExtNo
+		)
+		values
+		(
+			#{userId}, 
+			#{username}, 
+			#{password},
+			#{securepwd},
+			#{salt},
+			#{email}, 
+			#{mobile}, 
+			#{status}, 
+			#{createTime},
+			#{createUserId},
+			#{expireTime},
+			#{realName},
+			#{userAgyAccountAuth},
+			#{userMbrGroupAuth},
+			#{telExtNo}
+		)
+	</insert>
+	 
+	<update id="update" parameterType="com.wsdy.saasops.modules.sys.entity.SysUserEntity">
+		update sys_user 
+		<set> 
+			<if test="username != null">`username` = #{username}, </if>
+			<if test="password != null">`password` = #{password}, </if>
+			<if test="securepwd != null">`securepwd` = #{securepwd}, </if>
+			<if test="email != null">`email` = #{email}, </if>
+			<if test="mobile != null">`mobile` = #{mobile}, </if>
+			<if test="status != null">`status` = #{status}, </if>
+            <if test="realName != null">`realName` = #{realName}, </if>
+            <if test="expireTime != null">`expireTime` = #{expireTime}, </if>
+            <if test="userAgyAccountAuth != null">`userAgyAccountAuth` = #{userAgyAccountAuth}, </if>
+            <if test="userMbrGroupAuth != null">`userMbrGroupAuth` = #{userMbrGroupAuth}, </if>
+			<if test="telExtNo != null">`telExtNo` = #{telExtNo} </if>
+        </set>
+		where user_id = #{userId}
+	</update>
+	
+	<update id="updatePassword" parameterType="map">
+		update sys_user set password = #{newPassword},
+						  modifyUserId = #{userId},
+						    modifyTime = SYSDATE() 
+			where user_id = #{userId}
+	</update>
+	<update id="updateSecPassword" parameterType="map">
+		update sys_user set securepwd = #{newPassword}
+			where user_id = #{userId}
+	</update>
+
+	<update id="updateAuthenticatorKey">
+		update sys_user set authenticatorKey = #{authenticatorKey}
+		where user_id = #{userId}
+	</update>
+
+	<update id="updateAuthenticatorLogin">
+		update sys_user set authenticatorLogin = #{authenticatorLogin}
+		where user_id = #{userId}
+	</update>
+
+	<update id="updateLoginIp">
+		update sys_user set ip = #{ip}
+		where user_id = #{userId}
+	</update>
+
+	<update id="updateEnable" parameterType="map">
+		update sys_user set `status` = #{status}
+		where user_id = #{userId}
+	</update>
+	<delete id="deleteBatch">
+		delete from sys_user where user_id in 
+		<foreach item="userId" collection="array" open="(" separator="," close=")">
+			#{userId}
+		</foreach>
+		;
+		delete from sys_user_role where user_id in 
+		<foreach item="userId" collection="array" open="(" separator="," close=")">
+			#{userId}
+		</foreach>
+	</delete>
+
+	<delete id="deleteAuthority" parameterType="java.lang.Long">
+		DELETE sys_user_agyAccountRelation , sys_user_mbrGroupRelation from sys_user
+		LEFT join sys_user_agyAccountRelation on sys_user.user_id =sys_user_agyAccountRelation.userId
+		LEFT join sys_user_mbrGroupRelation on sys_user.user_id =sys_user_mbrGroupRelation.userId
+		where sys_user.user_id = #{userId}
+	</delete>
+	<!--获取角色数据权限 -->
+	<select id="getAuthAgy" parameterType="java.lang.Long" resultType="com.wsdy.saasops.modules.sys.entity.SysUserAgyaccountrelation">
+		SELECT * from sys_user_agyAccountRelation
+	    <where>
+			userId = #{userId}
+		</where>
+	</select>
+	<select id="getAuthMbr" parameterType="java.lang.Long" resultType="com.wsdy.saasops.modules.sys.entity.SysUserMbrgrouprelation">
+		SELECT * from sys_user_mbrGroupRelation
+		<where>
+			userId = #{userId}
+		</where>
+	</select>
+	<update id="deleteSysUser" parameterType="java.lang.Long">
+		DELETE from sys_user where user_id = #{userId}
+	</update>
+	
+	<select id="checkPasswordIsExpire" parameterType="java.lang.Long" resultType="java.lang.String">
+	select IF(date_add(IFNULL(tt.modifyTime, tt.create_time), interval tt.sysValue day)+tt.sysValue <![CDATA[ > ]]> NOW(), 'false', 'true') as expireFlag
+			from (
+				select u.create_time,
+							 u.modifyTime,
+							 t.sysValue from sys_user u,set_basic_set_sys_setting t 
+				where u.user_id = #{userId} and t.sysKey='passwordExpireDays'
+			) tt
+	</select>
+</mapper>

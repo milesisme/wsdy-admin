@@ -1,0 +1,617 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.system.pay.mapper.PayMapper">
+
+    <select id="findDepositList" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit"
+            parameterType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+        SELECT * FROM set_basic_sys_deposit WHERE isDelete = #{isDelete} AND type =0
+        ORDER BY
+        <choose>
+            <when test="'1'.toString() == sortItem">
+                bankName
+            </when>
+            <when test="'2'.toString() == sortItem">
+                dayMaxAmout
+            </when>
+            <when test="'5'.toString() == sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        available ASC,
+                        createTime ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        available DESC,
+                        createTime DESC
+                    </when>
+                </choose>
+            </when>
+            <otherwise>
+                createTime
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="'5'.toString() != sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        DESC
+                    </when>
+                    <otherwise>
+                        DESC
+                    </otherwise>
+                </choose>
+            </when>
+        </choose>
+
+    </select>
+
+
+    <select id="findOnlinePayList" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBacicOnlinepay"
+            parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBacicOnlinepay">
+        SELECT p.*,pay.paymentType,pay.payName,pay.terminalType,pay.platfromCode
+        FROM set_bacic_onlinePay p LEFT JOIN t_pay pay ON p.payId = pay.id
+        WHERE p.isDelete = #{isDelete} and pay.available = 1
+        <if test="id != null">
+            AND p.id = #{id}
+        </if>
+        ORDER BY
+        <choose>
+            <when test="'1'.toString() == sortItem">
+                pay.paymentType
+            </when>
+            <when test="'2'.toString() == sortItem">
+                p.name
+            </when>
+            <when test="'3'.toString() == sortItem">
+                p.dayMaxAmout
+            </when>
+            <when test="'5'.toString() == sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        p.available ASC,
+                        p.createTime ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        p.available DESC,
+                        p.createTime DESC
+                    </when>
+                </choose>
+            </when>
+            <otherwise>
+                p.createTime
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="'5'.toString() != sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        DESC
+                    </when>
+                </choose>
+            </when>
+        </choose>
+    </select>
+
+    <select id="findDepGroupByDepositId" resultType="com.wsdy.saasops.modules.member.entity.MbrGroup">
+		SELECT gp.* FROM set_basic_sys_dep_mbr dep
+		LEFT JOIN mbr_group gp ON dep.groupId = gp.id
+		WHERE dep.depositId = #{depositId}
+	</select>
+
+    <select id="findOnlineGroupByDepositId" resultType="com.wsdy.saasops.modules.member.entity.MbrGroup">
+		SELECT gp.* FROM set_basic_paymbrgrouprelation dep
+		LEFT JOIN mbr_group gp ON dep.groupId = gp.id
+		WHERE dep.onlinePayId = #{onlinePayId} ORDER BY dep.sort
+	</select>
+
+    <select id="findDepositByBank" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+        SELECT * FROM set_basic_sys_deposit WHERE isDelete = 0
+        AND bankAccount =#{bankAccount}
+        <if test="id != null">
+            AND id != #{id}
+        </if>
+    </select>
+
+    <select id="findPayBySiteCode" resultType="com.wsdy.saasops.modules.system.pay.entity.TPay">
+        SELECT pay.* FROM t_pay pay
+        LEFT JOIN t_pay_site pe ON pay.id = pe.payId
+        LEFT JOIN t_cp_site site ON pe.siteId = site.id
+        WHERE site.siteCode = #{siteCode} AND pay.available = 1
+        <if test="paymentTypes != null and paymentTypes.size()>0">
+            AND pay.paymentType in
+            <foreach collection="paymentTypes" open="(" close=")" separator="," item="paymentType">
+                #{paymentType}
+            </foreach>
+        </if>
+        group by pay.id
+    </select>
+
+    <select id="findBankByPayId" resultType="com.wsdy.saasops.modules.base.entity.BaseBank">
+		SELECT bank.*,pk.clientType FROM t_bs_bank bank
+		LEFT JOIN t_pay_bank pk on bank.id = pk.bankId
+		WHERE pk.payId=#{payId}
+	</select>
+
+    <select id="findDepositByGroupId" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+        SELECT deposit.*,mbr.sort,mbr.tier,bank.bankLog bankLogo,mbr.isqueue  FROM set_basic_sys_deposit deposit
+        LEFT JOIN set_basic_sys_dep_mbr mbr ON deposit.id = mbr.depositId
+        LEFT JOIN t_bs_bank bank ON bank.id = deposit.bankId
+        WHERE mbr.groupId = #{groupId} AND deposit.type =0 and deposit.available=1
+    </select>
+
+    <select id="findDepositAll" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+		SELECT deposit.*,bank.bankLog bankLogo  FROM set_basic_sys_deposit deposit
+		LEFT JOIN t_bs_bank bank ON bank.id = deposit.bankId
+		WHERE deposit.available=1 AND deposit.isDelete=0 AND deposit.type =0
+	</select>
+
+    <select id="findOnlineListByGroupId" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBacicOnlinepay">
+        SELECT onlinePay.*,p.sort,pay.paymentType,logo.bankLogo,p.isqueue FROM set_bacic_onlinePay onlinePay
+        LEFT JOIN set_basic_paymbrgrouprelation p ON onlinePay.id = p.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        LEFT JOIN t_pay_logo logo ON logo.paymentType = pay.paymentType
+        WHERE onlinePay.available = 1 AND pay.available = 1
+        <if test="groupId != null">
+            AND p.groupId = #{groupId}
+        </if>
+          ORDER BY p.sort
+    </select>
+
+    <select id="findOnlineList" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBacicOnlinepay">
+        SELECT onlinePay.*,pay.paymentType,logo.bankLogo FROM set_bacic_onlinePay onlinePay
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        LEFT JOIN t_pay_logo logo ON logo.paymentType = pay.paymentType
+        WHERE onlinePay.available = 1 AND pay.available = 1
+    </select>
+
+    <select id="findDepositBankList" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+		SELECT dt.*,bk.bankLog,mr.tier,mr.isqueue FROM set_basic_sys_deposit dt
+		LEFT JOIN set_basic_sys_dep_mbr mr ON dt.id = mr.depositId
+		LEFT JOIN mbr_account nt ON mr.groupId = nt.groupId
+		LEFT JOIN t_bs_bank bk ON dt.bankId = bk.id
+		WHERE dt.available = 1  AND nt.id = #{accountId}
+		AND dt.depositAmount <![CDATA[ < ]]> dt.dayMaxAmout
+		ORDER BY mr.sort
+	</select>
+
+    <select id="findDepositByGroupIdAndDepositId" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+		SELECT dt.* FROM set_basic_sys_deposit dt
+		LEFT JOIN set_basic_sys_dep_mbr mr ON dt.id = mr.depositId
+		WHERE mr.groupId=#{groupId} AND dt.id=#{depositId} AND dt.available =1
+	</select>
+
+    <select id="findOnlinePayListByAccountId" resultType="com.wsdy.saasops.api.modules.pay.dto.OnlinePayPicture">
+        SELECT 
+        	p.name,p.showName,p.id onlinePayId,p.minAmout,p.maxAmout,p.amountType,p.fixedAmount,pay.paymentType,
+	        pay.id payId,p.dayMaxAmout,pay.urlMethod,p.depositAmount,p.isHot,p.isRecommend,p.isJump,
+	        logo.bankLogo,logo.ewmLogo,logo.disableLogo,n.isqueue
+        FROM set_bacic_onlinePay p
+	        LEFT JOIN set_basic_paymbrgrouprelation n ON p.id = n.onlinePayId
+	        LEFT JOIN mbr_account t ON t.groupId = n.groupId
+	        LEFT JOIN t_pay pay ON p.payId = pay.id
+	        LEFT JOIN t_pay_logo logo ON logo.paymentType = pay.paymentType
+        WHERE t.id = #{accountId} AND p.devSource LIKE CONCAT('%',#{devSource}, '%')
+        AND p.available = 1 AND pay.available = 1
+        <if test="isSign == true">
+            AND p.depositAmount <![CDATA[ < ]]> p.dayMaxAmout
+        </if>
+        <if test="onlinePayId != null">
+            AND p.id = #{onlinePayId}
+        </if>
+        ORDER BY pay.paymenttype,n.sort,p.id
+    </select>
+
+    <select id="findBankListByPayId" resultType="com.wsdy.saasops.api.modules.pay.dto.PayPictureData">
+		SELECT bank.id bankCardId,bank.bankName,bank.bankCode,bank.bankLog
+		FROM t_bs_bank bank LEFT JOIN t_pay_bank p ON bank.id = p.bankId
+		LEFT JOIN t_pay pay  ON pay.id = p.payId
+		WHERE pay.id=#{payId} and p.clientType in (#{terminal},3)
+	</select>
+
+    <select id="findOnlinePayAndPay" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBacicOnlinepay">
+		SELECT p.*,pay.platfromCode,pay.callbackUrl,pay.urlMethod,pay.code,pay.payUrl,pay.paymentType
+		FROM set_bacic_onlinePay p
+		LEFT JOIN t_pay pay ON p.payId = pay.id
+		WHERE p.id =#{onlinePayId}
+	</select>
+
+    <update id="updateDepositAmount">
+		UPDATE set_basic_sys_deposit SET depositAmount = depositAmount+#{depositAmount}  WHERE id =#{depositId}
+	</update>
+
+    <update id="updateQrCodeAmount">
+		UPDATE set_basic_sys_qrcode SET depositAmount = depositAmount+#{depositAmount}  WHERE id =#{depositId}
+	</update>
+
+    <update id="updateOnlinePayAmount">
+		UPDATE set_bacic_onlinePay SET depositAmount = depositAmount+#{depositAmount}  WHERE id =#{onlinePayId}
+	</update>
+
+    <update id="clearDepositAmount">
+		UPDATE set_basic_sys_deposit SET depositAmount = 0
+	</update>
+
+    <update id="clearOnlinePayAmount">
+		UPDATE set_bacic_onlinePay SET depositAmount = 0
+	</update>
+
+    <select id="querySetBacicOnlinepayList" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBacicOnlinepay">
+        SELECT o.id,concat_ws('-',o.name,p.platfromName) name,o.merNo
+        FROM set_bacic_onlinePay o LEFT JOIN t_pay p ON o.payId = p.id
+    </select>
+
+    <select id="findBasicFastPay" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBacicFastPay"
+            parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBacicFastPay">
+        SELECT p.*,dep.dayMaxAmout,dep.depositAmount,
+        <if test="isSign == false or isSign == true">
+            (SELECT sort from set_basic_fastpay_group WHERE fastPayId = p.id and groupId=#{groupId}) sort,
+            (SELECT isqueue from set_basic_fastpay_group WHERE fastPayId = p.id and groupId=#{groupId}) isqueue,
+        </if>
+        logo.bankLogo, pay.paymenttype, pay.payurl FROM set_basic_fastpay p
+        LEFT JOIN (
+        SELECT IFNULL(sum(dayMaxAmout),0) dayMaxAmout,IFNULL(sum(depositAmount),0) depositAmount,fastPayId FROM
+        set_basic_sys_deposit
+        WHERE type=1 AND available=1 GROUP BY fastPayId
+        ) dep ON p.id = dep.fastPayId
+        LEFT JOIN t_pay pay ON p.payId = pay.id
+        LEFT JOIN t_pay_logo logo ON logo.paymentType = pay.paymentType
+        WHERE p.isDelete = 0 AND pay.available = 1
+        <if test="available != null">
+            AND p.available = #{available}
+        </if>
+        <if test="isSign == false">
+            AND EXISTS (SELECT fastPayId FROM set_basic_fastpay_group WHERE groupId=#{groupId} and fastPayId =p.id)
+        </if>
+        <if test="isSign == true">
+            AND not EXISTS (SELECT fastPayId FROM set_basic_fastpay_group WHERE groupId=#{groupId} and fastPayId =p.id)
+        </if>
+        <if test="id != null">
+            AND p.id = #{id}
+        </if>
+        ORDER BY
+        <choose>
+            <when test="'1'.toString() == sortItem">
+                pay.id
+            </when>
+            <when test="'2'.toString() == sortItem">
+                dep.dayMaxAmout
+            </when>
+            <when test="'3'.toString() == sortItem">
+                p.createTime
+            </when>
+            <when test="'5'.toString() == sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        p.available ASC,
+                        p.createTime ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        p.available DESC,
+                        p.createTime DESC
+                    </when>
+                </choose>
+            </when>
+            <otherwise>
+                p.createTime
+            </otherwise>
+        </choose>
+        <choose>
+            <when test="'5'.toString() != sortItem">
+                <choose>
+                    <when test="'asc'.toString() == sortBy">
+                        ASC
+                    </when>
+                    <when test="'desc'.toString() == sortBy">
+                        DESC
+                    </when>
+                    <otherwise>
+                        DESC
+                    </otherwise>
+                </choose>
+            </when>
+        </choose>
+    </select>
+
+    <select id="findFastPayGroupById" resultType="com.wsdy.saasops.modules.member.entity.MbrGroup">
+        SELECT gp.* FROM set_basic_fastpay_group fg
+        INNER JOIN mbr_group gp ON fg.groupId = gp.id
+        WHERE fg.fastPayId = #{fastPayId}
+    </select>
+
+    <select id="findFastDepositWithdrawList" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBacicFastPay">
+        SELECT p.*,pay.platfromCode,pay.paymenttype,gp.isqueue,pay.code payCode
+        FROM set_basic_fastpay p
+        LEFT JOIN t_pay pay ON p.payId = pay.id
+	    LEFT JOIN set_basic_fastpay_group gp ON gp.fastPayId = p.id
+	    LEFT JOIN mbr_account nt ON gp.groupId = nt.groupId
+        WHERE pay.paymenttype=15 AND p.isDelete = 0 AND pay.available = 1 AND nt.id = #{accountId}
+        ORDER BY gp.sort
+    </select>
+
+    <select id="findFastPayBankList" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBacicFastPay">
+        SELECT p.*,dep.dayMaxAmout,dep.depositAmount,pay.platfromCode,pay.paymenttype,gp.isqueue,pay.code payCode
+        FROM set_basic_fastpay p
+        LEFT JOIN (
+            SELECT IFNULL(sum(dayMaxAmout),0) dayMaxAmout,IFNULL(sum(depositAmount),0) depositAmount,fastPayId
+            FROM set_basic_sys_deposit WHERE type=1 AND available=1 GROUP BY fastPayId
+        ) dep ON p.id = dep.fastPayId
+        LEFT JOIN t_pay pay ON p.payId = pay.id
+	    LEFT JOIN set_basic_fastpay_group gp ON gp.fastPayId = p.id
+	    LEFT JOIN mbr_account nt ON gp.groupId = nt.groupId
+        WHERE p.isDelete = 0 AND pay.available = 1 AND nt.id =#{accountId}
+        AND dep.depositAmount <![CDATA[ < ]]> dep.dayMaxAmout
+        ORDER BY gp.sort
+    </select>
+
+    <select id="fundFastPayDepositList" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+        SELECT t.*,bk.bankLog,bk.bankCode FROM set_basic_sys_deposit t
+        LEFT JOIN t_bs_bank bk ON t.bankId = bk.id
+        WHERE t.fastPayId =#{fastPayId} AND t.available=1
+        AND t.isShow = 1 AND t.depositAmount <![CDATA[ < ]]> t.dayMaxAmout
+    </select>
+
+    <select id="findFastPayDepositByGroupId" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+        SELECT dt.*, pay.payUrl,
+            bank.bankCode,bank.bankname,
+            fastPay.`password`,fastPay.cid,fastPay.evebbankid
+        FROM set_basic_sys_deposit dt
+	    LEFT JOIN set_basic_fastpay fastPay ON fastPay.id = dt.fastPayId
+	    LEFT JOIN set_basic_fastpay_group gp ON gp.fastPayId =fastPay.id
+        LEFT JOIN t_bs_bank bank ON bank.id = dt.bankId
+        LEFT JOIN t_pay pay ON pay.id = fastPay.payId
+        WHERE dt.fastPayId >0 AND gp.groupId=#{groupId}
+        AND dt.id=#{depositId} AND dt.available =1 AND pay.available =1
+    </select>
+
+    <select id="findSysDepositById" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+        SELECT dt.*,pay.payUrl,p.password,p.cid FROM set_basic_sys_deposit dt
+        LEFT JOIN set_basic_fastpay p ON dt.fastPayId = p.id
+        LEFT JOIN t_pay pay ON pay.id = p.payId
+        WHERE dt.id =#{id} AND dt.type=1
+    </select>
+
+    <select id="findSysDepositByFastPayId" resultType="com.wsdy.saasops.modules.system.pay.entity.SysDeposit">
+        SELECT t.* FROM set_basic_sys_deposit t
+        WHERE t.type =1 AND t.isDelete =0 AND t.fastPayId=#{fastPayId}
+    </select>
+
+    <select id="findFastDepositCount" resultType="java.lang.Integer">
+        SELECT count(*) FROM set_basic_sys_deposit WHERE id !=#{id} AND isDelete =0 AND bankAccount=#{bankAccount}
+    </select>
+
+    <select id="findPayMbrGroupRelationMaxSort" resultType="java.lang.Integer">
+        SELECT IFNULL(MAX(sort),0)+1 FROM set_basic_paymbrgrouprelation WHERE groupId =#{groupId}
+    </select>
+
+    <select id="findFastPayGroupMaxSort" resultType="java.lang.Integer">
+        SELECT IFNULL(MAX(sort),0)+1 FROM set_basic_fastpay_group WHERE groupId =#{groupId}
+    </select>
+
+    <select id="findSetBasicSysDepMbrMaxSort" resultType="java.lang.Integer">
+        SELECT IFNULL(MAX(sort),0)+1 FROM set_basic_sys_dep_mbr WHERE groupId =#{groupId} and tier =1
+    </select>
+
+    <select id="findPayId" resultType="java.lang.String" parameterType="java.lang.Integer">
+        select pay.platfromCode from set_basic_fastpay t left join t_pay pay on t.payId = pay.id where t.id = #{fastPayId}
+    </select>
+
+    <select id="findBankById" resultType="com.wsdy.saasops.modules.base.entity.BaseBank">
+        select t.* from t_bs_bank t where t.id = #{bankId}
+    </select>
+
+    <select id="getOnLinePayGroupIsQueue" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicPaymbrGroupRelation">
+        select sbp.groupid,p.paymenttype,sbp.isqueue from set_basic_paymbrgrouprelation sbp
+        INNER JOIN set_bacic_onlinepay sbo on sbp.onlinepayid = sbo.id
+        INNER JOIN t_pay p on sbo.payid = p.id
+        where p.paymenttype = #{paymentType}
+        GROUP BY sbp.groupid ORDER BY sbp.sort
+    </select>
+
+    <select id="getFastPayGroupIsQueue" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicFastPayGroup">
+        select sbg.groupid,p.paymenttype,sbg.isqueue from set_basic_fastpay_group sbg
+        INNER JOIN set_basic_fastpay sbf on sbg.fastpayid = sbf.id
+        INNER JOIN t_pay p on sbf.payid = p.id
+        group by sbg.groupid
+    </select>
+
+    <select id="getBankPayGroupIsQueue" resultType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysDepMbr">
+        select bsdm.groupid,bsdm.isqueue from set_basic_sys_dep_mbr bsdm
+        INNER JOIN set_basic_sys_deposit bsd on bsd.id = bsdm.depositid
+        group by bsdm.groupid
+    </select>
+
+
+    <sql id="statisticSucRate_where">
+        -- 时间限制
+        <if test="startTime == null or startTime == '' or endTime == null or endTime == ''">
+            and DATE_ADD(dep.auditTime, interval 7 DAY) >= now()
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND dep.auditTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND dep.auditTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </sql>
+
+    <select id="statisticSucRate" resultType="com.wsdy.saasops.modules.system.pay.dto.StatisticsSucRateDto"
+            parameterType="com.wsdy.saasops.modules.system.pay.dto.StatisticsSucRateDto">
+        select *,
+        (CASE WHEN totalNum =0 THEN 0 ELSE (Cast(sucNum*100/totalNum As decimal(18,2))) END ) sucRate
+        from (
+        -- 支付宝
+        select 1 type, dep.onlinepayid id, onlinePay.name payname,
+        count(pay.id)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN pay.id ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.mark=0
+        and pay.paymentType = 5
+        <include refid="statisticSucRate_where"/>
+        group by onlinePay.name
+
+        -- 微信
+        UNION ALL
+        select 2 type, dep.onlinepayid id, onlinePay.name payname,
+        count(pay.id)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN pay.id ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.mark=0
+        and pay.paymentType = 2
+        <include refid="statisticSucRate_where"/>
+        group by onlinePay.name
+
+        -- 网银
+        UNION ALL
+        select 3 type, dep.onlinepayid id, onlinePay.name payname,
+        count(pay.id)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN pay.id ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.mark=0
+        and pay.paymentType in (4,7,8)
+        <include refid="statisticSucRate_where"/>
+        group by onlinePay.name
+
+        -- 极速支付/自动入款
+        UNION ALL
+        select 4 type, dep.companyPayId id, pay.payname payname,
+        count(pay.id)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN pay.id ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN set_basic_sys_deposit basic ON basic.id = dep.companyPayId
+        LEFT JOIN set_basic_fastpay fastpay ON fastpay.id = basic.fastpayid
+        LEFT JOIN t_pay pay ON pay.id = fastpay.payId
+        WHERE dep.mark=1
+        and basic.type=1
+        and pay.paymentType in (6,9,10,13)
+        <include refid="statisticSucRate_where"/>
+        group by pay.id
+
+        -- 其他 1.qq
+        UNION ALL
+        select 5 type, dep.onlinepayid id, onlinePay.name payname,
+        count(pay.id)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN pay.id ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.mark=0
+        and pay.paymentType = 1
+        <include refid="statisticSucRate_where"/>
+        group by onlinePay.name
+
+        -- 其他 2.银行卡--网关银行卡跳转
+        UNION ALL
+        select 5 type, dep.onlinepayid id, onlinePay.name payname,
+        count(pay.id)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN pay.id ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.mark=0
+        and pay.paymentType = 11
+        <include refid="statisticSucRate_where"/>
+        group by onlinePay.name
+
+        -- 其他 3.普通支付/线下入款
+        UNION ALL
+        select 5 type, dep.companyPayId id, '线下入款' payname,
+        count(*)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN dep.companyPayId ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        LEFT JOIN set_basic_sys_deposit basic ON basic.id = dep.companyPayId
+        WHERE dep.mark=1
+        and basic.type=0
+        <include refid="statisticSucRate_where"/>
+
+        -- 其他 3.个人二维码
+        UNION ALL
+        select 5 type, dep.qrcodeid id, '普通扫码支付' payname,
+        count(*)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN dep.qrcodeid ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        INNER JOIN set_basic_sys_qrcode basic ON basic.id = dep.qrcodeid
+        WHERE dep.mark=2
+        <include refid="statisticSucRate_where"/>
+
+        -- 其他 4.网关卡转卡
+        UNION ALL
+        select 5 type, dep.onlinepayid id, onlinePay.name payname,
+        count(pay.id)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN pay.id ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN set_bacic_onlinePay onlinePay ON onlinePay.id = dep.onlinePayId
+        LEFT JOIN t_pay pay ON pay.id = onlinePay.payId
+        WHERE dep.mark=0
+        and pay.paymentType = 14
+        <include refid="statisticSucRate_where"/>
+        group by onlinePay.name
+
+        -- 6.加密货币
+        UNION ALL
+        select 6 type, dep.crid id,basic.name payname,
+        count(*)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN dep.crid ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN mbr_account mbr on mbr.id = dep.accountid
+        INNER JOIN set_basic_sys_cryptocurrencies basic ON basic.id = dep.crid
+        WHERE dep.mark=3
+        and basic.currencycode='USDT' and currencyprotocol ='ERC20'
+        <include refid="statisticSucRate_where"/>
+
+        -- 15.极速存款
+        UNION ALL
+        select 15 type, dep.companyPayId id, pay.payname payname,
+        count(pay.id)  totalNum, -- 总笔数
+        count(CASE WHEN dep.status =1 THEN pay.id ELSE NULL END ) sucNum	-- 成功笔数
+        from fund_deposit dep
+        LEFT JOIN set_basic_fastpay fastpay ON fastpay.id = dep.companyPayId
+        LEFT JOIN `saasops_manage`.t_pay pay ON pay.id = fastpay.payId
+        WHERE dep.mark=1
+        and pay.paymentType = 15
+        <include refid="statisticSucRate_where"/>
+        group by pay.id
+        ) t  where t.id is not null
+    </select>
+
+    <delete id="deletFastPayByIdEx" parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBasicFastPayGroup">
+        delete from set_basic_fastpay_group
+        where groupid = #{groupId} and fastpayid in(
+            select pay.id
+            from set_basic_fastpay pay
+            inner join (select * from set_basic_fastpay_group) g on pay.id = g.fastpayid
+            where g.groupid = #{groupId} and available=1
+        )
+    </delete>
+    <delete id="deleteSysDepMbrEx" parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBasicSysDepMbr">
+        delete from set_basic_sys_dep_mbr
+        where groupid =  #{groupId} and depositid in(
+            select pay.id
+            from set_basic_sys_deposit pay
+            inner join (select * from set_basic_sys_dep_mbr) g on pay.id = g.depositid
+            where g.groupid =  #{groupId} and available=1
+        )
+    </delete>
+    <delete id="deleteGroupRelationEx" parameterType="com.wsdy.saasops.modules.system.pay.entity.SetBasicPaymbrGroupRelation">
+        delete from set_basic_paymbrgrouprelation
+        where groupid =  #{groupId} and onlinePayId in(
+            select pay.id
+            from set_bacic_onlinepay pay
+            inner join (select * from set_basic_paymbrgrouprelation) g on pay.id = g.onlinePayId
+            where g.groupid =  #{groupId} and available=1
+        )
+    </delete>
+</mapper>

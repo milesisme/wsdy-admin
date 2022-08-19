@@ -1,0 +1,1049 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.mapper.OperateMapper">
+    <select id="selectGameOne" resultType="com.wsdy.saasops.modules.operate.entity.TGmGame"
+            parameterType="java.lang.Integer">
+		select t1.*,t2.catName,t3.depotName from t_gm_game
+		t1,t_gm_cat t2,
+		t_gm_depot t3 where t1.catId=t2.id and t1.depotId=
+		t3.id and t3.available=1 and t1.id=#{id}
+	</select>
+    <select id="selectNoticeList"
+            resultType="com.wsdy.saasops.modules.operate.entity.OprNotice"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprNotice">
+        select * from opr_notice
+        <include refid="noticeWhere"/>
+    </select>
+
+    <select id="queryValidListPage" resultType="com.wsdy.saasops.modules.operate.entity.OprNotice">
+        select * from opr_notice t where t.available = 1
+                                     and t.showType in (1,2)
+                                     and t.startTime <![CDATA[ <= ]]> NOW()
+                                     and t.endTime <![CDATA[ >= ]]> NOW() order by t.createTime desc limit 1
+    </select>
+
+    <select id="queryNoticeList" resultType="com.wsdy.saasops.modules.operate.entity.OprNotice"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprNotice">
+        select t.*
+        from opr_notice t
+        where t.available=1
+        and t.startTime <![CDATA[ <= ]]> NOW()
+        and t.endTime <![CDATA[ >= ]]> NOW()
+        <if test="showType != null and showType!='' and showType != '2'.toString()">
+            and (showType=#{showType} or showType='2')
+        </if>
+        order by t.startTime desc
+    </select>
+
+    <select id="findCatLabelList" resultType="com.wsdy.saasops.modules.operate.entity.TgmCatLabel"
+            parameterType="java.lang.Integer">
+		select * from(select t1.id,catName lableName,1 showType,t1.sortId
+		from t_gm_cat
+		t1,t_gm_depotcat t2 where t1.id=t2.catId and
+		t1.available=1 and
+		parentId=5 and t2.depotId=#{depotId}
+		union
+		select
+		DISTINCT t1.id,t1.labelName,2 showType,t1.sortId from t_gm_label
+		t1,opr_gmlabel t2 where t1.id=t2.labelId and
+		t2.depotId=#{depotId})tb1
+		order by showType ,sortId
+	</select>
+
+    <select id="findDepotcat" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepotcat"
+            parameterType="com.wsdy.saasops.modules.operate.entity.TGmDepotcat">
+        SELECT tt2.available availableWh,tt.*,1 isHall from (
+            SELECT tb1.id,tb1.catId,tb1.catName,tb1.depotId,tb1.depotName,tb1.istry,tb1.depotcode,tb1.orientation,
+            tb1.sortId,tb1.createtime,tb2.picUrl,tb2.mbPicUrl,tb2.gameTag,IFNULL(tb3.depotname, tb2.titleTag) titleTag,
+            tb2.depotBackgroundImage,tb2.logoPc,tb2.logoMb,tb2.logoApp,tb3.sortId siteSortId,tb3.memo
+            FROM (
+                SELECT DISTINCT t1.id,t1.logo,t1.gameTag,t1.pcUrlTag,t1.istry,t1.orientation,
+                t2.catName,t3.depotName,t1.depotId,t1.catId,t1.recRating,t4.sort,t3.depotcode,
+                t3.sortid,t3.createtime
+                FROM t_gm_game t1,t_gm_cat t2,
+                t_gm_depot t3,t_gm_depotcat t4 WHERE t1.catId = t2.id
+                AND t1.depotId = t3.id
+                AND t3.id = t4.depotId
+                AND t2.id = t4.catId
+                AND t2.id IN (1, 3, 6, 12, 9, 49)
+                AND t1.topLink = 1
+                <if test="catId != null and catId != ''">
+                AND t1.catId = #{catId}
+                </if>
+                AND t3.available=1
+            )tb1 left join t_game_logo tb2
+            on tb1.catId=tb2.catId and tb1.depotId=tb2.depotId
+            LEFT JOIN set_gm_game tb3 on tb2.id = tb3.gameLogoId
+            WHERE
+            exists (
+            SELECT api.depotId FROM t_gm_api api
+            left join t_gm_apiprefix fix on api.id=fix.apiId
+            left join t_cp_site site on site.id=fix.siteId
+            WHERE api.depotId=tb1.depotId and site.siteCode=#{siteCode}
+            )
+            <if test="terminal==null">
+                AND tb2.enablePc = 1 and (tb3.enableDepotPc = 1 OR tb3.enableDepotPc is null)
+            </if>
+            <if test="terminal==1">
+                AND tb2.enableMb = 1 and (tb3.enableDepotMb = 1 OR tb3.enableDepotMb is null)
+            </if>
+        ) tt LEFT JOIN t_gm_api tt1 ON tt.depotId = tt1.depotId
+        LEFT JOIN t_gm_apiprefix tt2 ON tt1.id = tt2.apiId
+        where tt2.prefix = #{siteCode} and tt2.available != 0
+        GROUP BY tt.id
+        order by tt.siteSortId = 0 asc, tt.siteSortId asc,tt.sortId ASC,tt.createtime DESC
+    </select>
+
+    <select id="findDepotcatAll" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepotcat">
+        select DISTINCT t2.depotName,case when t3.parentId=0 then t3.catName else (select catName
+        from t_gm_cat where id=t3.parentId)  end catName,t1.depotId,case when t3.parentId=0 then
+        t1.catId else parentId end catId from t_gm_depotcat t1,t_gm_depot t2,t_gm_cat t3 where
+        t1.catId=t3.id and t1.depotId=t2.id and t2.available=1 and t3.available=1 order by t2.depotName
+	</select>
+
+    <select id="findCatDepot" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepotcat">
+        select t1.depotId,t2.depotName,t3.catName from t_gm_depotcat t1,t_gm_depot t2,t_gm_cat t3 where
+        t1.depotId = t2.id and t2.available = 1 and t1.catId = t3.id
+        <if test="catId != null">
+            and t1.catId = #{catId}
+        </if>
+    </select>
+
+    <select id="findWebGameList" resultType="com.wsdy.saasops.modules.operate.entity.OprGame"
+            parameterType="com.wsdy.saasops.api.modules.user.dto.ElecGameDto">
+        SELECT * FROM(
+            SELECT t1.id,t1.gameName,t1.logo,t1.logo2,IFNULL(t4.popularity,t1.clicknum) clickNum,IFNULL(t1.recRating, 0) recRating,t1.istry,t1.orientation,
+            t5.depotName,t3.catName,IFNULL(t1.enablePool, 0) enablePool,IFNULL(t1.enableTest, 0)
+            enableTest,IFNULL(t1.goodNum, 0) goodNum,
+            t1.enablePc,t1.enableMb,t1.enableApp,t1.sortId, t1.createtime
+            FROM t_gm_game t1
+            LEFT JOIN t_gm_cat t3 ON t1.catId = t3.id
+            LEFT JOIN set_game t4 ON t1.id = t4.gameId
+            LEFT JOIN t_gm_depot t5 ON t1.depotId = t5.id
+            <include refid="webGameWhere"/>
+        ) tt
+        <choose>
+            <when test="sortMark != null and sortMark == '1'.toString()">
+                order by tt.clickNum=0 asc,tt.clickNum asc,tt.createtime desc, id desc
+            </when>
+            <when test="sortMark != null and sortMark == '2'.toString()">
+                order by tt.goodNum ${sortWay}
+            </when>
+            <otherwise>
+                order by tt.sortId ${sortWay}
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="findLotteryGameList" resultType="com.wsdy.saasops.modules.operate.entity.OprGame"
+            parameterType="com.wsdy.saasops.api.modules.user.dto.ElecGameDto">
+        select * from(
+        SELECT t1.id,t1.gameName,t1.logo,t1.logo2,IFNULL(t4.popularity,t1.clicknum) clickNum,IFNULL(t1.recRating, 0) recRating,t1.istry,t1.orientation,
+        t5.depotName,t3.catName,IFNULL(t1.enablePool, 0) enablePool,IFNULL(t1.enableTest, 0)
+        enableTest,IFNULL(t1.goodNum, 0) goodNum,
+        t1.enablePc,t1.enableMb,t1.enableApp,t1.sortId, t1.createtime
+        FROM t_gm_game t1
+        LEFT JOIN t_gm_cat t3 ON t1.catId = t3.id
+        LEFT JOIN set_game t4 ON t1.id = t4.gameId
+        LEFT JOIN t_gm_depot t5 ON t1.depotId = t5.id
+        WHERE t1.catId=12 and t1.available=1
+        <if test="id != null">
+            and t1.subCatId =#{id}
+        </if>
+        <if test="enableTest != null">
+            and t1.enableTest =#{enableTest}
+        </if>
+        <if test="terminal==0">
+            and t1.enablePc=1
+            and (t4.enableGmaePc =1 or t4.enableGmaePc IS NULL)
+        </if>
+        <if test="terminal==1">
+            and t1.enableMb=1
+            and (t4.enableGmaeMb =1 or t4.enableGmaeMb IS NULL)
+        </if>
+        <if test="depotId != null">
+            and t1.depotId =#{depotId}
+        </if>
+        <if test="lableName!= null and lableName!=''">
+            and t1.gameName like concat('%',#{lableName},'%')
+        </if>
+        ) tt
+        <choose>
+            <when test="sortMark != null and sortMark == '1'.toString()">
+                order by tt.clickNum=0 asc,tt.clickNum asc,tt.createtime desc, id desc
+            </when>
+            <when test="sortMark != null and sortMark == '2'.toString()">
+                order by tt.goodNum ${sortWay}
+            </when>
+            <otherwise>
+                order by tt.sortId ${sortWay}
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="findChessGameList" resultType="com.wsdy.saasops.modules.operate.entity.OprGame"
+            parameterType="com.wsdy.saasops.api.modules.user.dto.ElecGameDto">
+        select * from(
+        SELECT t1.id,t1.gameName,t1.logo,t1.logo2,IFNULL(t4.popularity,t1.clicknum) clickNum,IFNULL(t1.recRating, 0) recRating,t1.istry,t1.orientation,
+        t5.depotName,t3.catName,IFNULL(t1.enablePool, 0) enablePool,IFNULL(t1.enableTest, 0)
+        enableTest,IFNULL(t1.goodNum, 0) goodNum,
+        t1.enablePc,t1.enableMb,t1.enableApp,t1.sortId, t1.createtime
+        FROM t_gm_game t1
+        LEFT JOIN t_gm_cat t3 ON t1.catId = t3.id
+        LEFT JOIN set_game t4 ON t1.id = t4.gameId
+        LEFT JOIN t_gm_depot t5 ON t1.depotId = t5.id
+        WHERE t1.catId=6 and t1.available=1
+        <if test="id != null">
+            and t1.subCatId =#{id}
+        </if>
+        <if test="enableTest != null">
+            and t1.enableTest =#{enableTest}
+        </if>
+        <if test="terminal==0">
+            and t1.enablePc=1
+            and (t4.enableGmaePc =1 or t4.enableGmaePc IS NULL)
+        </if>
+        <if test="terminal==1">
+            and t1.enableMb=1
+            and (t4.enableGmaeMb =1 or t4.enableGmaeMb IS NULL)
+        </if>
+        <if test="depotId != null">
+            and t1.depotId =#{depotId}
+        </if>
+        <if test="lableName!= null and lableName!=''">
+            and t1.gameName like concat('%',#{lableName},'%')
+        </if>
+        ) tt
+        <choose>
+            <when test="sortMark != null and sortMark == '1'.toString()">
+                order by tt.clickNum=0 asc,tt.clickNum asc,tt.createtime desc, id desc
+            </when>
+            <when test="sortMark != null and sortMark == '2'.toString()">
+                order by tt.goodNum ${sortWay}
+            </when>
+            <otherwise>
+                order by tt.sortId ${sortWay}
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="findGameList" resultType="com.wsdy.saasops.modules.operate.entity.OprGame"
+            parameterType="com.wsdy.saasops.modules.operate.entity.TGmDepotcat">
+        SELECT t1.id,t1.gameName,t1.logo,t1.logo2,IFNULL(t4.popularity,t1.clicknum) clickNum,IFNULL(t1.recRating, 0) recRating,t1.istry,
+        t5.depotName,t3.catName,IFNULL(t1.enablePool, 0) enablePool,IFNULL(t1.enableTest, 0)
+        enableTest,IFNULL(t1.goodNum, 0) goodNum,
+        t1.enablePc,t1.enableMb,t1.enableApp,t1.sortId, t1.createtime
+        FROM t_gm_game t1
+        LEFT JOIN t_gm_cat t3 ON t1.catId = t3.id
+        LEFT JOIN set_game t4 ON t1.id = t4.gameId
+        LEFT JOIN t_gm_depot t5 ON t1.depotId = t5.id
+        where  t1.catId= #{catId} and t1.available=1
+        <if test="terminal==null">
+            and t1.enablePc=1
+            and (t4.enableGmaePc =1 or t4.enableGmaePc IS NULL)
+        </if>
+        <if test="terminal==1">
+            and t1.enableMb=1
+            and (t4.enableGmaeMb =1 or t4.enableGmaeMb IS NULL)
+        </if>
+        <if test="depotId != null">
+            and t1.depotId =#{depotId}
+        </if>
+    </select>
+    <sql id="webGameWhere">
+        <where>
+            t1.catId=5 and t1.available=1
+            <if test="id != null">
+                and t1.subCatId =#{id}
+            </if>
+            <if test="enableTest != null">
+                and t1.enableTest =#{enableTest}
+            </if>
+            <if test="terminal==0">
+                and t1.enablePc=1
+                and (t4.enableGmaePc =1 or t4.enableGmaePc IS NULL)
+            </if>
+            <if test="terminal==1">
+                and t1.enableMb=1
+                and (t4.enableGmaeMb =1 or t4.enableGmaeMb IS NULL)
+            </if>
+            <if test="depotId != null">
+                and t1.depotId =#{depotId}
+            </if>
+            <if test="lableName!= null and lableName!=''">
+                and t1.gameName LIKE CONCAT('%',#{lableName},'%')
+            </if>
+        </where>
+    </sql>
+    <select id="findCatGameList" resultType="com.wsdy.saasops.modules.operate.entity.OprGame">
+	select t1.id,t1.gameName,t1.logo,t1.logo2,IFNULL(t1.clickNum,0) clickNum,IFNULL(t1.recRating,0) recRating, t2.depotName,t3.catName,
+	IFNULL(t1.enablePool,0) enablePool,IFNULL(t1.enableTest,0) enableTest,IFNULL(t1.goodNum,0) goodNum from t_gm_game t1,t_gm_depot t2,t_gm_cat t3
+	 where t1.depotId=t2.id and  t1.catId=t3.id   and t1.enablePc=1 and t1.available=1 and  t1.depotId=#{depotId}  and t1.catId=#{catId} and logo2 is not null
+	</select>
+
+    <select id="siteUrlList" resultType="com.wsdy.saasops.api.modules.apisys.entity.TcpSiteurl">
+	  SELECT * FROM `t_cp_siteurl` where clientType = 1 and available = 1 and siteId = #{siteId}
+	</select>
+
+    <select id="siteDepotList" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+	  SELECT t1.id,t3.siteName,t1.depotId,t4.depotCode,t4.depotName
+	  FROM t_gm_api t1,t_gm_apiprefix t2,t_cp_site t3,t_gm_depot t4
+	  where t1.id = t2.apiId
+	  and t2.siteId = t3.id
+	  and t1.depotId = t4.id
+	  and t3.siteCode = #{siteCode}
+	  GROUP BY t4.depotCode
+	</select>
+
+    <select id="findlabelGameList" resultType="com.wsdy.saasops.modules.operate.entity.OprGame"
+            parameterType="com.wsdy.saasops.api.modules.user.dto.ElecGameDto">
+select * from(
+        SELECT
+        t1.id,t1.gameName,t1.logo,t1.logo2,t1.istry,
+        IFNULL(t3.popularity,t1.clicknum) clickNum,
+        IFNULL(t1.recRating, 0) recRating,
+        t1.depotName,t4.catName,
+        IFNULL(t1.enablePool, 0) enablePool,
+        IFNULL(t1.enableTest, 0) enableTest,
+        IFNULL(t1.goodNum, 0) goodNum,
+        t1.sortId
+        FROM
+        t_gm_game t1 LEFT JOIN
+        opr_gmlabel t2 ON t1.id = t2.gameId LEFT JOIN
+        t_gm_cat t4 ON t1.subCatId = t4.id LEFT JOIN set_game t5 ON t1.id = t5.gameId
+        LEFT JOIN set_game t3 ON t1.id = t3.gameId
+        where t1.catId=5 and t1.enablePc=1 and t1.available=1 and t2.labelId=#{id} and
+        t2.depotId=#{depotId}
+        <if test="enableTest != null">
+            and t1.enableTest =#{enableTest}
+        </if>
+        <if test="terminal==0">
+            and t1.enablePc=1
+            and (t5.enableGmaePc =1 or t5.enableGmaePc IS NULL)
+        </if>
+        <if test="terminal==1">
+            and t1.enableMb=1
+            and (t5.enableGmaeMb =1 or t5.enableGmaeMb IS NULL)
+        </if>
+         <if test="lableName!= null and lableName!=''">
+            and t1.gameName LIKE CONCAT('%',#{lableName},'%')
+         </if>
+        ) tt
+        <choose>
+            <when test="sortMark != null and sortMark == '1'.toString()">
+                order by tt.clickNum=0 asc,tt.clickNum ${sortWay}
+            </when>
+            <when test="sortMark != null and sortMark == '2'.toString()">
+                order by tt.goodNum ${sortWay}
+            </when>
+            <otherwise>
+                order by tt.sortId ${sortWay}
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="findFishGameList" resultType="com.wsdy.saasops.modules.operate.entity.OprGame"
+            parameterType="com.wsdy.saasops.api.modules.user.dto.ElecGameDto">
+        select * from(
+            SELECT t1.*,
+                t5.picUrl,t5.mbPicUrl,t5.appPicUrl,t5.logoPc,t5.logoApp,t5.logoMb,
+                t7.popularity,IFNULL(t7.popularity,t1.clicknum) clickNum2,t6.sortid sortid2
+            FROM t_gm_game t1
+            LEFT JOIN t_game_logo t5 ON t1.depotId = t5.depotId
+            AND t1.catId = t5.catId
+            LEFT JOIN set_gm_game t6 ON t5.id = t6.gameLogoId
+            LEFT JOIN set_game t7 ON t1.id = t7.gameId
+            WHERE t1.catId = 8
+            AND t1.depotId IN (
+                SELECT t2.depotId
+                FROM t_gm_api t2
+                LEFT JOIN t_gm_apiprefix t3 ON t2.id = t3.apiId
+                LEFT JOIN t_cp_site t4 ON t3.siteId = t4.id
+                WHERE t4.siteCode = #{siteCode}
+            )
+            AND t1.available = 1
+            <if test="lableName!= null and lableName!=''">
+                and t1.gameName like concat('%',#{lableName},'%')
+            </if>
+            <if test="terminal==0">
+                and t1.enablePc=1
+                and (t7.enableGmaePc =1 or t7.enableGmaePc IS NULL)
+                AND (t6.enableDepotPc = 1 OR t6.enableDepotPc IS NULL)
+            </if>
+            <if test="terminal==1">
+                and t1.enableMb=1
+                and (t7.enableGmaeMb =1 or t7.enableGmaeMb IS NULL)
+                and (t6.enableDepotMb =1 or t6.enableDepotMb IS NULL)
+            </if>
+        ) tt
+        order by tt.sortid2 = 0 asc, tt.sortid2 asc,tt.clickNum2 = 0 asc,tt.clickNum2 asc
+    </select>
+
+
+    <select id="gameAllList" resultType="com.wsdy.saasops.modules.operate.dto.DepotListDto">
+        SELECT t2.depotId,t4.depotName,t5.logoPc depotLogo FROM
+        <if test="siteId != null">
+            (SELECT * FROM t_gm_apiprefix t1 WHERE t1.siteId = #{siteId})tt
+        </if>
+        <if test="siteId == null">
+            (SELECT * FROM t_gm_apiprefix t1)tt
+        </if>
+        LEFT JOIN t_gm_api t2 ON tt.apiId = t2.id
+        LEFT JOIN t_gm_depotcat t3 ON t2.depotId = t3.depotId
+        LEFT JOIN t_gm_depot t4 ON t3.depotId = t4.id
+        LEFT JOIN t_game_logo t5 ON t4.id = t5.depotId
+        WHERE t3.catId = 5 and t4.hotGameAvailable = 1
+        and t4.available = 1
+        GROUP BY t2.depotId ORDER BY t2.depotId ASC
+    </select>
+
+    <select id="gameRecommendedDepotList" resultType="com.wsdy.saasops.modules.operate.dto.DepotListDto">
+        select t1.id depotId,t1.depotName,t5.logoPc depotLogo from t_gm_depot t1
+        LEFT JOIN t_gm_api t2 ON t1.id = t2.depotId
+        LEFT JOIN t_gm_apiprefix t3 on t2.id = t3.apiId
+        LEFT JOIN t_cp_site t4 on t3.siteId = t4.id
+        LEFT JOIN t_game_logo t5 ON t1.id = t5.depotId
+        LEFT JOIN set_gm_game t6 on t5.id = t6.gameLogoId
+        where t5.catId = 5
+        <if test="siteId != null">
+            and t4.id = #{siteId}
+        </if>
+        and t1.available = 1
+        and t5.enableMb = 1
+        and (t6.enableDepotMb = 1 OR t6.enableDepotMb is null)
+        GROUP BY t1.id ORDER BY t1.id ASC
+    </select>
+
+
+    <select id="gameAllList1" resultType="com.wsdy.saasops.modules.operate.entity.OprGame">
+        SELECT * FROM t_gm_game t1 LEFT JOIN set_game t2 ON t1.id = t2.gameId
+        <where>
+            <if test="depotId != null">
+                and t1.depotId =#{depotId}
+            </if>
+            <if test="terminal==0">
+                and t1.enablePc=1
+                and (t2.enableGmaePc =1 or t2.enableGmaePc IS NULL)
+            </if>
+            <if test="terminal==1">
+                and t1.enableMb=1
+                and (t2.enableGmaeMb =1 or t2.enableGmaeMb IS NULL)
+            </if>
+        </where>
+        ORDER BY clickNum DESC LIMIT #{pageNumber}
+    </select>
+
+    <sql id="msgWhere">
+        <where>
+            t1.msgId=t2.id
+            <if test="loginName!= null and loginName!=''">
+                and t1.loginName like concat('%',#{loginName},'%')
+            </if>
+            <if test="title!= null and title!=''">
+                and t2.title like concat('%',#{title},'%')
+            </if>
+
+            <if test="sendTimeStart!= null and sendTimeStart!=''">
+                and t2.sendTime&lt;=#{sendTimeStart}
+            </if>
+            <if test="sendTimeEnd!= null and sendTimeEnd!=''">
+                and t2.sendTime&gt;=#{sendTimeEnd}
+            </if>
+
+            <if test="receiveType!= null and receiveType!=''">
+                and
+                t2.receiveType =#{receiveType}
+            </if>
+            <if test="state != null">
+                and t2.state =#{state}
+            </if>
+
+            <if test="readTimeStart!= null and readTimeStart!=''">
+                and t2.readTime&gt;=#{createStart}
+            </if>
+            <if test="readTimeEnd!= null and readTimeEnd!=''">
+                and t2.readTime&lt;=#{createEnd}
+            </if>
+        </where>
+    </sql>
+    <sql id="noticeWhere">
+        <where>
+            <if test="noticeTitle != null and noticeTitle!=''">
+                and noticeTitle like concat('%',#{noticeTitle},'%')
+            </if>
+            <if test="showTypes != null and showTypes!='' and showTypes != '2'.toString()">
+                and (showType=#{showTypes} or showType='2')
+            </if>
+            <if test="availables != null and availables.size()>0">
+                and available in
+                <foreach item="available" collection="availables" open="(" separator="," close=")">
+                    #{available}
+                </foreach>
+            </if>
+            <if test="createStart != null and createStart!=''">
+                and createTime&gt;=#{createStart}
+            </if>
+            <if test="createEnd != null and createEnd!=''">
+                and createTime&lt;=#{createEnd}
+            </if>
+        </where>
+    </sql>
+    <sql id="baseWhere">
+        <where>
+            <if test="actTmplId != null">
+                and t4.actTmplId =#{actTmplId}
+            </if>
+            <if test="actCatId != null">
+                and t4.actCatId =#{actCatId}
+            </if>
+            <if test="actName != null and actName!=''">
+                and t4.actName like concat('%',#{actName},'%')
+            </if>
+            <if test="useState != null">
+                and t4.useState =#{useState}
+            </if>
+            <if test="useStart != null and useStart!=''">
+                and t4.useStart&gt;=#{useStart}
+            </if>
+            <if test="useEnd != null and useEnd!=''">
+                and t4.useEnd&lt;=#{useEnd}
+            </if>
+        </where>
+    </sql>
+    <sql id="GameWhere">
+        <where>
+            <if test="depotId != null">
+                and t1.depotId =#{depotId}
+            </if>
+            <if test="catId != null">
+                and t1.catId =#{catId}
+            </if>
+            <if test="gameName != null and gameName''">
+                and t1.gameName like concat('%',#{gameName},'%')
+            </if>
+        </where>
+    </sql>
+
+    <update id="updateGmClickNum" parameterType="java.lang.Integer">
+		update t_gm_game set clickNum=IFNULL(clickNum,0)+1,goodNum=clickNum where id=#{gameId}
+	</update>
+
+    <select id="findelecDepotList" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+        select tt2.available availableWh,tt.* from (
+            SELECT tb1.id,IFNULL(tb3.depotname, tb1.depotname) depotname,tb1.sortid,tb1.createtime,tb1.memo,tb1.depotCode,
+                tb2.picUrl logo, tb2.logoMb mbPicUrl,tb3.sortId siteSortId
+            FROM
+            (
+                SELECT DISTINCT t1.*, t2.sort
+                FROM t_gm_depot t1
+                LEFT JOIN t_gm_depotcat t2 ON t1.id = t2.depotId
+                LEFT JOIN t_gm_cat t3 ON t2.catId = t3.id
+                WHERE t3.id = 5 AND t1.available = 1
+            ) tb1
+            LEFT JOIN t_game_logo tb2 ON tb2.catId = 5 AND tb1.id = tb2.depotId
+            LEFT JOIN set_gm_game tb3 ON tb2.id = tb3.gameLogoId
+            WHERE exists (
+                SELECT api.depotId FROM t_gm_api api
+                left join t_gm_apiprefix fix on api.id=fix.apiId
+                left join t_cp_site site on site.id=fix.siteId
+                WHERE api.depotId=tb1.id and site.siteCode=#{siteCode}
+            )
+            <if test="terminal==0">
+                and tb2.enablePc=1
+                and (tb3.enableDepotPc =1 or tb3.enableDepotPc IS NULL)
+            </if>
+            <if test="terminal==1">
+                and tb2.enableMb=1
+                and (tb3.enableDepotMb =1 or tb3.enableDepotMb IS NULL)
+            </if>
+        )tt LEFT JOIN t_gm_api tt1 ON tt.id = tt1.depotId
+        LEFT JOIN t_gm_apiprefix tt2 ON tt1.id = tt2.apiId
+        LEFT JOIN t_cp_site site1 on site1.id=tt2.siteId
+        WHERE site1.siteCode=#{siteCode}
+        GROUP BY tt.id ORDER BY tt.siteSortId = 0 asc,tt.siteSortId asc,tt.sortId ASC,tt.createtime desc
+    </select>
+
+    <select id="findChessDepotList" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+        select tt2.available availableWh,tt.* from (
+        SELECT tb1.id,IFNULL(tb3.depotname, tb1.depotname) depotname,tb1.sortid,tb1.createtime,tb1.memo,tb1.depotCode,
+        tb2.picUrl logo, tb2.logoMb mbPicUrl,tb3.sortId siteSortId
+        FROM
+        (
+        SELECT DISTINCT t1.*, t2.sort
+        FROM t_gm_depot t1
+        LEFT JOIN t_gm_depotcat t2 ON t1.id = t2.depotId
+        LEFT JOIN t_gm_cat t3 ON t2.catId = t3.id
+        WHERE t3.id = 6 AND t1.available = 1
+        ) tb1
+        LEFT JOIN t_game_logo tb2 ON tb2.catId = 6 AND tb1.id = tb2.depotId
+        LEFT JOIN set_gm_game tb3 ON tb2.id = tb3.gameLogoId
+        WHERE exists (
+        SELECT api.depotId FROM t_gm_api api
+        left join t_gm_apiprefix fix on api.id=fix.apiId
+        left join t_cp_site site on site.id=fix.siteId
+        WHERE api.depotId=tb1.id and site.siteCode=#{siteCode}
+        )
+        <if test="terminal==0">
+            and tb2.enablePc=1
+            and (tb3.enableDepotPc =1 or tb3.enableDepotPc IS NULL)
+        </if>
+        <if test="terminal==1">
+            and tb2.enableMb=1
+            and (tb3.enableDepotMb =1 or tb3.enableDepotMb IS NULL)
+        </if>
+        )tt LEFT JOIN t_gm_api tt1 ON tt.id = tt1.depotId
+        LEFT JOIN t_gm_apiprefix tt2 ON tt1.id = tt2.apiId
+        left join t_cp_site site1 on site1.id=tt2.siteId
+        WHERE site1.siteCode=#{siteCode}
+        GROUP BY tt.id ORDER BY tt.siteSortId = 0 asc,tt.siteSortId asc,tt.sortId ASC,tt.createtime DESC
+    </select>
+
+    <select id="findLotteryDepotList" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+        select tt2.available availableWh,tt.* from (
+        SELECT tb1.id,IFNULL(tb3.depotname, tb1.depotname) depotname,tb1.sortid,tb1.createtime,tb1.memo,tb1.depotCode,
+        tb2.picUrl logo, tb2.logoMb mbPicUrl,tb3.sortId siteSortId
+        FROM
+        (
+        SELECT DISTINCT t1.*, t2.sort
+        FROM t_gm_depot t1
+        LEFT JOIN t_gm_depotcat t2 ON t1.id = t2.depotId
+        LEFT JOIN t_gm_cat t3 ON t2.catId = t3.id
+        WHERE t3.id = 12 AND t1.available = 1
+        ) tb1
+        LEFT JOIN t_game_logo tb2 ON tb2.catId = 12 AND tb1.id = tb2.depotId
+        LEFT JOIN set_gm_game tb3 ON tb2.id = tb3.gameLogoId
+        WHERE exists (
+        SELECT api.depotId FROM t_gm_api api
+        left join t_gm_apiprefix fix on api.id=fix.apiId
+        left join t_cp_site site on site.id=fix.siteId
+        WHERE api.depotId=tb1.id and site.siteCode=#{siteCode}
+        )
+        <if test="terminal==0">
+            and tb2.enablePc=1
+            and (tb3.enableDepotPc =1 or tb3.enableDepotPc IS NULL)
+        </if>
+        <if test="terminal==1">
+            and tb2.enableMb=1
+            and (tb3.enableDepotMb =1 or tb3.enableDepotMb IS NULL)
+        </if>
+        )tt LEFT JOIN t_gm_api tt1 ON tt.id = tt1.depotId
+        LEFT JOIN t_gm_apiprefix tt2 ON tt1.id = tt2.apiId
+        left join t_cp_site site1 on site1.id=tt2.siteId
+        WHERE site1.siteCode=#{siteCode}
+        GROUP BY tt.id ORDER BY tt.siteSortId = 0 asc,tt.siteSortId asc,tt.sortId ASC,tt.createtime desc
+    </select>
+
+    <select id="findSiteTGmDepotList" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+        SELECT t6.id,t6.depotName,t6.depotCode,t2.available availableWh
+        FROM t_gm_api t1
+        LEFT JOIN t_gm_apiprefix t2 ON t1.id = t2.apiId
+        LEFT JOIN t_cp_site t3 ON t2.siteId = t3.id
+        LEFT JOIN t_gm_depot t6 ON t1.depotId = t6.id
+        LEFT JOIN t_game_logo t4 ON t1.depotId = t4.depotId
+        LEFT JOIN set_gm_game t5 ON t4.id = t5.gameLogoId
+        WHERE t3.siteCode = #{siteCode}
+        AND t4.enablePc = 1
+        AND (t5.enableDepotPc = 1 OR t5.enableDepotPc IS NULL)
+        GROUP BY t1.id;
+    </select>
+
+    <select id="findelecCatList" resultType="com.wsdy.saasops.modules.operate.entity.TGmCat">
+        SELECT t3.catName,t3.catMbShowLogo,t3.catMbDefaultLogo,t3.catTemplateName,t3.id from (
+        SELECT api.depotId FROM t_gm_api api
+        left join t_gm_apiprefix fix on api.id=fix.apiId
+        left join t_cp_site site on site.id=fix.siteId
+        WHERE api.id=fix.apiId and fix.siteId=site.id and site.siteCode=#{siteCode}) t1
+        LEFT JOIN t_game_logo t2 ON t1.depotId = t2.depotId
+        LEFT JOIN t_gm_cat t3 on t2.catId = t3.id
+        LEFT JOIN set_gm_game t4 ON t2.id = t4.gameLogoId
+        <where>
+            <if test="terminal==0">
+                t2.enablePc = 1
+                and (t4.enableDepotPc =1 OR t4.enableDepotPc is NULL)
+            </if>
+            <if test="terminal==1">
+                t2.enableMb=1
+                and (t4.enableDepotMb =1 OR t4.enableDepotMb is NULL)
+            </if>
+        </where>
+        GROUP BY t2.catId ORDER BY t3.sortId
+    </select>
+
+    <select id="catchFishDepoList" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+        SELECT
+        tb1.*, tb2.picUrl logo,
+        tb2.mbPicUrl
+        FROM
+        (SELECT DISTINCT t1.*, t2.sort FROM t_gm_depot t1
+        LEFT JOIN t_gm_depotcat t2 ON t1.id = t2.depotId
+        LEFT JOIN t_gm_cat t3 ON t2.catId = t3.id
+        WHERE t3.id = 8 AND t1.available = 1) tb1
+        LEFT JOIN t_game_logo tb2 ON tb2.catId = 8
+        AND tb1.id = tb2.depotId
+        LEFT JOIN set_gm_game tb3 ON tb2.id = tb3.gameLogoId
+        WHERE
+        exists (
+        SELECT api.depotId FROM t_gm_api api
+        left join t_gm_apiprefix fix on api.id=fix.apiId
+        left join t_cp_site site on site.id=fix.siteId
+        WHERE api.depotId=tb1.id and site.siteCode=#{siteCode}
+        )
+        <if test="terminal==0">
+            and tb2.enablePc=1
+            and (tb3.enableDepotPc =1 or tb3.enableDepotPc IS NULL)
+        </if>
+        <if test="terminal==1">
+            and tb2.enableMb=1
+            and (tb3.enableDepotPc =1 or tb3.enableDepotPc IS NULL)
+        </if>
+        GROUP BY tb1.depotCode
+        ORDER BY tb1.sort ASC,tb1.id ASC
+    </select>
+
+    <select id="queryTGmGameList" resultType="com.wsdy.saasops.modules.operate.entity.TGmGame">
+        SELECT
+        gm.id id,
+        gm.gameTag gameTag,
+        gm.enablePc enablePc,
+        gm.enableMb enableMb,
+        gm.enableTest enableTest,
+        gm.monthPer monthPer,
+        gm.lastdayPer lastdayPer,
+        gm.available available,
+        cat.catName catName,
+        dp.depotName depotName,
+        dp.memo memo
+        FROM
+        t_gm_game gm
+        LEFT JOIN
+        t_gm_depot dp
+        ON
+        gm.depotId = dp.id
+        LEFT JOIN
+        t_gm_cat cat
+        ON
+        gm.catId = cat.id
+        <include refid="queryTg"></include>
+    </select>
+
+    <sql id="queryTg">
+        <where>
+            <if test="gameTag!=null and gameTag!=''">
+                AND gm.gameTag=#{gameTag}
+            </if>
+            <if test="depotId!=null and depotId!=''">
+                AND dp.Id = #{depotId}
+            </if>
+            <if test="available!=null">
+                AND gm.available = #{available}
+            </if>
+            <if test="enablePc!=null">
+                AND gm.enablePc = #{enablePc}
+            </if>
+            <if test="enableMb!=null">
+                AND gm.enableMb = #{enableMb}
+            </if>
+            <if test="enableTest!=null">
+                AND gm.enableTest = #{enableTest}
+            </if>
+            <if test="depotName!=null">
+                AND gm.depotName = #{depotName}
+            </if>
+            <if test="catId!= null">
+                AND gm.catId = #{catId}
+            </if>
+        </where>
+    </sql>
+
+    <select id="queryCatList" resultType="com.wsdy.saasops.modules.operate.entity.TGmCat">
+        select
+        cat.id id,
+        cat.catName catName,
+        count(gm.id) gameCount,
+        SUM(gm.monthPer) tMonthPer,
+        SUM(gm.lastdayPer) tLastDayPer
+        from
+        t_gm_game gm,
+        t_gm_cat cat,
+        t_gm_depot depot
+        <include refid="queryCat"/>
+        GROUP BY gm.catId
+    </select>
+
+    <sql id="queryCat">
+        <where>
+            cat.id = gm.catId
+            AND
+            depot.id = gm.depotId
+            <if test="id!=null">
+                AND depot.id = #{id}
+            </if>
+            <if test="available!=null">
+                AND depot.available=#{available}
+            </if>
+        </where>
+    </sql>
+
+    <select id="findDepotBalanceList" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+		select tb1.* ,tb2.accountId,case when tb2.accountId is null then 0 else 1 end
+		hasAccount from t_gm_depot tb1 inner join mbr_depot_wallet tb2 on
+		tb1.id=tb2.depotId where tb2.accountId=#{accountId} and tb1.available=1
+		order by tb1.sortId asc
+	</select>
+	
+    <select id="findDepotList" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+        SELECT tt2.available availableWh,tt.* FROM (
+            SELECT
+            	tb1.id,IFNULL(tb6.depotname, tb1.depotname) depotname,
+            	tb1.sortid,tb1.createtime,tb1.memo,tb1.depotCode,
+				tb1.available,tb1.hotgameavailable,
+            	tb2.accountId,
+                case when tb2.accountId is null then 0 else 1 end hasAccount,
+                case when (tb2.accountId is null or tb2.istransfer = 0) then 0 else 1 end hasTransfer,
+                GROUP_CONCAT(tb4.catName) catNames,tb6.sortId siteSortId
+            FROM t_gm_depot tb1
+            LEFT JOIN mbr_depot_wallet tb2 ON tb1.id = tb2.depotId AND tb2.accountId =#{accountId}
+            LEFT JOIN t_gm_depotcat tb3 ON tb1.id = tb3.depotId
+            LEFT JOIN t_gm_cat tb4 ON tb3.catId = tb4.id
+            LEFT JOIN t_game_logo tb5 ON tb4.id = tb5.catId and tb1.id = tb5.depotId
+            LEFT JOIN set_gm_game tb6 ON tb5.depotId = tb6.depotId and tb5.id = tb6.gameLogoId
+            WHERE tb1.available=1 and tb4.parentId=0
+            <if test="terminal==0">
+                AND tb5.enablePc=1
+                AND (tb6.enableDepotPc =1 or tb6.enableDepotPc IS NULL)
+            </if>
+            <if test="terminal==1">
+                AND tb5.enableMb=1
+                AND (tb6.enableDepotmb =1 or tb6.enableDepotmb IS NULL)
+            </if>
+            AND EXISTS (
+                SELECT api.depotId FROM t_gm_api api
+                LEFT JOIN t_gm_apiprefix fix on api.id=fix.apiId
+                LEFT JOIN t_cp_site site ON site.id=fix.siteId
+                WHERE api.depotId=tb1.id AND site.siteCode= #{siteCode}
+            )
+            GROUP BY tb1.id
+        ) tt LEFT JOIN t_gm_api tt1 ON tt.id = tt1.depotId
+        LEFT JOIN t_gm_apiprefix tt2 ON tt1.id = tt2.apiId
+        WHERE tt2.siteId = (select id FROM t_cp_site where siteCode = #{siteCode})
+        AND tt2.available in (1, 2)
+        GROUP BY tt.id ORDER BY tt.siteSortId,tt.sortId ASC
+    </select>
+
+    <select id="findCatOrDepotListBySiteCode" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+        SELECT
+        <if test="isSign == true">
+            DISTINCT cat.catName catName,cat.id catId
+        </if>
+        <if test="isSign == false">
+            depot.depotCode,depot.depotName,cat.catName catName,cat.id catId,depot.id depotId
+        </if>
+        FROM t_gm_depot depot
+        LEFT JOIN t_gm_depotcat depotcat ON depot.id = depotcat.depotId
+        LEFT JOIN t_gm_cat cat ON cat.id = depotcat.catId
+        WHERE cat.parentId = 0 and depot.available = 1
+        AND exists (
+        SELECT api.depotId FROM t_gm_api api
+        left join t_gm_apiprefix fix on api.id= fix.apiId
+        left join t_cp_site site on site.id= fix.siteId
+        WHERE api.depotId=depot.id and site.siteCode= #{siteCode}
+        )
+    </select>
+
+    <insert id="insertRecentlyRecord">
+        insert into mbr_recently_game(
+                        userId,
+                        userName,
+                        depotId,
+                        depotName,
+                        gameId,
+                        gameName,
+                        gameNameEn,
+                        gameCode,
+                        gameLogo,
+                        entryTime
+                    )values (
+                        #{userId},
+                        #{userName},
+                        #{depotId},
+                        #{depotName},
+                        #{gameId},
+                        #{gameName},
+                        #{gameNameEn},
+                        #{gameCode},
+                        #{gameLogo},
+                        #{entryTime}
+                    )
+    </insert>
+
+    <update id="updateRecentlyRecord">
+        update mbr_recently_game set entryTime=#{entryTime} where gameId = #{gameId} and userId = #{userId}
+    </update>
+
+    <select id="queryTRecentlyGameList" resultType="com.wsdy.saasops.modules.operate.entity.TRecentlyGame">
+        select * from  mbr_recently_game where gameId=#{gameId} and userId = #{userId}
+    </select>
+
+    <select id="findRecentlyRecord" resultType="com.wsdy.saasops.modules.operate.entity.TRecentlyGame">
+        select r.* from t_gm_depot t
+        left join set_gm_game gm on t.id = gm.depotId
+        left join mbr_recently_game r on t.id = r.depotId
+        where available = 1
+        and gm.enableDepotMb = 1
+        and r.userId = #{userId}
+        and r.id is not NULL group by r.gameName ORDER BY r.entryTime DESC LIMIT 8
+    </select>
+
+    <select id="hotGameList" resultType="com.wsdy.saasops.modules.operate.entity.OprGame">
+        SELECT t1.*,IFNULL(t2.popularity,0) popularity FROM t_gm_game t1 LEFT JOIN set_game t2 ON t1.id = t2.gameId
+        WHERE t1.depotId IN (
+        SELECT t1.id FROM t_gm_depot t1
+        LEFT JOIN t_gm_api t2 on t1.id = t2.depotId
+        LEFT JOIN t_gm_apiprefix t3 ON t2.id = t3.apiId
+        LEFT JOIN t_cp_site t4 ON t3.siteId = t4.id
+        LEFT JOIN t_game_logo t5 ON t1.id = t5.depotId
+        LEFT JOIN set_gm_game t6 on t5.id = t6.gameLogoId
+        where t4.siteCode = #{siteCode} AND t5.catId = 5
+        and t1.available = 1
+        <if test="terminal==0">
+            and t5.enablePc=1
+            and (t6.enableDepotPc =1 or t6.enableDepotPc IS NULL)
+        </if>
+        <if test="terminal==1">
+            and t5.enableMb=1
+            and (t6.enableDepotMb =1 or t6.enableDepotMb IS NULL)
+        </if>)
+        <if test="terminal==0">
+            and t1.enablePc=1
+            and (t2.enableGmaePc =1 or t2.enableGmaePc IS NULL)
+        </if>
+        <if test="terminal==1">
+            and t1.enableMb=1
+            and (t2.enableGmaeMb =1 or t2.enableGmaeMb IS NULL)
+        </if>
+        and t1.available = 1 and t1.catid=5
+        ORDER BY clickNum DESC LIMIT #{pageNumber}
+    </select>
+
+    <select id="gameRecommendedList" resultType="com.wsdy.saasops.modules.operate.entity.OprGame">
+        SELECT t1.*,IFNULL(t2.popularity,0) popularity FROM t_gm_game t1 LEFT JOIN set_game t2 ON t1.id = t2.gameId
+        <where>
+            <if test="depotId != null">
+                and t1.depotId =#{depotId}
+            </if>
+            <if test="terminal==0">
+                and t1.enablePc=1
+                and (t2.enableGmaePc =1 or t2.enableGmaePc IS NULL)
+            </if>
+            <if test="terminal==1">
+                and t1.enableMb=1
+                and (t2.enableGmaeMb =1 or t2.enableGmaeMb IS NULL)
+            </if>
+            and t1.catId = 5
+        </where>
+        ORDER BY popularity DESC LIMIT #{pageNumber}
+    </select>
+
+    <select id="findDepotAndCatNameList" resultType="com.wsdy.saasops.modules.member.dto.WaterDepotDto">
+        SELECT
+        tb1.depotname,tb4.catname,tb5.catid,tb1.id depotId,tb1.depotcode
+        FROM t_gm_depot tb1
+        LEFT JOIN t_gm_depotcat tb3 ON tb1.id = tb3.depotId
+        LEFT JOIN t_gm_cat tb4 ON tb3.catId = tb4.id
+        LEFT JOIN t_game_logo tb5 ON tb4.id = tb5.catId and tb1.id = tb5.depotId
+        LEFT JOIN set_gm_game tb6 ON tb5.depotId = tb6.depotId and tb5.id = tb6.gameLogoId
+        where tb1.available=1 and tb4.parentId=0
+        AND ( tb5.enablepc = 1 or tb5.enablemb = 1 or tb5.enableapp  = 1)
+        AND (tb6.enableDepotPc is NULL or tb6.enableDepotMb is NULL or tb6.enableDepotApp is null
+        or tb6.enableDepotPc = 1 or tb6.enableDepotMb = 1 or tb6.enableDepotApp  = 1)
+        AND exists (
+            SELECT api.depotId FROM t_gm_api api
+            left join t_gm_apiprefix fix on api.id=fix.apiId
+            left join t_cp_site site on site.id=fix.siteId
+            WHERE api.depotId=tb1.id and site.siteCode= #{siteCode}
+        )
+        ORDER BY tb5.catid,tb1.id
+    </select>
+
+    <select id="findDepotIstryCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.api.modules.user.dto.ElecGameDto">
+        SELECT count(*)
+        FROM t_gm_game t1
+        LEFT JOIN t_gm_cat t3 ON t1.catId = t3.id
+        LEFT JOIN set_game t4 ON t1.id = t4.gameId
+        LEFT JOIN t_gm_depot t5 ON t1.depotId = t5.id
+        <include refid="webGameWhere"/>
+        and t1.istry=1
+    </select>
+
+    <select id="getTGmApiprefix" resultType="com.wsdy.saasops.api.modules.apisys.entity.TGmApiprefix">
+        select p.*
+        from t_gm_api  a
+        inner join t_gm_depot d on a.depotid = d.id
+        inner join t_gm_apiprefix p on a.id = p.apiid
+        inner join t_cp_site s on p.siteid = s.id
+        where d.id = #{depotId} and s.sitecode = #{siteCode} and p.available = 1
+    </select>
+    
+    
+      <select id="getGameByTrunmanShowCategory" resultType="com.wsdy.saasops.modules.operate.entity.OprGame"
+            parameterType="com.wsdy.saasops.api.modules.user.dto.ElecGameDto">
+        SELECT * FROM(
+	        SELECT t1.id,t1.gameName,t1.logo,t1.logo2,IFNULL(t4.popularity,t1.clicknum) clickNum,IFNULL(t1.recRating, 0) recRating,t1.istry,t1.orientation,
+	        t5.depotName,t3.catName,IFNULL(t1.enablePool, 0) enablePool,IFNULL(t1.enableTest, 0)
+	        enableTest,IFNULL(t1.goodNum, 0) goodNum,t1.tableCode,
+	        t1.enablePc,t1.enableMb,t1.enableApp,t1.sortId, t1.createtime
+	        FROM t_gm_game t1
+	        LEFT JOIN t_gm_cat t3 ON t1.catId = t3.id
+	        LEFT JOIN set_game t4 ON t1.id = t4.gameId
+	        LEFT JOIN t_gm_depot t5 ON t1.depotId = t5.id
+	        WHERE t1.catId = 3 and t1.available=1
+	        <if test="id != null">
+	            and t1.subCatId =#{id}
+	        </if>
+	        <if test="enableTest != null">
+	            and t1.enableTest =#{enableTest}
+	        </if>
+	        <if test="terminal==0">
+	            and t1.enablePc=1
+	            and (t4.enableGmaePc =1 or t4.enableGmaePc IS NULL)
+	        </if>
+	        <if test="terminal==1">
+	            and t1.enableMb=1
+	            and (t4.enableGmaeMb =1 or t4.enableGmaeMb IS NULL)
+	        </if>
+	        <if test="depotId != null">
+	            and t1.depotId =#{depotId}
+	        </if>
+	        <if test="lableName!= null and lableName!=''">
+	            and t1.gameName like concat('%',#{lableName},'%')
+	        </if>
+        ) tt
+        <choose>
+            <when test="sortMark != null and sortMark == '1'.toString()">
+                order by tt.clickNum=0 asc,tt.clickNum asc,tt.createtime desc, id desc
+            </when>
+            <when test="sortMark != null and sortMark == '2'.toString()">
+                order by tt.goodNum ${sortWay}
+            </when>
+            <otherwise>
+                order by tt.sortId ${sortWay}
+            </otherwise>
+        </choose>
+    </select>
+
+    <select id="getAiRecommendSeven" resultType="com.wsdy.saasops.api.modules.user.dto.AiRecommondSevenDto">
+        SELECT SUM(rpt.validbet) totalBet, t1.id depotId,t2.id gameType
+        from rpt_bet_rcd_day rpt
+        LEFT JOIN t_gm_depot t1 ON t1.depotcode = rpt.platform
+        LEFT JOIN t_gm_cat t2 on t2.catcode = rpt.gamecategory
+        INNER JOIN mbr_account mbr on mbr.loginname=rpt.username
+        where mbr.id = #{userId}
+        and t2.id NOT IN (9)
+        and rpt.startday <![CDATA[ >= ]]> #{time}
+        GROUP BY rpt.gamecategory
+        ORDER BY totalBet desc
+        LIMIT 3
+    </select>
+</mapper>

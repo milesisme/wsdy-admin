@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.sys.dao.SysRoleMenuDao">
+
+	<insert id="save">
+		insert into sys_role_menu
+		(
+			`role_id`, 
+			`menu_id`
+		)
+		values
+		<foreach collection="menuIdList" item="item" index="index" separator="," >
+		(
+			#{roleId}, 
+			#{item} 
+		)
+		</foreach>
+	</insert>
+	
+	<insert id="saveOne" parameterType="com.wsdy.saasops.modules.sys.entity.SysRoleMenuEntity">
+		insert into sys_role_menu
+		(
+			role_id, 
+			menu_id
+		)
+		values
+		(
+			#{roleId}, 
+			#{menuId} 
+		)
+	</insert>
+	
+	<insert id="saveNotExists">
+		<foreach collection="sysRoleMenuEntitys" item="sysRoleMenuEntity" index="index"  >
+			<foreach collection="menuIds" item="menuId" index="index">
+				INSERT INTO sys_role_menu (menu_id, role_id, isTotalChecked) 
+					SELECT #{menuId}, #{sysRoleMenuEntity.roleId}, #{sysRoleMenuEntity.isTotalChecked} 
+						FROM DUAL  WHERE NOT EXISTS
+							(SELECT * FROM sys_role_menu WHERE  menu_id = #{menuId}  AND role_id = #{sysRoleMenuEntity.roleId});
+			</foreach>
+		</foreach>
+	</insert>
+	
+	<delete id="delete">
+		delete from sys_role_menu where role_id = #{value}
+	</delete>
+	
+	<delete id="deleteByRolesAndMenuIdsBatch">
+		<foreach collection="menuIds" item="menuId" index="index">
+			<foreach collection="roleIds" item="roleId" index="index"  >
+				DELETE FROM sys_role_menu WHERE role_id = #{roleId} AND menu_id = #{menuId} ;
+			</foreach>
+		</foreach>
+	</delete>
+	
+	<select id="queryMenuIdList" resultType="java.lang.Long">
+		select menu_id from sys_role_menu where role_id = #{value}
+	</select>
+	
+	<select id="queryMenuList" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleMenuEntity" >
+		select srm.* from sys_role_menu srm inner join sys_menu sm on sm.menu_id = srm.menu_id and sm.type in (0, 1) where srm.role_id = #{roleId}
+	</select>
+
+	<select id="queryMenuAuthList" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleMenuEntity" >
+		select srm.* from sys_role_menu srm inner join sys_menu sm on sm.menu_id = srm.menu_id and sm.type not in(4, 5) where srm.role_id = #{roleId}
+	</select>
+
+	<select id="queryMenuAuthListNew" resultType="java.lang.Integer" >
+		SELECT menu_id
+		FROM (
+				SELECT sm.*,srm.role_id
+				FROM sys_role_menu srm
+				INNER JOIN sys_menu sm ON sm.menu_id = srm.menu_id
+				AND sm.type NOT IN (4, 5)
+				WHERE
+					srm.role_id = #{roleId}
+		)t
+		WHERE
+			t.menu_id NOT IN (
+				SELECT sm.parent_id
+				FROM sys_role_menu srm
+				INNER JOIN sys_menu sm ON sm.menu_id = srm.menu_id
+				AND sm.type NOT IN (4, 5)
+				WHERE
+					srm.role_id = #{roleId}
+			)
+			-- 1177为管理总览，此处为处理权限树，写死
+		AND (t.parent_id != 0 or (t.menu_id = 1177 and t.role_id = #{roleId}))
+		AND t.menu_id NOT IN(
+			select sme.parentid from sys_menu_extend sme  where sme.parentid = t.menu_id
+		)
+		union all
+		select sm.menuid menu_id from sys_role_menu_extend srm left join sys_menu_extend sm on srm.menuid=sm.menuid where srm.roleid= #{roleId}  AND (select count(*) from sys_menu_extend where  parentid = sm.menuid) = 0
+	</select>
+
+	<insert id="saveBatch" parameterType="com.wsdy.saasops.modules.sys.entity.SysRoleMenuEntity">
+		insert into sys_role_menu (role_id, menu_id , isTotalChecked)
+		values
+		<foreach collection="list" item="item" index="index" separator="," >
+			(
+			#{item.roleId},#{item.menuId},#{item.isTotalChecked}
+			)
+		</foreach>
+	</insert>
+
+
+
+	<select id="findSysRoleMenuByRoleIdAndMenuId" resultType="java.lang.Integer">
+		SELECT count(*) FROM sys_role_menu WHERE role_id=#{roleId} AND menu_id=#{menuId}
+	</select>
+
+    <select id="queryRoleInfoById" resultType="com.wsdy.saasops.modules.sys.entity.SysRoleEntity">
+		select t.role_id roleId,
+			   t.role_name roleName
+		from sys_role t where t.role_id = #{roleId}
+	</select>
+	
+    <select id="queryRoleIdMenuIdsCount" resultType="java.lang.Integer">
+		SELECT COUNT(*) FROM sys_role_menu WHERE role_id = #{roleId} AND menu_id IN
+			<foreach collection="allMenuIds" item="item" index="index" open="(" separator="," close=")">
+				#{item} 
+			</foreach>
+	</select>
+</mapper>

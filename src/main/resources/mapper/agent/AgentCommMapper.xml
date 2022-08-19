@@ -1,0 +1,443 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.AgentCommMapper">
+
+
+    <select id="findAgyDomainList" resultType="com.wsdy.saasops.modules.agent.entity.AgyDomain"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyDomain">
+        SELECT n.* FROM agy_domain n
+        LEFT JOIN agy_account t
+        <where>
+            n.isDel = 0
+            <if test="accountId != null">
+                AND n.accountId =#{accountId}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND n.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+            </if>
+            <if test="spreadCode != null and spreadCode != ''">
+                AND t.spreadCode LIKE CONCAT('%',#{spreadCode}, '%')
+            </if>
+            <if test="domainUrl != null and domainUrl != ''">
+                AND n.domainUrl LIKE CONCAT('%',#{domainUrl}, '%')
+            </if>
+            <if test="status != null">
+                AND n.status =#{status}
+            </if>
+        </where>
+        ORDER BY n.createTime DESC
+    </select>
+
+    <select id="findCountDomain" resultType="java.lang.Integer">
+        SELECT count(*) FROM agy_domain WHERE domainUrl=#{domainUrl} AND id !=#{id}
+    </select>
+
+    <select id="findReportList" resultType="com.wsdy.saasops.modules.agent.dto.AgentReportDto">
+        SELECT t.parentId,t.id,e.offlineAgentCount,act.accountNum,IFNULL(sum(rpt.validbet),0) validbet,
+        IFNULL(sum(rpt.payout),0) payout,IFNULL(sum(bt.bonusAmount),0) bonusAmount,
+        IFNULL(sum(cc.offlineMemberCount),0) offlineMemberCount,sum(he.handlingCharge)+sum(withdrawHandlingCharge)
+        feeAmount
+        FROM agy_account t
+        LEFT JOIN (SELECT count(*) offlineAgentCount,parentId FROM agy_tree WHERE depth>0 GROUP BY parentId) e on
+        e.parentId = t.id
+        LEFT JOIN (SELECT count(*) accountNum,cagencyId FROM mbr_account GROUP BY cagencyId) act on act.cagencyId = t.id
+        LEFT JOIN agy_tree att ON att.parentId = t.id AND att.depth > 0
+
+        LEFT JOIN (
+        SELECT sum(r.validbet) validbet,sum(r.payout) payout,t.cagencyId FROM (
+        SELECT userName,sum(validbet) validbet,sum(payout) payout FROM rpt_bet_rcd_day
+        <where>
+            <if test="startTime != null and startTime != ''">
+                AND startday <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND startday <![CDATA[ >= ]]> #{endTime}
+            </if>
+        </where>
+        GROUP BY userName) r INNER JOIN mbr_account t ON r.username = t.loginName GROUP BY t.cagencyId)
+        rpt ON att.childNodeId = rpt.cagencyId
+
+        LEFT JOIN ( SELECT sum(s.bonusAmount) bonusAmount,r.cagencyId FROM opr_act_bonus s INNER JOIN mbr_account r ON
+        s.accountId = r.id
+        <where>
+            s.`status` = 1
+            <if test="startTime != null and startTime != ''">
+                AND DATE_FORMAT(s.applicationTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND DATE_FORMAT(s.applicationTime,'%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+        GROUP BY r.cagencyId
+        ) bt ON att.childNodeId = bt.cagencyId
+
+        LEFT JOIN (SELECT count(*) offlineMemberCount,cagencyId from mbr_account GROUP BY cagencyId) cc ON cc.cagencyId
+        = att.childNodeId
+
+        LEFT JOIN (
+        SELECT IFNULL(sum(t.handlingCharge),0) handlingCharge,c.cagencyId FROM fund_deposit t
+        LEFT JOIN mbr_account c ON t.accountId = c.id
+        <where>
+            t.`status` = 1 AND t.feeType = 1
+            <if test="startTime != null and startTime != ''">
+                AND DATE_FORMAT(t.createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND DATE_FORMAT(t.createTime,'%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+        GROUP BY c.cagencyId
+        ) he ON he.cagencyId = att.childNodeId
+
+        LEFT JOIN (
+        SELECT IFNULL(sum(w.handlingCharge),0) withdrawHandlingCharge,mt.cagencyId FROM fund_acc_withdraw w
+        LEFT JOIN mbr_account mt ON w.accountId = mt.id
+        <where>
+            w.`status` = 1 AND w.feeType = 1
+            <if test="startTime != null and startTime != ''">
+                AND DATE_FORMAT(w.createTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND DATE_FORMAT(w.createTime,'%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+        GROUP BY mt.cagencyId
+        ) fw ON fw.cagencyId = att.childNodeId
+
+        <where>
+            <if test="id == null">
+                t.parentId=0
+            </if>
+            <if test="id == null">
+                t.parentId=#{id}
+            </if>
+        </where>
+        GROUP BY t.id
+    </select>
+
+
+    <select id="commissionReviewList" resultType="com.wsdy.saasops.modules.agent.entity.AgyCommission"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyCommission">
+        SELECT *,case reviewStatus when 0 then '不通过' when 1 then '通过' when 2 then '待处理' end reviewStatusStr,
+        case issuestatus when 0 then '不通过' when 1 then '已发放' when 2 then '待处理' end issuestatusStr
+        from agy_commission
+        <where>
+            <if test="type != null">
+                and type  =#{type}
+            </if>
+            <if test="issuestatus != null">
+                and issuestatus  =#{issuestatus}
+            </if>
+            <if test="reviewStatus == null">
+                and reviewStatus !=1
+            </if>
+            <if test="reviewStatus != null">
+                and reviewStatus =#{reviewStatus}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND agyAccount = #{agyAccount}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND modifyTime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND modifyTime <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+        order by modifyTime desc
+    </select>
+
+    <select id="commissionAllSubList" resultType="com.wsdy.saasops.modules.agent.entity.AgyCommission" parameterType="com.wsdy.saasops.modules.agent.entity.AgyCommission">
+        SELECT commission.*,CASE reviewStatus WHEN 0 THEN '不通过' WHEN 1 THEN '通过' WHEN 2 then '待处理' END reviewStatusStr,
+        CASE issuestatus WHEN 0 THEN '不通过' WHEN 1 THEN '已发放' WHEN 2 THEN '待处理' END issuestatusStr, ar.agentType
+        FROM agy_commission commission
+	    LEFT JOIN (SELECT max(depth) agentType,childnodeid from agy_tree GROUP by childnodeid) ar
+       	ON ar.childnodeid = commission.agentid
+        <where>
+        	<if test="agyAccount != null and agyAccount != ''">
+                AND commission.agyAccount = #{agyAccount} 
+            </if>
+            <if test="type != null">
+                and commission.type  =#{type}
+            </if>
+            <if test="issuestatus != null">
+                and commission.issuestatus  =#{issuestatus}
+            </if>
+            <if test="reviewStatus != null">
+                and commission.reviewStatus =#{reviewStatus}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND modifyTime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND modifyTime <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+        ORDER BY modifyTime DESC
+    </select>
+
+    <select id="commissionReport" resultType="com.wsdy.saasops.modules.agent.entity.AgyCommission"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyCommission">
+        SELECT * from agy_commission
+        WHERE issuestatus =1
+        <if test="type != null">
+            AND type = #{type}
+        </if>
+        <if test="agentId != null">
+            AND agentId = #{agentId}
+        </if>
+        <if test="time != null and time != ''">
+            AND time =#{time}
+        </if>
+        <if test="agyAccount != null and agyAccount != ''">
+            AND agyAccount =#{agyAccount}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND modifyTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND modifyTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+    </select>
+
+
+    <select id="depotCostList" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.DepotCostDto">
+        SELECT username loginName,agyaccount,sum(payout) payout,sum(cost) cost FROM (
+        <include refid="agent_depotCostList_Detail"/>
+        )c GROUP BY username
+    </select>
+
+    <select id="sumDepotCost" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.DepotCostDto">
+        <if test="feeModel == 1">
+            SELECT SUM(payout) payout,TRUNCATE((SUM(cost) + (SUM(cost) * c.additionalServicerate / 100)), 2) cost FROM (
+            <include refid="depotCostList_Detail"/>
+            ) c
+        </if>
+        <if test="feeModel == 2">
+            SELECT 0 payout,sum(serviceCost) cost FROM (
+            <include refid="serviceCostList_Detail"/>
+            ) c
+        </if>
+        
+        <if test="feeModel == 3">
+        	SELECT SUM(t.payout) payout, SUM(t.cost) cost FROM (
+        	
+            	SELECT SUM(payout) payout, TRUNCATE((SUM(cost) + (SUM(cost) * c.additionalServicerate)), 2) cost FROM (
+	            	<include refid="depotCostList_Detail"/>
+	            ) c
+	           	UNION ALL
+	            SELECT 0 payout, SUM(serviceCost) cost FROM (
+	            	<include refid="serviceCostList_Detail"/>
+	            ) c
+            ) t
+        </if>
+        
+        
+    </select>
+
+    <select id="depotCostDetail" resultType="com.wsdy.saasops.modules.agent.dto.DepotCostDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.DepotCostDto">
+        <include refid="agent_depotCostList_Detail"/>
+    </select>
+
+    <sql id="agent_depotCostList_Detail">
+        SELECT username,agyaccount,payout,rate,gamelogoId,
+        case when rate>0 and payout<![CDATA[ < ]]>0 THEN TRUNCATE(ABS(rate/100*payout),2) ELSE 0 END cost,depotname
+        FROM(
+	        SELECT a.username,ag.agyaccount,sum(payout) payout, IFNULL(ge.rate,0) rate,lg.id gamelogoId,
+	        CONCAT(a.depotcode,cat.catname) depotname
+	        FROM (
+		        SELECT r.platform, d.id depotId,payout,r.username,r.startday,d.depotcode,
+		        case when r.gamecategory='Chess' then '6'
+		        when r.gamecategory='Sport' then '1'
+		        when r.gamecategory='Live' then '3'
+		        when r.gamecategory='Slot' then '5'
+		        when r.gamecategory='Hunter' then '8'
+		        when r.gamecategory='Esport' then '9'
+		        when r.gamecategory='Lottery' then '12'
+		        end type,r.gamecategory
+		        from rpt_bet_rcd_day r
+		        LEFT JOIN t_gm_depot d ON r.platform = d.depotcode
+		        WHERE r.gamecategory != ''
+	        ) a
+	        INNER JOIN mbr_account t ON t.loginname = a.username
+	        LEFT JOIN t_game_logo lg ON a.depotid = lg.depotid and lg.catid = a.type
+	        LEFT JOIN set_gm_game ge ON ge.gamelogoid = lg.id
+	        LEFT JOIN agy_account ag ON ag.id = t.cagencyid
+	        LEFT JOIN t_gm_cat cat ON cat.id = a.type
+	        <include refid="depotCostList_detail_where"/>
+        ) b
+    </sql>
+
+    <sql id="depotCostList_Detail">
+        SELECT
+            username,agyaccount,payout,rate,gamelogoId,b.additionalServicerate,b.cagencyid,
+            CASE WHEN rate > 0 AND payout<![CDATA[ < ]]>0 THEN TRUNCATE(ABS(rate/100*payout),2)+IFNULL(waterCost,0)
+            ELSE IFNULL(waterCost,0) END cost,depotname
+        FROM(
+            SELECT a.username,ag.agyaccount,SUM(payout) payout, IFNULL(ge.rate,0) rate,lg.id gamelogoId,ag.additionalServicerate,
+            CONCAT(a.depotcode,cat.catname) depotname,SUM(waterCost) waterCost,ag.id cagencyid
+            FROM (
+                SELECT r.platform, d.id depotId,payout,r.username,r.startday,d.depotcode,r.cost waterCost,
+	                CASE WHEN r.gamecategory='Chess' THEN '6'
+	                WHEN r.gamecategory='Sport' then '1'
+	                WHEN r.gamecategory='Live' then '3'
+	                WHEN r.gamecategory='Slot' then '5'
+	                WHEN r.gamecategory='Hunter' then '8'
+	                WHEN r.gamecategory='Esport' then '9'
+	                WHEN r.gamecategory='Lottery' then '12'
+	                END type,r.gamecategory
+                FROM rpt_bet_rcd_day r
+                LEFT JOIN t_gm_depot d ON r.platform = d.depotcode
+                WHERE r.gamecategory != ''
+            ) a
+            INNER JOIN mbr_account t ON t.loginname = a.username
+            LEFT JOIN t_game_logo lg ON a.depotid = lg.depotid and lg.catid = a.type
+            LEFT JOIN set_gm_game ge ON ge.gamelogoid = lg.id
+            LEFT JOIN agy_account ag ON ag.id = t.cagencyid
+            LEFT JOIN t_gm_cat cat ON cat.id = a.type
+            WHERE a.type != '' and a.depotId != '' AND ag.feemodel != 2
+            <if test="agyAccount != null and agyAccount != ''">
+                AND ag.agyAccount =#{agyAccount}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND a.username =#{loginName}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND a.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND a.startday <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+            </if>
+            <if test="cagencyId != null">
+                and t.cagencyid =#{cagencyId}
+            </if>
+            <if test="subcagencyId != null">
+                and t.subcagencyId =#{subcagencyId}
+            </if>
+            <choose>
+                <when test="groubyAgent == true">
+                    GROUP BY ag.agyaccount,a.depotid,a.type
+                </when>
+                <otherwise>
+                    GROUP BY a.username,a.depotid,a.type
+                </otherwise>
+            </choose>
+        ) b
+    </sql>
+
+    <sql id="serviceCostList_Detail">
+<!--     	查询分取款和存款，不同的收费比例 servicerate -->
+        SELECT t.loginname username,ag.agyaccount,t.id cagencyid,
+		        ag.feemodel,ag.depositServicerate,ag.withdrawServicerate,IFNULL(dt.depositAmount,0) depositAmount,
+		        IFNULL(aw.withdrawAmount,0) withdrawAmount,
+		        TRUNCATE(
+				ABS(IFNULL(dt.depositAmount,0) * (ag.depositServicerate/100))
+				+ ABS(IFNULL(aw.withdrawAmount,0) * (ag.withdrawServicerate/100))
+				,2) serviceCost
+        FROM mbr_account t
+        LEFT JOIN agy_account ag ON ag.id = t.cagencyid
+        LEFT JOIN (
+            SELECT IFNULL(SUM(actualarrival),0) depositAmount,t.cagencyid
+            FROM fund_deposit d
+            LEFT JOIN mbr_account t ON d.accountid = t.id
+            WHERE d.`status`=1
+            <if test="startTime != null and startTime != ''">
+                AND d.audittime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND d.audittime <![CDATA[ <= ]]> #{endTime}
+            </if>
+            GROUP BY t.cagencyid
+        ) dt ON dt.cagencyid = ag.id
+        LEFT JOIN (
+            SELECT IFNULL(sum(actualarrival),0) withdrawAmount,t.cagencyid
+            FROM fund_acc_withdraw d
+            LEFT JOIN mbr_account t ON d.accountid = t.id
+            WHERE d.`status`=1
+            <if test="startTime != null and startTime != ''">
+                AND d.passtime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND d.passtime <![CDATA[ <= ]]> #{endTime}
+            </if>
+            GROUP BY t.cagencyid
+         ) aw ON aw.cagencyid = ag.id
+        WHERE ag.feemodel != 1
+        <if test="agyAccount != null and agyAccount != ''">
+            AND ag.agyAccount =#{agyAccount}
+        </if>
+        <if test="loginName != null and loginName != ''">
+            AND t.loginname =#{loginName}
+        </if>
+        <if test="cagencyId != null">
+            AND t.cagencyid =#{cagencyId}
+        </if>
+        <if test="subcagencyId != null">
+            AND t.subcagencyId =#{subcagencyId}
+        </if>
+        GROUP BY t.cagencyid
+    </sql>
+
+    <sql id="depotCostList_detail_where">
+        WHERE a.type != '' and a.depotId != ''
+        <if test="agyAccount != null and agyAccount != ''">
+            AND ag.agyAccount =#{agyAccount}
+        </if>
+        <if test="loginName != null and loginName != ''">
+            AND a.username =#{loginName}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND a.startday <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND a.startday <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+        </if>
+        <if test="cagencyId != null">
+            and t.cagencyid =#{cagencyId}
+        </if>
+        <if test="subcagencyId != null">
+            and t.subcagencyId =#{subcagencyId}
+        </if>
+        <choose>
+            <when test="groubyAgent == true">
+                GROUP BY ag.agyaccount,a.depotid,a.type
+            </when>
+            <otherwise>
+                GROUP BY a.username,a.depotid,a.type
+            </otherwise>
+        </choose>
+    </sql>
+
+    <select id="findCommissionDetails" resultType="com.wsdy.saasops.modules.agent.dto.CommDetailsDto">
+        select agyAccount,rate,commission from agy_commission
+        <where>
+            <if test="time != null and time != ''">
+                AND time=#{time}
+            </if>
+            <if test="subAgyaccount != null and subAgyaccount != ''">
+                AND subAgyaccount=#{subAgyaccount}
+            </if>
+        </where>
+    </select>
+
+    <select id="sumCommissionReport" resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyCommission">
+        SELECT IFNULL(sum(commission),0) from agy_commission
+        where issuestatus =1  AND time =#{time} AND agentId =#{agentId}
+        AND type = #{type}
+    </select>
+
+    <select id="findCommissionDepot" resultType="com.wsdy.saasops.modules.agent.entity.AgyCommissionDepot">
+        SELECT payout,cost,concat(depot.depotname,cat.catname) depotname,
+        d.watercost,d.waterrate,d.validbet,d.rate
+        from agy_commission_depot d
+        LEFT JOIN t_gm_depot depot ON d.depotid = depot.id
+        LEFT JOIN t_gm_cat cat ON d.catid = cat.id
+        WHERE orderNo=#{orderNo}
+    </select>
+
+</mapper>

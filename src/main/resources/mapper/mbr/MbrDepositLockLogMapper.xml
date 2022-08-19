@@ -1,0 +1,118 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrDepositLockLogMapper">
+
+    <select id="listPage" resultType="com.wsdy.saasops.modules.member.entity.MbrDepositLockLog">
+        SELECT tab.id, tab.loginname, tab.tierName, tab.depositlock, tab.realname, autoLock.autoLock,
+            manualLock.manualLock
+        FROM
+            (
+                SELECT
+                    ma.id, ma.loginname, mal.tierName, ma.depositlock, ma.realname
+                FROM mbr_account ma
+                LEFT JOIN mbr_activity_level mal on ma.actLevelId = mal.id
+                WHERE ma.id IN (SELECT DISTINCT accountid from mbr_deposit_lock_log)
+                <if test="loginName != null and loginName != ''">
+                    AND ma.loginname = #{loginName}
+                </if>
+                <if test="depositLock != null">
+                    AND ma.depositLock = #{depositLock}
+                </if>
+                <if test="actLevelIdList != null and actLevelIdList.size()>0">
+                    AND ma.actLevelId in
+                    <foreach item="actLevelId" collection="actLevelIdList" open="(" separator="," close=")">
+                        #{actLevelId}
+                    </foreach>
+                </if>
+            ) tab
+            LEFT JOIN (
+                SELECT COUNT(1) autoLock, accountid FROM mbr_deposit_lock_log mdll WHERE locktype=0
+                <if test="startTime != null and startTime != ''">
+                    AND mdll.locktime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND mdll.locktime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                GROUP BY mdll.accountid
+            ) autoLock ON tab.id = autoLock.accountid
+            LEFT JOIN (
+                SELECT COUNT(1) manualLock, accountid FROM mbr_deposit_lock_log mdll WHERE locktype=1
+                <if test="startTime != null and startTime != ''">
+                    AND mdll.locktime <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND mdll.locktime <![CDATA[ <= ]]> #{endTime}
+                </if>
+                GROUP BY mdll.accountid
+            ) manualLock ON tab.id = manualLock.accountid
+    </select>
+
+    <select id="listDepositLockLog" resultType="com.wsdy.saasops.modules.member.entity.MbrDepositLockLog">
+        SELECT ma.loginname, ma.realname, mal.tierName, mdll.lockuser, mdll.locktime, mdll.lockmemo,
+            mdll.unlockuser, mdll.unlocktime, mdll.unlockmemo
+        FROM mbr_deposit_lock_log mdll
+        LEFT JOIN mbr_account ma ON mdll.accountid = ma.id
+        LEFT JOIN mbr_activity_level mal on ma.actLevelId = mal.id
+        WHERE mdll.accountid = #{accountId}
+        <if test="startTime != null and startTime != ''">
+            AND mdll.locktime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND mdll.locktime <![CDATA[ <= ]]> #{endTime}
+        </if>
+        ORDER BY mdll.locktime DESC
+    </select>
+
+    <select id="getLastLock" resultType="com.wsdy.saasops.modules.member.entity.MbrDepositLockLog">
+        SELECT * FROM mbr_deposit_lock_log mdll WHERE mdll.accountid = #{accountId} ORDER BY mdll.id DESC LIMIT 1
+    </select>
+
+    <select id="getLock" resultType="com.wsdy.saasops.modules.member.entity.MbrDepositLockLog">
+        SELECT * FROM mbr_deposit_lock_log mdll WHERE mdll.accountid = #{accountId}
+        AND mdll.unlockuser IS NULL
+        AND mdll.locktime <![CDATA[ <= ]]> now()
+        AND mdll.unlocktime <![CDATA[ >= ]]> now()
+    </select>
+
+    <select id="getUnfinishLockLog" resultType="com.wsdy.saasops.modules.member.entity.MbrDepositLockLog">
+        SELECT * FROM mbr_deposit_lock_log mdll WHERE mdll.accountid = #{accountId}
+        AND mdll.unlocktime <![CDATA[ <= ]]> now()
+        AND mdll.unlockuser is null
+    </select>
+
+    <select id="getAllUnpayOrder" resultType="java.lang.Integer">
+        SELECT COUNT( 1 ) FROM fund_deposit
+        WHERE STATUS = 2
+        AND accountid = #{accountId}
+        AND createtime <![CDATA[ >= ]]> #{startTime}
+        AND createtime <![CDATA[ <= ]]> #{endTime}
+    </select>
+
+    <select id="getUnpayCompanyidOrder" resultType="java.lang.Integer">
+        SELECT COUNT( 1 ) FROM fund_deposit
+        WHERE STATUS = 2
+        AND companypayid IS NOT NULL
+        AND accountid = #{accountId}
+        AND createtime <![CDATA[ >= ]]> #{startTime}
+        AND createtime <![CDATA[ <= ]]> #{endTime}
+    </select>
+
+    <select id="getUnpayOnlinepayidOrder" resultType="java.lang.Integer">
+        SELECT COUNT( 1 ) FROM fund_deposit fd
+        LEFT JOIN set_bacic_onlinepay sbo ON fd.onlinepayid = sbo.id
+        WHERE
+        STATUS = 2
+        AND fd.onlinepayid IS NOT NULL
+        AND fd.accountid = #{accountId}
+        AND fd.createtime <![CDATA[ >= ]]> #{startTime}
+        AND fd.createtime <![CDATA[ <= ]]> #{endTime}
+        <if test="payIds != null and payIds.size()>0">
+            AND sbo.payid in
+            <foreach collection="payIds" open="(" close=")" separator="," item="payId">
+                #{payId}
+            </foreach>
+        </if>
+    </select>
+
+</mapper>

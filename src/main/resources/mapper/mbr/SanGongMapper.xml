@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.mapper.SanGongMapper">
+
+    <select id="findAccountListByCagencyid" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT a.*,e.depth FROM (
+            SELECT t.*,e.depth,e.parentid FROM mbr_account t
+            INNER JOIN (SELECT * FROM mbr_tree e WHERE childnodeid not in(SELECT childnodeid FROM mbr_tree WHERE depth > 0)) e
+            on t.id = e.parentid WHERE t.cagencyid = #{cagencyid}
+        ) t LEFT JOIN mbr_tree e on t.parentid = e.parentid
+        LEFT JOIN mbr_account a ON e.childnodeid = a.id
+        WHERE e.depth <![CDATA[ < ]]> 4
+    </select>
+
+    <select id="findSuperiorAccountList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        SELECT t.*,e.depth FROM mbr_tree e
+		LEFT JOIN mbr_account t ON e.parentid = t.id
+		WHERE childnodeid=#{id} and e.depth <![CDATA[ < ]]> 4 and childnodeid != parentid ORDER BY e.depth DESC
+    </select>
+
+    <update id="updateBatchRebateReport">
+        UPDATE mbr_rebate_report_new SET auditid =#{auditId}
+        WHERE id IN
+        <foreach item="id" collection="reportIds" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+</mapper>

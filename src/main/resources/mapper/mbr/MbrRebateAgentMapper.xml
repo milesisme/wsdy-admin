@@ -1,0 +1,331 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.mbrRebateAgent.mapper.MbrRebateAgentMapper">
+    <select id="qryMbrRebateAgentDepthList"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select t.*,mbr.id parentid,mbr.loginname loginNameParent,mbr.agyflag agyflagParent,mbr.agylevelid agylevelidParent
+        from (
+            select childnodeid,max(depth) maxDepth,mbr.loginname,mbr.agyflag,mbr.agylevelid
+            from mbr_tree child
+            inner join mbr_account mbr on child.childnodeid = mbr.id
+            group by child.childnodeid
+        )t
+        left join mbr_tree tree on t.childnodeid = tree.childnodeid
+        left join mbr_account mbr on tree.parentid = mbr.id
+        where ((t.maxDepth <![CDATA[ <= ]]> #{rebateCastDepth}  and t.maxDepth <![CDATA[ > ]]>  0) or (t.maxDepth=0 and t.agyflag=1))
+        and (tree.depth =1 or tree.depth =0)
+        and (mbr.agyflag =1 or t.agyflag =1)
+    </select>
+
+    <select id="qryMbrDepth"  resultType="java.lang.Integer">
+        select max(depth)
+        from mbr_tree child
+        where child.childnodeid = #{accountId}
+        group by child.childnodeid
+    </select>
+    <select id="qryDepositSum"  resultType="java.math.BigDecimal">
+        select ifnull(sum(depositAmount),0) total
+        from fund_deposit
+        where status =1 and accountid= #{accountId}
+    </select>
+    <select id="qryDepositSumFromChild"  resultType="java.math.BigDecimal">
+        select ifnull(sum(dep.depositAmount),0) total
+        from mbr_tree tree
+        left join fund_deposit dep on dep.accountid = tree.childnodeid
+        where tree.parentid = #{accountId} and dep.status =1 and tree.depth > 0
+    </select>
+
+    <select id="getChildList"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentRespChildListDto"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select mon.loginName,mon.agyflag,mon.agylevelid,mon.validPayoutForSelf,mon.validPayoutFromChild,mon.rebateTotal,
+            count(IFNULL(mon.accountid,0)) childNum
+        from mbr_rebate_agent_month mon
+        left join mbr_tree tree on mon.accountid = tree.parentid
+        where mon.parentid =  #{childNodeId} and mon.createtimeex = #{createTime} and tree.depth > 0
+        <if test="loginName !=null and loginName!=''">
+            and mon.loginname = #{loginName}
+        </if>
+        group by mon.accountid
+        order by mon.agyflag desc, mon.validPayoutForSelf asc
+    </select>
+
+    <select id="qryMbrRebateAgentDepthListEx"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select t.*,tree.parentid,
+            IFNULL(sum(rpt.payout),0) payout,
+            IFNULL(sum(rpt.validbet),0) validbet
+        from (
+            select childnodeid,max(depth) maxDepth,mbr.loginname,mbr.agyflag,mbr.agylevelid
+            from mbr_tree child
+            left join mbr_account mbr on child.childnodeid = mbr.id
+            group by child.childnodeid
+        )t
+        left join rpt_bet_rcd_day rpt on t.loginName = rpt.username
+        left join mbr_tree tree on t.childnodeid = tree.childnodeid
+        where t.maxDepth <![CDATA[ <= ]]> #{rebateCastDepth}
+        and tree.depth =1
+        group by t.childnodeid
+    </select>
+
+    <sql id="applicationTime_where">
+        <if test="startTime != null and startTime != ''">
+            AND t.applicationTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.applicationTime <![CDATA[ < ]]> #{endTime}
+        </if>
+    </sql>
+    <sql id="time_where">
+        <if test="startTime != null and startTime != ''">
+            AND t.time <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND t.time <![CDATA[ < ]]> #{endTime}
+        </if>
+    </sql>
+    <select id="qryMbrBonus"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select IFNULL(sum(bonusAmount),0) bonusAmount
+        from (
+            -- 红利
+            select IFNULL(sum(bonusAmount),0) bonusAmount,accountId
+            from opr_act_bonus t
+            where status = 1 and accountId = #{childNodeId}
+            <include refid="applicationTime_where"/>
+            union all
+            -- 任务
+            select IFNULL(sum(bonusAmount),0) bonusAmount,accountId
+            from task_bonus t
+            where accountId = #{childNodeId}
+            <include refid="time_where"/>
+        )t
+    </select>
+
+    <select id="getValidPayout"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select IFNULL(sum(rpt.validbet),0) validbet,IFNULL(sum(rpt.payout),0) payout
+        from  rpt_bet_rcd_day rpt
+        where rpt.username = #{loginName}
+        <if test="startTime !=null and startTime !='' ">
+            AND rpt.startday <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime !=null and endTime !='' ">
+            AND rpt.startday <![CDATA[ <= ]]>#{endTime}
+        </if>
+    </select>
+
+    <select id="getValidPayoutFromChildMember"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+       select IFNULL(sum(rebate.validPayoutForParent),0)
+       from mbr_rebate_agent_day rebate
+       where rebate.parentid = #{childNodeId}
+       and createtimeex = #{createTime}
+    </select>
+
+    <select id="getValidPayoutFromChildMemberEx"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+       select IFNULL(sum(rebate.validPayoutForParent),0)
+       from mbr_rebate_agent_month rebate
+       where rebate.parentid = #{childNodeId}
+       and createtimeex = #{createTime}
+    </select>
+
+    <select id="getValidPayoutFromChildMemberMonth"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+       select IFNULL(sum(rebate.validPayoutForParentMonth),0)
+       from mbr_rebate_agent_day rebate
+       where rebate.parentid = #{childNodeId}
+       and createtimeex = #{createTime}
+    </select>
+
+    <select id="getValidPayoutFromChildMemberAgent"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+       select IFNULL(sum(rebate.validPayoutFromChild),0)
+       from mbr_rebate_agent_day rebate
+       where rebate.parentid = #{childNodeId}
+       and createtimeex = #{createTime} and agyflag = 1
+    </select>
+
+    <select id="getValidPayoutFromChildMemberAgentEx"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+       select IFNULL(sum(rebate.validPayoutFromChild),0)
+       from mbr_rebate_agent_month rebate
+       where rebate.parentid = #{childNodeId}
+       and createtimeex = #{createTime} and agyflag = 1
+    </select>
+
+    <select id="getValidPayoutFromChildMemberAgentMonth"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+       select IFNULL(sum(rebate.validPayoutFromChildMonth),0)
+       from mbr_rebate_agent_day rebate
+       where rebate.parentid = #{childNodeId}
+       and createtimeex = #{createTime} and agyflag = 1
+    </select>
+
+    <select id="getBonusAmountExfromChildTotal"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+       select IFNULL(sum(rebate.bonusAmountExForParent),0)
+       from mbr_rebate_agent_month rebate
+       where rebate.parentid = #{childNodeId}
+       and createtimeex = #{createTime} and agyflag = 1
+    </select>
+    <select id="getRebateChildTotal"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select IFNULL(sum(rebate.rebateTotalForParent),0)
+        from mbr_tree p
+        left join mbr_rebate_agent_month rebate on p.childnodeid = rebate.accountid
+        where p.parentid = #{childNodeId} and p.depth > 0
+        and rebate.agyflag = 1 and rebate.createtimeex = #{createTime}
+    </select>
+
+    <select id="getSubMemAgent"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.entity.MbrRebateAgentMonth"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+       select *
+       from mbr_rebate_agent_month rebate
+       where rebate.parentid = #{childNodeId}
+       and createtimeex = #{createTime} and agyflag = 1
+    </select>
+
+    <select id="qryBonusList"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentRespBonusListDto"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select bonus.id id,count(IFNULL(bonus.accountid,0)) childNum,bonus.auditTime,bonus.status,bonus.memo,bonus.createTimeEx,
+        le.tiername,
+        g.groupName,mbr.agyTime,
+        mon.accountId, mon.loginName,mon.agyflag,mon.agyLevelId,mon.createTime,mon.validPayoutForSelf,mon.validPayoutFromChild,mon.commissionRatio,
+        mon.rebate,mon.commissionRatioSub,mon.bonusAmountExfromChildTotal,mon.rebateChildTotal,mon.rebateFromChild,mon.rebateFromChildActual,mon.rebateTotal
+        from mbr_rebate_agent_bonus bonus
+        left join mbr_rebate_agent_level le on bonus.agyLevelId = le.id
+        left join mbr_account mbr on bonus.accountid = mbr.id
+        left join mbr_group g on g.id = mbr.groupid
+        left join mbr_rebate_agent_month mon on bonus.mbrrebateagentmonthid = mon.id
+        left join mbr_tree tree on bonus.accountid = tree.parentid
+        where tree.depth > 0
+        <if test="createTime !=null and createTime!=''">
+            and bonus.createtimeex = #{createTime}
+        </if>
+        <if test="groupId !=null ">
+            and g.id = #{groupId}
+        </if>
+        <if test="loginName !=null and loginName!=''">
+            and bonus.loginname = #{loginName}
+        </if>
+        <if test="status !=null">
+            and bonus.status = #{status}
+        </if>
+        <if test="agyLevelId !=null">
+            and bonus.agyLevelId = #{agyLevelId}
+        </if>
+        group by bonus.accountid
+        <if test="orderBy != null and orderBy != ''">
+            ORDER BY ${orderBy}
+        </if>
+    </select>
+
+    <select id="getChildBonusList"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentRespBonusListDto"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select
+            case
+            when mon.agyflag = 0 then 0 else count(IFNULL(mon.accountid,0))
+            end childNum,
+            g.groupName,
+            mon.accountId, mon.loginName,mon.agyflag,mon.agyLevelId,mon.createTime,mon.validPayoutForSelf,mon.validPayoutFromChild,mon.commissionRatio,
+            mon.rebate,mon.commissionRatioSub,mon.bonusAmountExfromChildTotal,mon.rebateChildTotal,mon.rebateFromChild,mon.rebateFromChildActual,mon.rebateTotal
+        from mbr_rebate_agent_month mon
+        left join mbr_account mbr on mon.accountid = mbr.id
+        left join mbr_group g on g.id = mbr.groupid
+        where mon.parentId = #{parentId}  and mon.accountid != #{parentId}
+        and  (mon.validPayoutFromChild > 0 or mon.validPayoutForSelf >0 or mon.rebateTotal >0 )
+        <if test="createTime !=null and createTime!=''">
+            and mon.createtimeex = #{createTime}
+        </if>
+        <if test="groupId !=null ">
+            and g.id = #{groupId}
+        </if>
+        <if test="loginName !=null and loginName!=''">
+            and mon.loginname = #{loginName}
+        </if>
+        <if test="agyLevelId !=null">
+            and mon.agyLevelId = #{agyLevelId}
+        </if>
+        group by mon.accountid
+        <if test="orderBy != null and orderBy != ''">
+            ORDER BY ${orderBy}
+        </if>
+    </select>
+
+    <select id="getMbrRebateAgentDayList"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentRespHistoryListDto"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select g.groupName,
+        d.id,d.accountId,d.loginName,d.createTime,d.createTimeEx,d.validPayoutFromChild,d.validPayoutFromChildMonth,d.agyLevelId
+        from mbr_rebate_agent_day d
+        left join mbr_account mbr on d.accountid = mbr.id
+        left join mbr_group g on g.id = mbr.groupid
+        where d.agyflag = 1
+        <if test="createTimeStart != null and createTimeStart != ''">
+            AND d.createtimeex <![CDATA[ >= ]]> #{createTimeStart}
+        </if>
+        <if test="createTimeEnd != null and createTimeEnd != ''">
+            AND d.createtimeex <![CDATA[ <= ]]> #{createTimeEnd}
+        </if>
+        <if test="groupId !=null ">
+            and g.id = #{groupId}
+        </if>
+        <if test="loginName !=null and loginName!=''">
+            and d.loginname = #{loginName}
+        </if>
+        <if test="agyLevelId !=null">
+            and d.agyLevelId = #{agyLevelId}
+        </if>
+        order by d.createtimeex desc, d.validPayoutFromChild asc
+    </select>
+    <update id="batchUpdateBonus">
+        UPDATE mbr_rebate_agent_bonus
+        SET status = #{status},auditUser =#{userName},auditTime = #{auditTime}
+        WHERE id IN
+        <foreach item="item" collection="groups" open="(" separator="," close=")">
+            #{item.id}
+        </foreach>
+    </update>
+    <select id="getDealStatusList"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.entity.MbrRebateAgentBonus"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.entity.MbrRebateAgentBonus" >
+       select bonus.*
+       from mbr_rebate_agent_bonus bonus
+       where bonus.createtimeex = #{createTimeEx} and bonus.status != 2
+    </select>
+    <select id="getSubTotalValidBet"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select IFNULL(sum(rebate.validbet),0)
+        from mbr_tree p
+        left join mbr_rebate_agent_month rebate on p.childnodeid = rebate.accountid
+        where p.parentid = #{childNodeId} and p.depth = 1
+            and rebate.createtimeex = #{createTime}
+    </select>
+
+    <select id="getAllSubMemAgentRebateChildTotal"  resultType="java.math.BigDecimal"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select IFNULL(sum(rebate.rebateChildTotal),0)
+        from mbr_tree p
+        left join mbr_rebate_agent_month rebate on p.childnodeid = rebate.accountid
+        where p.parentid = #{childNodeId} and p.depth > 0
+          and rebate.agyflag = 1 and rebate.createtimeex = #{createTime} and rebate.validPayoutFromChild = 0
+    </select>
+
+    <select id="getAllSubMemAgentRebateChildList"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.entity.MbrRebateAgentMonth"
+            parameterType="com.wsdy.saasops.modules.mbrRebateAgent.dto.MbrRebateAgentQryDto" >
+        select group_concat(p.parentid SEPARATOR ',') parentIds, t.*
+        from (
+                 select p.depth, rebate.accountid, rebate.rebateChildTotal
+                 from mbr_tree p
+                 inner join mbr_rebate_agent_month rebate on p.childnodeid = rebate.accountid
+                 where p.parentid = #{childNodeId}
+                   and p.depth > 0
+                   and rebate.agyflag = 1
+                   and rebate.createtimeex = #{createTime}
+                   and rebate.validPayoutFromChild = 0
+             ) t
+        left join  mbr_tree p on t.accountid = p.childnodeid
+        where p.depth > 0
+        group by t.accountid
+    </select>
+</mapper>

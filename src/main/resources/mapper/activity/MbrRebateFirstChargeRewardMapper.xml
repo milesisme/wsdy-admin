@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.activity.mapper.MbrRebateFirstChargeRewardMapper">
+	<update id="updateMbrRebateFirstChargeBilldIdAndAuditIdById">
+			update mbr_rebate_first_charge_reward set billdetailid = #{billDetailId}
+
+			<if test="auditId !=  null">
+				,auditid= #{auditId}
+			</if>
+
+			where id = #{id}
+	</update>
+	
+	<select id="findMbrRebateFirstChargeReward" resultType="java.lang.Integer">
+		SELECT count(*) FROM mbr_rebate_first_charge_reward
+		<include refid="activity_where"/>
+	</select>
+
+	<sql id="activity_where">
+		<where>
+			<if test="isStatus == 1">
+				AND status != 0
+			</if>
+			<if test="activityId != null and activityId != ''">
+				AND activityId = #{activityId}
+			</if>
+			<if test="depositId != null and depositId != ''">
+				AND depositId = #{depositId}
+			</if>
+			<if test="accountId != null and accountId != ''">
+				AND accountId = #{accountId}
+			</if>
+			<if test="applicationTime != null and applicationTime != ''">
+				AND date_format(applicationTime,'%Y-%m-%d') = #{applicationTime}
+			</if>
+			<if test="startTime != null and startTime != ''">
+				AND date_format(applicationTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND date_format(applicationTime,'%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+			</if>
+		</where>
+	</sql>
+
+
+	<select id="findMbrRebateFirstChargeRewardCount" resultType="java.lang.Integer">
+		SELECT count(*) FROM mbr_rebate_first_charge_reward mrf
+		<where>
+			<if test="actLevelId != null">
+				AND mrf.actLevelId =#{actLevelId}
+			</if>
+			<if test="accountId != null and accountId != ''">
+				AND mrf.accountId =#{accountId}
+			</if>
+
+			<if test="subAccountId != null ">
+				AND mrf.subAccountId =#{subAccountId}
+			</if>
+			<if test="activityId != null and activityId != ''">
+				AND mrf.activityId =#{activityId}
+			</if>
+			<if test="applicationTime != null and applicationTime != ''">
+				AND DATE_FORMAT(mrf.applicationTime,'%Y-%m-%d') =#{applicationTime}
+			</if>
+			<if test="startTime != null and startTime != ''">
+				AND DATE_FORMAT(mrf.applicationTime,'%Y-%m-%d') <![CDATA[ >= ]]>#{startTime}
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND DATE_FORMAT(mrf.applicationTime,'%Y-%m-%d') <![CDATA[ <= ]]>#{endTime}
+			</if>
+
+			<if test="ip != null and ip != ''">
+				ip = #{ip}
+			</if>
+
+		</where>
+	</select>
+
+	<select id="getApiFirstChargeByAccountId"
+			resultType="com.wsdy.saasops.api.modules.activity.dto.FirstChargeRewardDto">
+			select mrf.applicationtime givetime, mrf.bonusamount amount, ma.loginname subusername  from mbr_rebate_first_charge_reward mrf
+			inner join mbr_account ma on ma.id = mrf.subaccountid
+			where mrf.accountid = #{accountId}
+			AND DATE_FORMAT(mrf.applicationTime,'%Y-%m-%d %H:%i:%s') <![CDATA[ >= ]]>#{startTime}
+			AND DATE_FORMAT(mrf.applicationTime,'%Y-%m-%d %H:%i:%s') <![CDATA[ <= ]]>#{endTime}
+			order by mrf.applicationtime desc
+	</select>
+
+</mapper>

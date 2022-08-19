@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.dao.OprHelpCategoryMapper">
+
+	<update id="updatCategoryAvailable" parameterType="com.wsdy.saasops.modules.operate.entity.OprHelpCategory">
+		update help_category set available=#{available} where id=#{id}
+	</update>
+	
+	<update id="deleteCategory" parameterType="com.wsdy.saasops.modules.operate.entity.OprHelpCategory">
+		update help_category set isdelete=#{isdelete} where id=#{id}
+	</update>
+	
+	<select id="selectCategoryList" parameterType="com.wsdy.saasops.modules.operate.entity.OprHelpCategory" resultType="com.wsdy.saasops.modules.operate.entity.OprHelpCategory">
+		SELECT * from help_category
+		WHERE 1=1
+		<if test="available != null ">
+			AND available =#{available}
+		</if>
+		<if test="isdelete != null ">
+			AND isdelete =#{isdelete}
+		</if>
+		ORDER BY outRangId,createtime DESC
+	</select>
+	
+</mapper>

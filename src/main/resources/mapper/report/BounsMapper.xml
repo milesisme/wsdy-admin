@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.analysis.mapper.BounsMapper">
+
+    <select id="findSubordinateAgent"
+            parameterType="com.wsdy.saasops.modules.analysis.entity.BounsReportQueryModel"
+            resultType="com.wsdy.saasops.modules.analysis.entity.RptWinLostModel">
+        <include refid="rptBonusAgentSql"/>
+        GROUP BY DATE_FORMAT(tb.applicationtime,'%Y-%m-%d'),agt.agyAccount
+    </select>
+
+    <sql id="rptBonusAgentSql">
+        SELECT 
+        	DATE_FORMAT(tb.applicationtime,'%Y-%m-%d') startday,
+        	agt.agyAccount as agent,agt.id
+        	agentId,agt.parentId topAgentId,
+        	COUNT(distinct(tb.accountId)) profitTimes,COUNT(1) profitCounts,
+        	SUM(IF(tb.source = 3, -1 * tb.bonusamount, tb.bonusamount)) profits
+        from opr_act_bonus tb
+        INNER JOIN mbr_account mbr on tb.accountId=mbr.id
+        INNER JOIN (
+            SELECT t.* from agy_account ct
+            left JOIN agy_tree e ON ct.id = e.parentid
+            LEFT JOIN agy_tree t ON e.childnodeid = t.parentid
+            WHERE ct.agyaccount = #{agyAccount} and e.depth = 1
+        ) t ON t.childnodeid = mbr.cagencyId
+        LEFT JOIN agy_account agt ON agt.id = t.parentid
+        LEFT JOIN mbr_group g on mbr.groupId=g.id
+        LEFT JOIN opr_act_activity activity on tb.activityId=activity.id
+        LEFT JOIN opr_act_rule rule on activity.ruleId=rule.id
+        LEFT JOIN t_op_acttmpl acttmpl on rule.actTmplId=acttmpl.id
+        WHERE tb.`status`=1
+        <include refid="activityWhere"/>
+        <include refid="agentAndUserGroupWhere_Bouns"/>
+    </sql>
+
+    <select id="findSubordinateAgentListTotal" parameterType="com.wsdy.saasops.modules.analysis.entity.BounsReportQueryModel"
+            resultType="com.wsdy.saasops.modules.analysis.entity.RptWinLostModel">
+        select '总计' as startday, sum(profitTimes) as profitTimes,sum(profitCounts) profitCounts,sum(profits) profits
+        from (
+            <include refid="rptBonusAgentSql"/>
+            GROUP BY DATE_FORMAT(tb.applicationtime,'%Y-%m-%d')
+        )t
+    </select>
+
+    <select id="findSubordinateBonus"
+            parameterType="com.wsdy.saasops.modules.analysis.entity.BounsReportQueryModel"
+            resultType="com.wsdy.saasops.modules.analysis.entity.RptWinLostModel">
+        SELECT 
+	        agt.agyAccount as agent,agt.id
+	        agentId,agt.parentId topAgentId,COUNT(distinct(tb.accountId)) profitTimes,
+	        COUNT(1) profitCounts,SUM(IF(tb.source = 3, -1 * tb.bonusamount, tb.bonusamount)) profits
+        FROM opr_act_bonus tb
+        LEFT JOIN mbr_account mbr on tb.accountId=mbr.id
+        LEFT JOIN mbr_group g on mbr.groupId=g.id
+        LEFT JOIN (select * from agy_account where parentId=0) tagt on mbr.tagencyId=tagt.id
+        LEFT JOIN agy_account agt on mbr.cagencyId=agt.id
+        LEFT JOIN opr_act_activity activity on tb.activityId=activity.id
+        LEFT JOIN opr_act_rule rule on activity.ruleId=rule.id
+        LEFT JOIN t_op_acttmpl acttmpl on rule.actTmplId=acttmpl.id
+        where tb.`status`=1
+        <if test="isSign ==1">
+            and mbr.cagencyId in
+            (
+            SELECT e.childnodeid from agy_account t
+            LEFT JOIN agy_tree e ON t.id = e.parentid
+            WHERE t.agyaccount=#{agyAccount} and depth > 0
+            )
+        </if>
+        <if test="isSign ==2">
+            and mbr.cagencyId in
+            (SELECT id from agy_account WHERE agyaccount=#{agyAccount})
+        </if>
+        <include refid="activityWhere"/>
+        <include refid="agentAndUserGroupWhere_Bouns"/>
+    </select>
+
+    <sql id="activityWhere">
+        <if test="specifyAgyAccount != null and specifyAgyAccount !='' ">
+            and agt.agyAccount =#{specifyAgyAccount}
+        </if>
+        <if test="activityIdList != null and activityIdList.size() !='' ">
+            AND activity.id in
+            <foreach collection="activityIdList" item="activityId" open="(" close=")" separator=",">
+                #{activityId}
+            </foreach>
+        </if>
+        <if test="catIdList != null and catIdList !='' ">
+            AND acttmpl.id in(${catIdList})
+        </if>
+
+        <if test=" enablePc !=null and enablePc >0 ">
+            And activity.enablePc=1
+        </if>
+        <if test=" enableMb !=null and enableMb >0 ">
+            And activity.enableMb=1
+        </if>
+    </sql>
+
+    <sql id="agentAndUserGroupWhere_Bouns">
+        <if test="betStrTime !=null and betStrTime !='' ">
+            And tb.applicationtime <![CDATA[ >= ]]> #{betStrTime}
+        </if>
+        <if test=" betEndTime !=null and betEndTime !='' ">
+            And tb.applicationtime <![CDATA[ <= ]]> #{betEndTime}
+        </if>
+        <if test="agentId !=null">
+            and mbr.cagencyId = #{agentId}
+        </if>
+        <if test="parentAgentId !=null">
+            AND tagt.id = #{parentAgentId}
+        </if>
+     <!--   <if test="parentAgentidList != null and parentAgentidList.size() !='' ">
+            AND tagt.id in
+            <foreach collection="parentAgentidList" item="pAgentId" open="(" close=")" separator=",">
+                #{pAgentId}
+            </foreach>
+        </if>
+        <if test="agentIdList != null and agentIdList.size() !='' ">
+            AND agt.id in
+            <foreach collection="agentIdList" item="agentId" open="(" close=")" separator=",">
+                #{agentId}
+            </foreach>
+        </if>-->
+        <if test="groupIdList != null and groupIdList.size() != 0">
+            AND mbr.groupId in
+            <foreach collection="groupIdList" item="groupId" open="(" close=")" separator=",">
+                #{groupId}
+            </foreach>
+        </if>
+        <if test=" userId !=null and userId !='' ">
+            and mbr.id=#{userId}
+        </if>
+        <if test=" userName !=null and userName !='' ">
+            and mbr.loginName like CONCAT('%',#{userName}, '%')
+        </if>
+
+        <if test="loginName != null and loginName != ''">
+            AND mbr.loginName LIKE CONCAT('%',#{loginName}, '%')
+        </if>
+        <if test="isTest == 0">
+            and not exists (
+            select * from agy_tree tree where  tree.childnodeid = mbr.cagencyid and tree.parentid = 4
+            )
+        </if>
+        <if test="isTest == 1">
+            and  exists (
+            select * from agy_tree tree where  tree.childnodeid = mbr.cagencyid and tree.parentid = 4
+            )
+        </if>
+        <if test="agyAccountStr != null and agyAccountStr != ''">
+            and  exists (
+            select * from agy_tree tree left join agy_account agy on tree.parentid =agy.id where  tree.childnodeid = mbr.cagencyid and agy.agyAccount LIKE CONCAT('%',#{agyAccountStr}, '%')
+            )
+        </if>
+    </sql>
+
+
+</mapper>

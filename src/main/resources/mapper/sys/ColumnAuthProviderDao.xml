@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.modules.sys.dao.ColumnAuthProviderDao">
+	
+	<select id="findUserIdByToken" resultType="java.lang.Long">
+		select DISTINCT tr.role_id as roleId 
+		  from sys_user_token tk, 
+		       sys_user_role tr
+		 where tk.user_id = tr.user_id 
+		   and tk.token=#{token}
+	</select>
+
+</mapper>

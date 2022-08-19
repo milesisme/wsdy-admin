@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.dao.OprAdvMapper">
+
+	<delete id="deleteByIds" parameterType="map">
+		DELETE FROM opr_adv
+		<include refid="del_where"/>
+	</delete>
+	<delete id="deleteImageByIds" parameterType="map">
+		DELETE FROM opr_adv_image
+		<where>
+			advId in
+			<foreach collection="ids" open="(" close=")" separator="," item="id">
+				#{id}
+			</foreach>
+		</where>
+	</delete>
+
+	<select id="selectByIds" parameterType="java.util.Map" resultType="com.wsdy.saasops.modules.operate.entity.OprAdv">
+		select * FROM opr_adv
+		<include refid="del_where"/>
+	</select>
+
+	<delete id="deleteImageById" parameterType="java.lang.Integer">
+		delete from opr_adv_image where advId = #{id}
+	</delete>
+
+	<sql id="del_where">
+		<where>
+			id in 
+			<foreach collection="ids" open="(" close=")" separator="," item="id">
+				#{id}
+			</foreach>
+		</where>
+	</sql>
+	<select id="queryOprAdvList" parameterType="com.wsdy.saasops.modules.operate.entity.OprAdv" resultMap="queryWebOprAdvListMap">
+		SELECT adv.*,
+			image.advid,image.pcpath,image.mbpath,image.pictarget,image.actid,image.activityid,image.outStation,image.intype,image.inpagetype
+		from opr_adv adv
+        left join opr_adv_image image on adv.id = image.advId
+		<where>
+			<if test="clientShows != null and clientShows.size()>0">
+				and adv.clientShow in
+				<foreach item="clientShow" collection="clientShows" open="(" separator="," close=")">
+					#{clientShow}
+				</foreach>
+				or adv.clientShow = 2
+			</if>
+			<if test="advType!=null">
+				AND adv.advType = #{advType}
+			</if>
+			<if test="advTypeChild!=null">
+				AND adv.advTypeChild = #{advTypeChild}
+			</if>
+			<if test="advTypes != null and advTypes.size()>0">
+				and adv.advType in
+				<foreach item="advType" collection="advTypes" open="(" separator="," close=")">
+					#{advType}
+				</foreach>
+			</if>
+			<if test="availables != null and availables.size()>0">
+				and adv.available in
+				<foreach item="available" collection="availables" open="(" separator="," close=")">
+					#{available}
+				</foreach>
+			</if>
+			<if test="title!=null and title !=''">
+				AND adv.title LIKE CONCAT('%',#{title},'%')
+			</if>
+			<if test="startTime != null and startTime != ''">
+				AND adv.createTime <![CDATA[ >= ]]>#{startTime}
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND adv.createTime <![CDATA[ <= ]]>#{endTime}
+			</if>
+		</where>
+		GROUP BY adv.id
+		ORDER BY adv.createTime DESC
+	</select>
+
+	<resultMap id="queryWebOprAdvListMap" type="com.wsdy.saasops.modules.operate.entity.OprAdv">
+		<id column="id" property="id"/>
+		<result column="title" property="title"/>
+		<result column="advTypeChild" property="advTypeChild"/>
+		<result column="advTypeChildNum" property="advTypeChildNum"/>
+		<result column="available" property="available"/>
+		<result column="clientShow" property="clientShow"/>
+		<result column="advType" property="advType"/>
+		<result column="useStart" property="useStart"/>
+		<result column="useEnd" property="useEnd"/>
+		<result column="advType" property="advType"/>
+		<result column="creater" property="creater"/>
+		<result column="createTime" property="createTime"/>
+		<result column="updater" property="updater"/>
+		<result column="updateTime" property="updateTime"/>
+		<collection property="imageList" ofType="com.wsdy.saasops.modules.operate.entity.OprAdvImage">
+			<!-- id:唯一标识 property：要将订单明细的唯一标识映射到com.mybatis.entity.OrderDetail的那个属性 -->
+			<result column="advId" property="advId"/>
+			<result column="pcPath" property="pcPath"/>
+			<result column="mbPath" property="mbPath"/>
+			<result column="picTarget" property="picTarget"/>
+			<result column="actId" property="actId"/>
+			<result column="activityId" property="activityId"/>
+			<result column="outStation" property="outStation"/>
+			<result column="inType" property="inType"/>
+			<result column="inPageType" property="inPageType"/>
+		</collection>
+	</resultMap>
+
+	<select id="queryWebOprAdvList" parameterType="com.wsdy.saasops.modules.operate.entity.OprAdv" resultMap="queryWebOprAdvListMap">
+		SELECT * from opr_adv adv
+		left join opr_adv_image image on adv.id = image.advId
+		where adv.useStart<![CDATA[ <= ]]> now() and  adv.useEnd <![CDATA[ >= ]]> now() and adv.available=1
+			<if test="clientShow!=null and clientShow==0">
+				AND (adv.clientShow = 0 or adv.clientShow = 2)
+			</if>
+			<if test="clientShow!=null and clientShow==1">
+				AND (adv.clientShow = 1 or adv.clientShow = 2)
+			</if>
+			<if test="advType!=null">
+				AND adv.advType = #{advType}
+			</if>
+			<if test="advTypeChild!=null">
+				AND adv.advTypeChild = #{advTypeChild}
+			</if>
+		order by adv.advTypeChildNum asc
+	</select>
+
+	<select id="queryAdvBannerDtoList" parameterType="com.wsdy.saasops.modules.operate.entity.AdvBanner" resultType="com.wsdy.saasops.modules.operate.entity.AdvBanner">
+		SELECT * from t_opt_adv_banner adv where 1=1
+		<if test="clientShow!=null and clientShow==0">
+			AND (adv.clientShow = 0 or adv.clientShow = 2)
+		</if>
+		<if test="clientShow!=null and clientShow==1">
+			AND (adv.clientShow = 1 or adv.clientShow = 2)
+		</if>
+		<if test="advType!=null">
+			AND adv.advType = #{advType}
+		</if>
+		<if test="evebNum!=null">
+			AND adv.evebNum = #{evebNum}
+		</if>
+	</select>
+
+	<select id="coupletList" resultMap="queryWebOprAdvListMap">
+		SELECT * from opr_adv adv left join
+					  opr_adv_image image on adv.id = image.advId
+				where adv.useStart<![CDATA[ <= ]]> now() and  adv.useEnd <![CDATA[ >= ]]> now()
+				  and adv.available=1
+		          and adv.advType=1
+	</select>
+
+	<select id="queryOprAdvInfo" parameterType="java.lang.Integer" resultMap="queryWebOprAdvListMap">
+		SELECT * from opr_adv adv left join
+					  opr_adv_image image on adv.id = image.advId
+		        where adv.id = #{id}
+	</select>
+
+	<select id="queryOprAdvByAvailable" resultType="com.wsdy.saasops.modules.operate.entity.OprAdv">
+		select * from opr_adv adv where adv.advType = #{advType} and adv.available = 1
+	</select>
+
+	<update id="updateOprAdvAvailable" parameterType="com.wsdy.saasops.modules.operate.entity.OprAdv">
+		update opr_adv set available=#{available} where id=#{id}
+	</update>
+
+</mapper>

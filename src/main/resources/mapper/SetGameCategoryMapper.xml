@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wsdy.saasops.modules.operate.dao.SetGameCategoryMapper">
+
+	<select id="list" resultType="com.wsdy.saasops.modules.operate.entity.SetGameCategory"
+            parameterType="com.wsdy.saasops.modules.operate.entity.SetGameCategory">
+		SELECT t.* FROM (
+			SELECT category.id, 
+				category.name,
+				category.gamelogoid, 
+				category.sortId,
+				category.updateTime,
+				false isTGmCatId
+			FROM set_game_category category
+				LEFT JOIN set_game_category_relation relation ON relation.gamecategoryid = category.id
+				LEFT JOIN t_gm_game game ON game.id = relation.gameid
+			WHERE category.isdelete = 0
+				<if test="gamelogoid != null">
+					AND category.gamelogoid = #{gamelogoid}
+				</if>
+				<if test="name != null and name != ''">
+					AND category.name LIKE CONCAT('%',#{name}, '%')
+				</if>
+				<if test="gameName != null and gameName != ''">
+					AND game.gamename LIKE CONCAT('%',#{gameName}, '%')
+				</if>
+			GROUP BY category.id
+
+			UNION ALL
+			
+			SELECT
+				cat.id id,
+				cat.catname name,
+				depot.id gamelogoid,
+				cat.sortid,
+				cat.modifytime updateTime,
+				true isTGmCatId
+			FROM t_gm_cat cat 
+				LEFT JOIN t_gm_game tgame ON tgame.subcatid = cat.id 
+				LEFT JOIN set_game sgame ON tgame.id = sgame.gameId
+				LEFT JOIN t_gm_depot depot ON tgame.depotId = depot.id
+				LEFT JOIN t_gm_api t3 ON depot.id = t3.depotId
+        		LEFT JOIN t_gm_apiprefix t4 ON t3.id = t4.apiId
+		  	WHERE tgame.catId=12 AND tgame.available=1 
+					AND cat.id NOT IN (SELECT ca.tGmCatId FROM set_game_category ca)
+					AND t4.available != 0
+				<if test="gamelogoid != null">
+					AND depot.id = #{gamelogoid}
+				</if>
+				<if test="name != null and name != ''">
+					AND cat.catname LIKE CONCAT('%',#{name}, '%')
+				</if>
+				<if test="gameName != null and gameName != ''">
+					AND tgame.gamename LIKE CONCAT('%',#{gameName}, '%')
+				</if>
+			GROUP BY cat.id
+			) t
+		ORDER BY t.sortId DESC
+    </select>
+    
+	<select id="getLotteryCategory" resultType="com.wsdy.saasops.modules.operate.entity.SetGameCategory">
+		SELECT t.* FROM (						
+			SELECT category.id, 
+				category.name,
+				category.gamelogoid, 
+				category.sortId,
+				false isTGmCatId
+			FROM set_game_category category
+				LEFT JOIN set_game_category_relation relation ON relation.gamecategoryid = category.id
+				LEFT JOIN t_gm_game game ON game.id = relation.gameid
+			WHERE category.isdelete = 0
+				AND category.gamelogoid = #{gamelogoid}
+			GROUP BY category.id
+
+			UNION ALL
+			
+			SELECT
+				cat.id id,
+				cat.catname name,
+				depot.id gamelogoid,
+				cat.sortid,
+				true isTGmCatId
+			FROM t_gm_cat cat 
+				LEFT JOIN t_gm_game tgame ON tgame.subcatid = cat.id 
+				LEFT JOIN set_game sgame ON tgame.id = sgame.gameId
+				LEFT JOIN t_gm_depot depot ON tgame.depotId = depot.id
+				LEFT JOIN t_gm_api t3 ON depot.id = t3.depotId
+        		LEFT JOIN t_gm_apiprefix t4 ON t3.id = t4.apiId
+		  	WHERE tgame.catId = 12 AND tgame.available = 1 AND t4.available != 0
+					AND cat.id NOT IN (SELECT ca.tGmCatId FROM set_game_category ca)
+					AND depot.id = #{gamelogoid}
+			GROUP BY cat.id
+			) t
+		ORDER BY t.sortId
+    </select>
+    
+    <select id="getGameByCategory" resultType="com.wsdy.saasops.modules.operate.entity.OprGame"
+            parameterType="com.wsdy.saasops.api.modules.user.dto.ElecGameDto">
+        SELECT 
+		        t1.id,t1.gameName,t1.logo,t1.logo2,IFNULL(t4.popularity,t1.clicknum) clickNum,
+		        IFNULL(t1.recRating, 0) recRating,t1.istry,t1.orientation,
+		        t5.depotName,t3.catName,IFNULL(t1.enablePool, 0) enablePool,IFNULL(t1.enableTest, 0) enableTest,
+		        IFNULL(t1.goodNum, 0) goodNum,
+		        t1.enablePc,t1.enableMb,t1.enableApp,t1.createtime,t1.tableCode
+	        FROM t_gm_game t1
+	        LEFT JOIN set_game_category_relation relation on relation.gameid = t1.id
+	       	LEFT JOIN set_game_category category ON category.id = relation.gamecategoryid
+	        LEFT JOIN t_gm_cat t3 ON t1.catId = t3.id
+	        LEFT JOIN set_game t4 ON t1.id = t4.gameId
+	        LEFT JOIN t_gm_depot t5 ON t1.depotId = t5.id
+        WHERE t1.catId = 12 AND t1.available = 1
+	       	<choose>
+			    <when test="isTGmCatId != null and isTGmCatId == false">
+	        		AND category.id = #{id}
+			    </when>
+			    <otherwise>
+	        		AND t1.subcatid = #{id}
+			    </otherwise>
+			</choose>
+			<if test="lableName != null and lableName != ''">
+				AND t1.gamename LIKE CONCAT('%',#{lableName}, '%')
+			</if>
+			<if test="depotId != null ">
+				AND t1.depotId = #{depotId}
+			</if>
+	        <if test="terminal==0">
+	            AND t1.enablePc=1
+	            AND (t4.enableGmaePc =1 or t4.enableGmaePc IS NULL)
+	        </if>
+	        <if test="terminal==1">
+	            AND t1.enableMb=1
+	            AND (t4.enableGmaeMb =1 or t4.enableGmaeMb IS NULL)
+	        </if>
+	     	GROUP BY t1.id ORDER BY t1.sortId, relation.sortId
+    </select>
+    
+    <insert id="insertSetGameCategory" parameterType="com.wsdy.saasops.modules.operate.entity.SetGameCategory"
+            useGeneratedKeys="true" keyProperty="id">
+		INSERT INTO set_game_category
+		(
+			name,
+			gamelogoid,
+			sortId,
+			updateTime,
+			updateBy,
+			tGmCatId			
+		)
+		VALUES
+		(
+			#{name},
+			#{gamelogoid},
+			#{sortId},
+			#{updateTime},
+			#{updateBy},
+			#{tGmCatId}
+		)
+	</insert>
+    
+</mapper>

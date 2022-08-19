@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.wsdy.saasops.api.modules.user.mapper.ApiUserMapper">
+
+	<insert id="insertFindPwd" parameterType="com.wsdy.saasops.api.modules.user.entity.FindPwEntity">
+		INSERT INTO mbr_retrvpw(loginName,vaildCode,expire,applyTime,vaildTimes,vaildType, accountType) VALUES
+		(#{loginName}, #{vaildCode}, #{expire}, #{applyTime}, #{vaildTimes},#{vaildType},#{accountType}) 
+		ON DUPLICATE KEY UPDATE
+		vaildCode=values(vaildCode),expire=values(expire),applyTime=values(applyTime),
+		vaildTimes=values(vaildTimes),vaildType=values(vaildType),accountType=#{accountType}
+	</insert>
+
+</mapper>

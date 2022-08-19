@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.task.mapper.TaskMapper">
+
+    <select id="configList" resultType="com.wsdy.saasops.modules.task.entity.TaskConfig">
+		SELECT c.*,e.codeName financialCodeName FROM task_config c
+		LEFT JOIN t_bs_financialcode e ON c.financialcode = e.`code`
+		<where>
+            <if test="id != null">
+                AND c.id =#{id}
+            </if>
+        </where>
+	</select>
+
+    <select id="taskBlackList" resultType="com.wsdy.saasops.modules.operate.entity.OprActBlacklist">
+		SELECT * FROM opr_act_blacklist where tmplcode = (SELECT financialcode FROM task_config WHERE id =#{id})
+		ORDER BY createtime desc
+	</select>
+
+    <select id="findBonusStatistical" resultType="com.wsdy.saasops.modules.task.entity.TaskBonus"
+            parameterType="com.wsdy.saasops.modules.task.entity.TaskBonus">
+        SELECT c.taskname,sum(bonusamount) bonusamount,count(DISTINCT accountid) receiveNum,s.number,
+        c.id configId,c.financialcode
+        FROM task_config c
+        LEFT JOIN task_bonus bonus ON bonus.configid = c.id
+        LEFT JOIN task_statistical s ON s.configid = c.id
+        LEFT JOIN mbr_account t ON t.id = bonus.accountid
+        LEFT JOIN agy_account gy ON gy.id = t.cagencyid
+        <where>
+            <if test="isCagency != null and isCagency ==1">
+                AND t.cagencyId not in (4)
+            </if>
+            <if test="isCagency != null and isCagency ==0">
+                AND t.cagencyId in (4)
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND bonus.loginName =#{loginName}
+            </if>
+            <if test="cagencyId != null">
+                AND t.cagencyId =#{cagencyId}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND gy.agyaccount =#{agyAccount}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND bonus.time <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND bonus.time <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+        GROUP BY c.id
+    </select>
+
+    <select id="bounsDetail" resultType="com.wsdy.saasops.modules.task.entity.TaskBonus"
+            parameterType="com.wsdy.saasops.modules.task.entity.TaskBonus">
+        SELECT bonus.*,c.taskname
+        FROM task_bonus bonus
+        LEFT JOIN mbr_account t ON bonus.accountid = t.id
+        LEFT JOIN task_config c ON c.id = bonus.configid
+        LEFT JOIN agy_account gy ON gy.id = t.cagencyid
+        <where>
+            <if test="configId != null">
+                AND bonus.configId =#{configId}
+            </if>
+            <if test="isCagency != null and isCagency ==1">
+                AND t.cagencyId not in (4)
+            </if>
+            <if test="isCagency != null and isCagency ==0">
+                AND t.cagencyId in (4)
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND bonus.loginName =#{loginName}
+            </if>
+            <if test="accountId != null">
+                AND bonus.accountId =#{accountId}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND gy.agyaccount =#{agyAccount}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND bonus.time <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND bonus.time <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+        order by bonus.time desc
+    </select>
+
+    <select id="findBonusAmount" resultType="java.math.BigDecimal">
+        SELECT IFNULL(sum(bonusamount),0) FROM task_bonus where accountId =#{accountId}
+        <if test="time != null and time != ''">
+            AND date_format(`time`, '%Y-%m-%d') = #{time}
+        </if>
+    </select>
+
+    <select id="findBlackListByAccountId" resultType="java.lang.Integer">
+		SELECT count(*) FROM opr_act_blacklist where tmplcode = #{tmplcode} and accountId =#{accountId}
+	</select>
+
+    <select id="findAccountSignin" resultType="com.wsdy.saasops.modules.task.entity.TaskSignin">
+		SELECT * FROM task_signin where accountId =#{accountId}
+        <if test="time != null and time != ''">
+            AND `time`= #{time}
+        </if>
+		ORDER BY id desc LIMIT 1
+	</select>
+
+    <select id="findTaskActivity" resultType="com.wsdy.saasops.modules.task.dto.TaskActivityDto">
+        SELECT DISTINCT y.id activityId,y.activityName,y.mblogourl,cy.catid
+        FROM opr_act_activity y
+        LEFT JOIN (SELECT activityid,catid FROM opr_act_catactivity GROUP BY activityid) cy ON cy.activityid = y.id
+        where y.id in
+        <foreach item="id" collection="activityIds" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+        AND y.available =1 AND y.isShow=1 and y.enableMb=1
+    </select>
+
+    <select id="updateClickRate">
+		update task_statistical SET `number`=`number`+1 WHERE `configid` = #{configid}
+	</select>
+
+    <select id="findTaskConfigList" resultType="com.wsdy.saasops.modules.task.entity.TaskConfig">
+        select * from task_config where rule != '' and rule is not null
+        and available=1
+        <if test="financialCode != null and financialCode != ''">
+            and financialCode =#{financialCode}
+        </if>
+    </select>
+
+    <select id="findDrawAccountLevel" resultType="java.lang.Integer">
+        SELECT al.accountlevel FROM task_level l
+        LEFT JOIN mbr_activity_level al ON l.accountLevelid = al.id
+        where l.accountId =#{accountId}
+    </select>
+
+    <select id="findTaskAccountLevel" resultType="java.lang.Integer">
+        SELECT al.accountlevel FROM mbr_account l
+        LEFT JOIN mbr_activity_level al ON l.actlevelid = al.id
+        where l.id =#{accountId}
+    </select>
+
+    <select id="findTaskReceiveTime" resultType="com.wsdy.saasops.modules.task.entity.TaskBonus">
+        SELECT * FROM task_bonus
+        WHERE accountId=#{accountId} and configid =#{configId}
+        and time <![CDATA[ > ]]> #{time}
+        ORDER BY time desc LIMIT 1
+    </select>
+
+    <select id="financialCodeName" resultType="java.lang.String">
+        select codename from t_bs_financialcode where code=#{code}
+    </select>
+
+    <select id="findTaskBonusLimtOne" resultType="com.wsdy.saasops.modules.task.entity.TaskBonus">
+        SELECT * FROM task_bonus
+        <where>
+            <if test="accountId != null">
+                and accountId=#{accountId}
+            </if>
+            <if test="configId != null">
+                and configId=#{configId}
+            </if>
+        </where>
+        order by id desc LIMIT 1
+    </select>
+
+    <select id="findDepositamountTsk" resultType="java.math.BigDecimal">
+        SELECT IFNULL(sum(depositamount),0) from fund_deposit
+        WHERE accountid =#{accountId} AND
+        date_format(auditTime, '%Y-%m-%d') = #{auditTime}
+    </select>
+
+    <select id="findValidbetTsk" resultType="java.math.BigDecimal">
+        SELECT IFNULL(sum(validbet),0) from rpt_bet_rcd_day
+        WHERE username =#{username}
+        <if test="startday != null and startday != ''">
+            AND startday = #{startday}
+        </if>
+    </select>
+
+    <select id="findHRTaskBonusList" resultType="com.wsdy.saasops.modules.task.entity.TaskBonus">
+        SELECT * from task_bonus
+        where accountid =#{accountId} and configid =#{configId}
+        ORDER BY id desc LIMIT #{num}
+    </select>
+
+</mapper>

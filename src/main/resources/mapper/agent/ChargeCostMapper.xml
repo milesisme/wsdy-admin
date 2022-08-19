@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.ChargeCostMapper">
+
+    <select id="findServiceChargAgent" resultType="com.wsdy.saasops.modules.agent.dto.AgentChargeMDto"
+        parameterType="com.wsdy.saasops.modules.agent.dto.AgentChargeMDto">
+        <include refid="serviceChargAgent_sql"/>
+    </select>
+
+    <sql id="serviceChargAgent_sql">
+        SELECT 
+        	t.agyaccount,d.departmentName,t.memo,
+	        IFNULL(dt.depositAmount,0) depositAmount,IFNULL(aw.withdrawAmount,0) withdrawAmount,
+	        CASE WHEN (t.feemodel = 2 OR t.feemodel = 3) THEN TRUNCATE(
+			ABS(IFNULL(dt.depositAmount,0) * (t.depositServicerate/100))
+			+ ABS(IFNULL(aw.withdrawAmount,0) * (t.withdrawServicerate/100))
+			,2) 
+			ELSE 0 END cost,
+	        IFNULL(dt.depositAmount,0)+IFNULL(aw.withdrawAmount,0) sumDepositAndWithdrawal
+        FROM agy_account t
+        LEFT JOIN agy_department d ON t.departmentid = d.id
+        LEFT JOIN (
+            SELECT IFNULL(sum(actualarrival),0) depositAmount,t.cagencyid
+            FROM fund_deposit d
+            LEFT JOIN mbr_account t ON d.accountid = t.id
+            LEFT JOIN agy_account t1 ON t1.id = t.cagencyid
+            WHERE d.`status`=1 and t1.attributes=0
+            <if test="startTime != null and startTime != ''">
+                AND d.audittime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND d.audittime <![CDATA[ <= ]]> #{endTime}
+            </if>
+            GROUP BY t.cagencyid
+        ) dt ON dt.cagencyid = t.id
+        LEFT JOIN (
+            SELECT IFNULL(sum(actualarrival),0) withdrawAmount,t.cagencyid
+            FROM fund_acc_withdraw d
+            LEFT JOIN mbr_account t ON d.accountid = t.id
+            LEFT JOIN agy_account t1 ON t1.id = t.cagencyid
+            WHERE d.`status`=1 and t1.attributes=0
+            <if test="startTime != null and startTime != ''">
+                AND d.passtime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND d.passtime <![CDATA[ <= ]]> #{endTime}
+            </if>
+            GROUP BY t.cagencyid
+        ) aw ON aw.cagencyid = t.id
+        WHERE t.attributes=0 and t.parentid>0
+        <if test="memo != null and memo != ''">
+            And t.memo LIKE CONCAT('%',#{memo}, '%')
+        </if>
+        <if test="agyAccount != null and agyAccount != ''">
+            AND t.agyAccount =#{agyAccount}
+        </if>
+        <if test="departmentName != null and departmentName != ''">
+            AND d.departmentName =#{departmentName}
+        </if>
+    </sql>
+
+    <select id="sumServiceChargAgent" resultType="com.wsdy.saasops.modules.agent.dto.AgentChargeMDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.AgentChargeMDto">
+        SELECT '总计' agyAccount,SUM(depositAmount) depositAmount,
+        SUM(withdrawAmount) withdrawAmount,sum(sumDepositAndWithdrawal) sumDepositAndWithdrawal,
+        SUM(cost) cost
+        FROM(<include refid="serviceChargAgent_sql"/>) a
+    </select>
+
+
+   <sql id="serviceChargAccount_sql">
+       SELECT t.loginname,IFNULL(dt.depositAmount,0) depositAmount,IFNULL(aw.withdrawAmount,0) withdrawAmount,
+        TRUNCATE(
+			ABS(IFNULL(dt.depositAmount,0) * (act.depositServicerate/100))
+			+ ABS(IFNULL(aw.withdrawAmount,0) * (act.withdrawServicerate/100))
+		,2) cost,
+       IFNULL(dt.depositAmount,0)+IFNULL(aw.withdrawAmount,0) sumDepositAndWithdrawal
+       FROM mbr_account t
+       LEFT JOIN agy_account act ON t.cagencyid = act.id
+	   LEFT JOIN (
+            SELECT IFNULL(sum(actualarrival),0) depositAmount,d.accountid FROM fund_deposit d
+            WHERE d.`status`=1
+            <if test="startTime != null and startTime != ''">
+               AND d.audittime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+               AND d.audittime <![CDATA[ <= ]]> #{endTime}
+            </if>
+            GROUP BY d.accountid
+        ) dt ON dt.accountid = t.id
+		LEFT JOIN (
+            SELECT IFNULL(sum(actualarrival),0) withdrawAmount,d.accountid
+            FROM fund_acc_withdraw d
+            WHERE d.`status`=1
+            <if test="startTime != null and startTime != ''">
+               AND d.passtime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+               AND d.passtime <![CDATA[ <= ]]> #{endTime}
+            </if>
+            GROUP BY d.accountid
+        ) aw ON aw.accountid = t.id
+        WHERE act.agyaccount=#{agyAccount}
+   </sql>
+
+    <select id="findServiceChargAccount" resultType="com.wsdy.saasops.modules.agent.dto.AgentChargeMDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.AgentChargeMDto">
+        <include refid="serviceChargAgent_sql"/>
+    </select>
+
+    <select id="sumServiceChargAccount" resultType="com.wsdy.saasops.modules.agent.dto.AgentChargeMDto"
+            parameterType="com.wsdy.saasops.modules.agent.dto.AgentChargeMDto">
+        SELECT 
+        	'总计' loginname,SUM(depositAmount) depositAmount,
+        	SUM(withdrawAmount) withdrawAmount,sum(sumDepositAndWithdrawal) sumDepositAndWithdrawal,
+        	SUM(cost) cost
+        FROM(<include refid="serviceChargAgent_sql"/>) a
+    </select>
+</mapper>

@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.dao.OprRecMbrMapper">
+
+    <select id="queryAllList" resultType="com.wsdy.saasops.modules.operate.entity.OprRecMbr"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprRecMbr">
+        select * from (
+        SELECT
+        DISTINCT acc.id mbrId,
+        acc.agyAccount mbrName,'0' groupId,
+        msg.title,
+        msg.context,
+        msg.createTime,
+        msg.sender,
+        msg.id msgId,
+        IFNULL(mbr.isRead, 0) as isRead,
+        date_format(mbr.readDate,'%y-%m-%d') as readDate
+        from
+        opr_msg msg
+        LEFT JOIN opr_msgrec rec ON msg.id =
+        rec.msgId
+        LEFT JOIN agy_account acc ON (acc.id = rec.agtId or acc.id =
+        rec.genAgtId)
+        LEFT JOIN opr_msgrecmbr mbr ON msg.id = mbr.msgId and
+        acc.id =
+        mbr.agtId
+        <where>
+            IFNULL(mbr.isRead, 0) not in (2)
+            <if test="isReads != null and isReads.size()>0">
+                AND IFNULL(mbr.isRead, 0) in
+                <foreach collection="isReads" open="(" close=")" separator="," item="isRead">
+                    #{isRead}
+                </foreach>
+            </if>
+            AND acc.id IS NOT NULL
+            AND acc.createTime  <![CDATA[<=]]>
+            msg.createTime
+            <if test="mbrName != null and mbrName != ''">
+                AND acc.agyAccount = #{mbrName}
+            </if>
+            <include refid="queryRec_where"></include>
+        </where>
+        union
+        SELECT
+        acc.id mbrId,
+        acc.loginName mbrName,
+        acc.groupId,
+        msg.title,
+        msg.context,
+        msg.createTime,
+        msg.sender,
+        msg.id msgId,
+        IFNULL(mbr.isRead, 0) as isRead,
+        mbr.readDate
+        from
+        opr_msg msg
+        LEFT JOIN opr_msgrec rec ON
+        msg.id = rec.msgId
+        LEFT JOIN mbr_account acc ON acc.id = rec.mbrId
+        LEFT
+        JOIN opr_msgrecmbr mbr ON msg.id = mbr.msgId and acc.id =
+        mbr.mbrId
+        <where>
+            IFNULL(mbr.isRead, 0) not in (2)
+            <if test="isReads != null and isReads.size()>0">
+                AND IFNULL(mbr.isRead, 0) in
+                <foreach collection="isReads" open="(" close=")" separator="," item="isRead">
+                    #{isRead}
+                </foreach>
+            </if>
+            AND acc.id IS NOT NULL
+            AND acc.registerTime  <![CDATA[<=]]>
+            msg.createTime
+            <if test="mbrName != null and mbrName != ''">
+                AND acc.loginName = #{mbrName}
+            </if>
+            <if test="baseAuth != null">
+                <!-- <choose>
+                     <when
+                             test="baseAuth.groupIds != null and baseAuth.groupIds != '' and baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                         <if test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                             AND acc.groupId in ( ${baseAuth.groupIds} )
+                         </if>
+                         <if
+                                 test="baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                             AND acc.cagencyId in ( ${baseAuth.agyAccountIds} )
+                         </if>
+                     </when>
+                     <otherwise>
+                         AND acc.groupId = -1
+                     </otherwise>
+                 </choose>-->
+                <if test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                    AND acc.groupId in ( ${baseAuth.groupIds} )
+                </if>
+                <if test="baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                    AND acc.cagencyId in ( ${baseAuth.agyAccountIds} )
+                </if>
+            </if>
+            <include refid="queryRec_where"></include>
+        </where>
+        ) A ORDER BY A.createTime DESC,A.mbrName ASC
+    </select>
+
+    <select id="queryAgyMesList" resultType="com.wsdy.saasops.modules.operate.entity.OprRecMbr"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprRecMbr">
+        SELECT
+        DISTINCT acc.id mbrId,
+        acc.agyAccount mbrName,
+        msg.title,
+        msg.context,
+        msg.createTime,
+        msg.sender,
+        msg.id msgId,
+        IFNULL( mbr.isRead, 0 ) AS isRead,
+        date_format(mbr.readDate,'%y-%m-%d') AS readDate
+        from
+        opr_msg msg
+        LEFT JOIN opr_msgrec rec ON msg.id =
+        rec.msgId
+        LEFT JOIN agy_account acc ON (acc.id = rec.agtId or acc.id =
+        rec.genAgtId)
+        LEFT JOIN opr_msgrecmbr mbr ON msg.id = mbr.msgId and
+        acc.id =
+        mbr.agtId
+        <where>
+            IFNULL(mbr.isRead, 0) not in (2)
+            <if test="isReads != null and isReads.size()>0">
+                AND IFNULL(mbr.isRead, 0) in
+                <foreach collection="isReads" open="(" close=")" separator="," item="isRead">
+                    #{isRead}
+                </foreach>
+            </if>
+            AND acc.id IS NOT NULL
+            AND acc.createTime  <![CDATA[<=]]>
+            msg.createTime
+            <if test="mbrName != null and mbrName != ''">
+                AND acc.agyAccount = #{mbrName}
+            </if>
+            <include refid="queryRec_where"></include>
+        </where>
+        ORDER BY msg.createTime DESC,acc.agyAccount ASC
+    </select>
+
+
+    <select id="queryMbrMesList" resultType="com.wsdy.saasops.modules.operate.entity.OprRecMbr"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprRecMbr">
+        SELECT
+        acc.id mbrId,
+        acc.loginName mbrName,
+        acc.groupId,
+        msg.title,
+        msg.context,
+        msg.createTime,
+        msg.sender,
+        msg.id msgId,
+        IFNULL( mbr.isRead, 0 ) AS isRead,
+        date_format(mbr.readDate,'%y-%m-%d') AS readDate
+        from
+        opr_msg msg
+        LEFT JOIN opr_msgrec rec ON
+        msg.id = rec.msgId
+        LEFT JOIN mbr_account acc ON acc.id = rec.mbrId
+        LEFT
+        JOIN opr_msgrecmbr mbr ON msg.id = mbr.msgId and acc.id =
+        mbr.mbrId
+        <where>
+            IFNULL(mbr.isRead, 0) not in (2)
+            <if test="isReads != null and isReads.size()>0">
+                AND IFNULL(mbr.isRead, 0) in
+                <foreach collection="isReads" open="(" close=")" separator="," item="isRead">
+                    #{isRead}
+                </foreach>
+            </if>
+            AND acc.id IS NOT NULL
+            AND acc.registerTime  <![CDATA[<=]]>
+            msg.createTime
+            <if test="mbrName != null and mbrName != ''">
+                AND acc.loginName = #{mbrName}
+            </if>
+            <if test="baseAuth != null">
+                <!--<choose>
+                    <when  test="baseAuth.groupIds != null and baseAuth.groupIds != '' and baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                        <if test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                            AND acc.groupId in ( ${baseAuth.groupIds} )
+                        </if>
+                        <if test="baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                            AND acc.cagencyId in ( ${baseAuth.agyAccountIds} )
+                        </if>
+                    </when>
+                    <otherwise>
+                        AND acc.groupId = -1
+                    </otherwise>
+                </choose>-->
+                <if test="baseAuth.groupIds != null and baseAuth.groupIds != '' ">
+                    AND acc.groupId in ( ${baseAuth.groupIds} )
+                </if>
+                <if test="baseAuth.agyAccountIds != null and baseAuth.agyAccountIds !='' ">
+                    AND acc.cagencyId in ( ${baseAuth.agyAccountIds} )
+                </if>
+            </if>
+
+            <if test="isRead != null">
+                AND IFNULL(mbr.isRead, 0) = #{isRead}
+            </if>
+            <include refid="queryRec_where"></include>
+        </where>
+
+        ORDER BY msg.createTime DESC,acc.loginName ASC
+    </select>
+
+    <sql id="queryRec_where">
+        <if test="title!=null and title !=''">
+            AND msg.title LIKE CONCAT('%',#{title},'%')
+        </if>
+        <if test="sendTimeFrom!=null and sendTimeFrom!=''">
+            AND msg.createTime <![CDATA[ >= ]]>
+            #{sendTimeFrom}
+        </if>
+        <if test="isReadsN != null and isReadsN.size()>0">
+            AND mbr.isRead IS null
+        </if>
+        <if test="sendTimeTo!=null and sendTimeTo!=''">
+            AND msg.createTime <![CDATA[<=]]>
+            #{sendTimeTo}
+        </if>
+
+        <if test="readFrom!=null and readFrom!=''">
+            AND mbr.readDate <![CDATA[ >= ]]>
+            #{readFrom}
+        </if>
+        <if test="readTo!=null and readTo!=''">
+            AND mbr.readDate <![CDATA[ <= ]]>
+            #{readTo}
+        </if>
+
+        <if test="isReadsY != null and isReadsY.size()>0 and isReadsN != null and isReadsN.size()>0">
+            and (mbr.isRead IS null or mbr.isRead in
+            <foreach item="isRead" collection="isReadsY" open="(" separator="," close=")">
+                #{isRead}
+            </foreach>
+            )
+        </if>
+        <if test="(isReadsY != null and isReadsY.size()>0) and (isReadsN == null or isReadsN.size() == 0)">
+            and mbr.isRead in
+            <foreach item="isRead" collection="isReadsY" open="(" separator="," close=")">
+                #{isRead}
+            </foreach>
+        </if>
+        <if test="(isReadsY == null or  isReadsY.size()== 0) and (isReadsN != null and isReadsN.size()>0) ">
+            and mbr.isRead IS null
+        </if>
+
+    </sql>
+
+    <delete id="deleteOprRecMbr">
+        DELETE
+        FROM
+          opr_msgrecmbr
+        WHERE isRead = 1
+        AND IFNULL((SELECT  sysValue  FROM set_basic_set_sys_setting  WHERE sysKey = 'autoDeleteDays'),0) <![CDATA[ > ]]> 0
+        AND IFNULL(DATEDIFF(NOW(), readDate),0) <![CDATA[ >= ]]> IFNULL((SELECT  sysValue  FROM set_basic_set_sys_setting  WHERE sysKey = 'autoDeleteDays'),0)
+    </delete>
+</mapper>

@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.analysis.mapper.HomeMapper">
+
+   <!-- <select id="getRptMemberListEx" resultType="com.wsdy.saasops.modules.analysis.entity.RptMemberModel">
+        select startday,SUM(deposit) deposits,SUM(withdraw) withdraws,SUM(newMbr) newMbrs,SUM(newDeposits) newDeposits,SUM(activeMbr) activeMbrs,SUM(totalMbr) totalMbrs,SUM(payouts) payouts,SUM(validBets)  validBets
+        from (
+            &#45;&#45; 总派彩/总有效投注
+            select DATE_FORMAT(a.startday,#{formate}) startday,0 deposit,0 withdraw,0 newMbr,0 newDeposits,0 activeMbr,0 totalMbr,SUM(a.payout) payouts,SUM(a.validbet) validBets
+            from rpt_bet_rcd_day a
+            where  a.startday <![CDATA[ >= ]]> #{startTime} and a.startday <![CDATA[ < ]]> #{endTime}
+            GROUP BY DATE_FORMAT(a.startday,#{formate})
+
+            UNION ALL
+            &#45;&#45; 总存款
+            select DATE_FORMAT(tb.auditTime,#{formate}) date,SUM(tb.depositAmount) deposit,0 withdraw,0 newMbr,0 newDeposits,0 activeMbr,0 totalMbr,0 payouts,0 validBets
+            from fund_deposit tb LEFT JOIN mbr_account mbr on tb.accountId=mbr.id
+            where tb.`status`=1
+            and  str_to_date( tb.auditTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime} and str_to_date( tb.auditTime, '%Y-%m-%d') <![CDATA[ < ]]> #{endTime}
+            GROUP BY DATE_FORMAT(tb.auditTime,#{formate})
+
+            UNION ALL
+            &#45;&#45; 总取款
+            select DATE_FORMAT(tb.passTime,#{formate}) date,0 deposit,SUM(tb.actualArrival) withdraw,0 newMbr,0 newDeposits,0 activeMbr,0 totalMbr,0 payouts,0 validBets
+            from fund_acc_withdraw tb LEFT JOIN mbr_account mbr on tb.accountId=mbr.id
+            where tb.`status`=1
+            and  str_to_date( tb.passTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime} and str_to_date( tb.passTime, '%Y-%m-%d') <![CDATA[ < ]]> #{endTime}
+            GROUP BY DATE_FORMAT(tb.passTime,#{formate})
+
+            UNION ALL
+            &#45;&#45; 新增会员/新会员存款数
+            select DATE_FORMAT(a.date,#{formate}),0 deposit,0 withdraw,COUNT(DISTINCT a.accountId) newMbr,COUNT(case when a.accountId=d.accountId then 1 else null end) newDeposits,0 activeMbr,0 totalMbr,0 payouts,0 validBets
+            from (
+                select DATE_FORMAT(a.registerTime,'%Y-%m-%d') date, id accountId
+                from mbr_account a
+                where  str_to_date( a.registerTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime} and str_to_date( a.registerTime, '%Y-%m-%d') <![CDATA[ < ]]> #{endTime}
+                GROUP BY DATE_FORMAT(a.registerTime,'%Y-%m-%d'),id
+            ) a LEFT JOIN
+            (
+                select DATE_FORMAT(d.auditTime,'%Y-%m-%d') date,accountId
+                from fund_deposit d where d.`status`=1
+                GROUP BY DATE_FORMAT(d.auditTime,'%Y-%m-%d'),accountId
+            ) d on a.date=d.date
+            GROUP BY DATE_FORMAT(a.date,#{formate})
+
+            UNION ALL
+            &#45;&#45; 活跃会员: 存/取款 投注
+            select DATE_FORMAT(t.date,#{formate}),0 deposit,0 withdraw,0 newMbr,0 newDeposits,COUNT(DISTINCT accountId) activeMbr,0 totalMbr,0 payouts,0 validBets
+            from (
+                select DATE_FORMAT(d.auditTime,'%Y-%m-%d') date,accountId
+                    from fund_deposit d where d.`status`=1
+                    GROUP BY DATE_FORMAT(d.auditTime,'%Y-%m-%d'),accountId
+
+                UNION ALL
+                select DATE_FORMAT(w.passTime,'%Y-%m-%d') date,accountId
+                    from fund_acc_withdraw w where w.`status`=1
+                    GROUP BY DATE_FORMAT(w.passTime,'%Y-%m-%d'),accountId
+
+                UNION ALL
+                select startday,a.id
+                    from rpt_bet_rcd_day r INNER JOIN mbr_account a on a.loginName=r.username
+                    GROUP BY r.startday,a.id
+            ) t
+            where str_to_date( t.date, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime} and str_to_date( t.date, '%Y-%m-%d') <![CDATA[ < ]]> #{endTime}
+            GROUP BY DATE_FORMAT(t.date,#{formate})
+
+            UNION ALL
+            &#45;&#45; 日期字段
+            select DISTINCT(DATE_FORMAT(date,#{formate})) date,0 deposit,0 withdraw,0 newMbr,0 newDeposits,0 activeMbr,0 totalMbr,0 payouts,0 validBets
+            from (
+                select adddate('2010-01-01',t3.i*1000 + t2.i*100 + t1.i*10 + t0.i) date
+                from
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t0,
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t1,
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t2,
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t3
+            ) c
+            where  c.date <![CDATA[ >= ]]> #{startTime} and c.date <![CDATA[ < ]]> #{endTime}
+        ) t
+        GROUP BY startday
+        ORDER BY 1 desc
+    </select>-->
+    
+    <select id="getRptMemberListEx" resultType="com.wsdy.saasops.modules.analysis.entity.RptMemberModel">
+        select startday,SUM(deposit) deposits,SUM(withdraw) withdraws,
+        SUM(newMbr) newMbrs,SUM(newDeposits) newDeposits,SUM(activeMbr) activeMbrs,
+        SUM(totalMbr) totalMbrs,SUM(payouts) payouts,SUM(validBets)  validBets,
+        SUM(depositOrderCount) depositOrderCount, SUM(depositCount) depositCount
+        from (
+            -- 总派彩/总有效投注
+            select DATE_FORMAT(a.startday,#{formate}) startday,0 deposit,0 withdraw,0 newMbr,0 newDeposits,0 activeMbr,0 totalMbr,SUM(a.payout) payouts,SUM(a.validbet) validBets ,0 depositOrderCount, 0 depositCount
+            from rpt_bet_rcd_day a
+            where  a.startday <![CDATA[ >= ]]> #{startTime} and a.startday <![CDATA[ < ]]> #{endTime}
+            GROUP BY DATE_FORMAT(a.startday,#{formate})
+
+            UNION ALL
+            -- 总存款
+            select DATE_FORMAT(tb.auditTime,#{formate}) startday,SUM(tb.depositAmount) deposit,0 withdraw,0 newMbr,0 newDeposits,0 activeMbr,0 totalMbr,0 payouts,0 validBets,
+            COUNT(tb.id) depositOrderCount,
+            COUNT(DISTINCT tb.accountId)   depositCount
+            from fund_deposit tb LEFT JOIN mbr_account mbr on tb.accountId=mbr.id
+            where tb.`status`=1
+            and  str_to_date( tb.auditTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime} and str_to_date( tb.auditTime, '%Y-%m-%d') <![CDATA[ < ]]> #{endTime}
+            GROUP BY DATE_FORMAT(tb.auditTime,#{formate})
+
+            UNION ALL
+            -- 日期字段
+            select DISTINCT(DATE_FORMAT(date,#{formate})) startday,0 deposit,0 withdraw,0 newMbr,0 newDeposits,0 activeMbr,0 totalMbr,0 payouts,0 validBets, 0 depositOrderCount, 0 depositCount
+            from (
+                select adddate('2010-01-01',t3.i*1000 + t2.i*100 + t1.i*10 + t0.i) date
+                from
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t0,
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t1,
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t2,
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t3
+            ) c
+            where  c.date <![CDATA[ >= ]]> #{startTime} and c.date <![CDATA[ < ]]> #{endTime}
+        ) t
+        GROUP BY startday
+        ORDER BY 1 desc
+    </select>
+
+
+    <select id="getRptMemberListExother" resultType="com.wsdy.saasops.modules.analysis.entity.RptMemberModel">
+        SELECT startday,SUM(deposit) deposits,SUM(withdraw) withdraws,
+        SUM(newMbr) newMbrs,SUM(newDeposits) newDeposits,SUM(activeMbr) activeMbrs,
+        SUM(totalMbr) totalMbrs,SUM(payouts) payouts,SUM(validBets)  validBets,
+        SUM(newWithdrawCount) newWithdrawCount,  SUM(newWithdrawAmount) newWithdrawAmount,  SUM(newWithdrawOrderCount) newWithdrawOrderCount,
+        SUM(withdrawOrderCount) withdrawOrderCount, SUM(withdrawCount) withdrawCount,
+        SUM(newDepositAmount)  newDepositAmount,  SUM(newDepositOrderCount) newDepositOrderCount
+        FROM (
+            -- 总取款
+            select DATE_FORMAT(tb.passTime,#{formate}) startday,0 deposit,
+            SUM(tb.actualArrival) withdraw,0 newMbr,0 newDeposits,0 activeMbr,0 totalMbr,0 payouts,0 validBets,
+            0 newDepositOrderCount,
+            0 newDepositAmount,
+            0 newWithdrawCount,
+            0 newWithdrawAmount,
+            0 newWithdrawOrderCount,
+            COUNT(tb.id) withdrawOrderCount,
+            COUNT(DISTINCT tb.accountId)   withdrawCount
+
+
+            from fund_acc_withdraw tb
+            LEFT JOIN mbr_account mbr on tb.accountId=mbr.id
+            where tb.`status`=1
+            and  str_to_date( tb.passTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime} and str_to_date( tb.passTime, '%Y-%m-%d') <![CDATA[ < ]]> #{endTime}
+            GROUP BY DATE_FORMAT(tb.passTime,#{formate})
+
+            UNION ALL
+            -- 新增会员/新会员存款数
+            select DATE_FORMAT(a.date,#{formate}) startday,0 deposit,0 withdraw,
+            COUNT(DISTINCT a.accountId) newMbr,
+            COUNT(d.accountId ) newDeposits,
+            0 activeMbr,0 totalMbr,0 payouts,0 validBets,
+            SUM(newDepositOrderCount ) newDepositOrderCount,
+            SUM(d.depositamount) newDepositAmount,
+            0 newWithdrawCount,
+            0 newWithdrawAmount,
+            0 newWithdrawOrderCount,
+            0 withdrawOrderCount,
+            0 withdrawCount
+            from (
+                select DATE_FORMAT(a.registerTime,'%Y-%m-%d') date, id accountId
+                from mbr_account a
+                where  str_to_date( a.registerTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime} and str_to_date( a.registerTime, '%Y-%m-%d') <![CDATA[ < ]]> #{endTime}
+                GROUP BY DATE_FORMAT(a.registerTime,'%Y-%m-%d'),id
+            ) a LEFT JOIN
+            (
+                select DATE_FORMAT(d.auditTime,'%Y-%m-%d') date,accountId, SUM(d.depositamount) depositamount, COUNT(d.id) newDepositOrderCount
+                from fund_deposit d where d.`status`=1
+                GROUP BY DATE_FORMAT(d.auditTime,'%Y-%m-%d'),accountId
+            ) d on (a.date=d.date and a.accountId = d.accountId)
+            GROUP BY DATE_FORMAT(a.date,#{formate})
+
+            UNION ALL
+            -- 新增会员/新会员取款数
+            select DATE_FORMAT(a.date,#{formate}) startday,0 deposit,0 withdraw,
+            0 newMbr,
+            0 newDeposits,
+            0 activeMbr,0 totalMbr,0 payouts,0 validBets,
+            0 newDepositOrderCount,
+            0 newDepositAmount,
+            COUNT(d.accountId) newWithdrawCount,
+            SUM(d.newWithdrawAmount) newWithdrawAmount,
+            SUM(d.newWithdrawOrderCount) newWithdrawOrderCount,
+            0 withdrawOrderCount,
+            0 withdrawCount
+
+        from (
+            select DATE_FORMAT(a.registerTime,'%Y-%m-%d') date, id accountId
+            from mbr_account a
+            where  str_to_date( a.registerTime, '%Y-%m-%d') <![CDATA[ >= ]]> #{startTime} and str_to_date( a.registerTime, '%Y-%m-%d') <![CDATA[ < ]]> #{endTime}
+            GROUP BY DATE_FORMAT(a.registerTime,'%Y-%m-%d'),id
+            ) a LEFT JOIN
+            (
+            select DATE_FORMAT(d.auditTime,'%Y-%m-%d') date,accountId, SUM(d.actualarrival) newWithdrawAmount, count(d.id) newWithdrawOrderCount
+            from fund_acc_withdraw d where d.`status`=1
+            GROUP BY DATE_FORMAT(d.auditTime,'%Y-%m-%d'),accountId
+            ) d on (a.date=d.date and a.accountId = d.accountId)
+            GROUP BY DATE_FORMAT(a.date,#{formate})
+
+            UNION ALL
+            -- 活跃会员: 投注额大于99
+            SELECT 	
+            	t.startday,0 deposit,0 withdraw,0 newMbr,0 newDeposits,
+           		t.activeMbr,0 totalMbr,0 payouts,0 validBets,
+                0 newDepositOrderCount,
+                0 newDepositAmount ,
+                0 newWithdrawCount, 0 newWithdrawAmount,  0 newWithdrawOrderCount, 0 withdrawOrderCount, 0 withdrawCount
+            FROM (
+                     SELECT COUNT(DISTINCT a.username) activeMbr, a.startday startday
+                     FROM (
+                          SELECT username, startday, SUM(bet) bet
+                          FROM rpt_bet_rcd_day
+                          WHERE startday >= #{startTime} AND startday <![CDATA[ < ]]> #{endTime}
+                          GROUP BY username,startday
+                     ) a WHERE a.bet >= 100 GROUP BY a.startday
+            ) t
+
+            UNION ALL
+            -- 日期字段
+            select DISTINCT(DATE_FORMAT(date,#{formate})) date,0 deposit,0 withdraw,0 newMbr,0 newDeposits,0 activeMbr,0 totalMbr,0 payouts,0 validBets,
+            0 newDepositOrderCount,
+            0 newDepositAmount,
+            0 newWithdrawCount, 0 newWithdrawAmount,  0 newWithdrawOrderCount, 0 withdrawOrderCount, 0 withdrawCount
+
+            from (
+                select adddate('2010-01-01',t3.i*1000 + t2.i*100 + t1.i*10 + t0.i) date
+                from
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t0,
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t1,
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t2,
+                (select 0 i union select 1 union select 2 union select 3 union select 4 union select 5 union select 6 union select 7 union select 8 union select 9) t3
+            ) c
+            where  c.date <![CDATA[ >= ]]> #{startTime} and c.date <![CDATA[ < ]]> #{endTime}
+        ) t
+        GROUP BY startday
+        ORDER BY 1 desc
+    </select>
+</mapper>

@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.analysis.mapper.WinLoseNewMapper">
+    <sql id="winLostTime_where">
+        <if test="startTime !=null and startTime !='' ">
+            AND rbrd.startday <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime !=null and endTime !='' ">
+            AND rbrd.startday <![CDATA[ <= ]]>#{endTime}
+        </if>
+        <if test="depositTimeStart != null and depositTimeStart != ''">
+            AND fe.createTime &gt;= #{depositTimeStart}
+        </if>
+        <if test="depositTimeEnd != null and depositTimeEnd != ''">
+            AND fe.createTime &lt;= #{depositTimeEnd}
+        </if>
+    </sql>
+    <sql id="winLostTime_cat_rpt">
+        <if test="catCodes != null and catCodes.size()>0">
+            and rbrd.gamecategory  in
+            <foreach collection="catCodes" open="(" close=")" separator="," item="catCode">
+                #{catCode}
+            </foreach>
+        </if>
+        <if test="depotCodes != null and depotCodes.size()>0">
+            and rbrd.platform  in
+            <foreach collection="depotCodes" open="(" close=")" separator="," item="depotCode">
+                #{depotCode}
+            </foreach>
+        </if>
+    </sql>
+
+
+    <select id="findWinLostReportView" resultType="com.wsdy.saasops.modules.analysis.dto.WinLostReportDto"
+            parameterType="com.wsdy.saasops.modules.analysis.dto.WinLostReportModelDto">
+        SELECT #{agyAccount} username ,
+        <if test="isSign =='1'.toString()">
+            'agent' level,
+        </if>
+        <if test="isSign =='2'.toString()">
+            'mbr' level,
+        </if>
+        <if test="isSign =='3'.toString()">
+            'all' level,
+        </if>
+        count(a.username) total,sum(a.bet) betTotal,sum(a.validbet) validbetTotal,sum(a.payout) payoutTotal, IFNULL(sum(a.quantity),0) quantity
+        FROM(
+            -- 按会员group, 便于统计个数
+            SELECT a.childNodeId, rbrd.username,sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout, IFNULL(sum(rbrd.quantity),0) quantity
+            FROM rpt_bet_rcd_day rbrd
+            INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+            INNER JOIN (
+                -- 获取 1该代理的所有下级代理id  2该代理id 3 该代理+所有下级代理id
+                SELECT e.childNodeId FROM agy_tree e
+                INNER JOIN agy_account t ON e.parentId = t.id
+                WHERE t.agyAccount=#{agyAccount}
+                <if test="isSign =='1'.toString()">
+                    and depth>0
+                </if>
+                <if test="isSign =='2'.toString()">
+                    and depth=0
+                </if>
+                <if test="isSign =='3'.toString()">
+                </if>
+                <if test="departmentid !=null and departmentid !='' ">
+                    AND t.departmentid = #{departmentid}
+                 </if>
+            )a ON a.childNodeId = ma.cagencyId
+        LEFT JOIN (SELECT MIN(id),accountId, createTime from fund_deposit where status = 1 GROUP BY accountid) fe ON fe.accountId  = ma.id
+            <where>
+                <include refid="winLostTime_where"/>
+                <include refid="winLostTime_cat_rpt"/>
+            </where>
+            GROUP BY rbrd.username
+        ) a
+    </select>
+
+    <select id="findWinLostReportViewAgent" resultType="com.wsdy.saasops.modules.analysis.dto.WinLostReportDto"
+            parameterType="com.wsdy.saasops.modules.analysis.dto.WinLostReportModelDto">
+        -- 4.汇总数据
+        select a.level,a.pagy username,
+        count(a.username) total,sum(a.bet) betTotal,sum(a.validbet) validbetTotal,sum(a.payout) payoutTotal, IFNULL(sum(a.quantity),0) quantity
+        from(
+            -- 3.按会员group, 便于统计个数
+            SELECT a.pid,a.pagy,rbrd.username,a.level,
+            sum(rbrd.bet) bet,sum(rbrd.validbet) validbet,sum(rbrd.payout) payout, IFNULL(sum(rbrd.quantity),0) quantity
+            FROM rpt_bet_rcd_day rbrd
+            INNER JOIN mbr_account ma ON rbrd.username= ma.loginName
+            INNER JOIN (
+                -- 2.得到目标代理下所有的子代(含目标代理)
+                select t.pid,t.pagy, e.childnodeid, a.agyaccount, t.level
+                from agy_tree e
+                inner join
+                (
+                    -- 1.找到目标代理 （股东-找所有的总代)
+                    <if test="agyAccount ==null or agyAccount =='' ">
+                        select t.id pid, t.agyaccount pagy, t.parentid level
+                        from agy_account t
+                        where t.parentid = 0
+                    </if>
+                    -- 1.找到目标代理 （代理-找到下级代理)
+                    <if test="agyAccount !=null and agyAccount !='' ">
+                        select t1.id pid, t1.agyaccount pagy, t1.parentid level
+                        from agy_account t
+                        inner join agy_tree e on t.id = e.parentid and depth = 1
+                        inner join agy_account t1 on e.childnodeid = t1.id
+                        where  t.agyAccount = #{agyAccount}
+                    </if>
+        <if test="departmentid !=null and departmentid !='' ">
+            AND t.departmentid = #{departmentid}
+        </if>
+                )t on e.parentid = t.pid
+                inner join agy_account a on a.id = e.childnodeid
+            )a ON a.childnodeid = ma.cagencyId
+        LEFT JOIN (SELECT MIN(id),accountId, createTime from fund_deposit where status = 1 GROUP BY accountid) fe ON fe.accountId  = ma.id
+            <where>
+                <include refid="winLostTime_where"/>
+                <include refid="winLostTime_cat_rpt"/>
+            </where>
+            group by  rbrd.username
+        )a
+        group by a.pid
+    </select>
+
+    <select id="findWinLostReportMbrView" resultType="com.wsdy.saasops.modules.analysis.dto.WinLostReportDto"
+            parameterType="com.wsdy.saasops.modules.analysis.dto.WinLostReportModelDto">
+        SELECT
+        <if test="isSign =='1'.toString()">
+            'agent' level,
+        </if>
+        <if test="isSign =='2'.toString()">
+            'mbr' level,
+        </if>
+        <if test="isSign =='3'.toString()">
+            'all' level,
+        </if>
+        COUNT(rbrd.username) total,SUM(rbrd.bet) betTotal,SUM(rbrd.validbet) validbetTotal,IFNULL(SUM(rbrd.quantity),0) quantity,
+        SUM(rbrd.payout) payoutTotal,rbrd.parentLoginName username
+        FROM (
+            SELECT rbrd.username,sum(rbrd.bet) bet,SUM(rbrd.validbet) validbet,SUM(rbrd.payout) payout,IFNULL(sum(rbrd.quantity),0) quantity,ma.parentId,ma.parentLoginName
+            FROM rpt_bet_rcd_day rbrd
+            INNER JOIN (
+                SELECT act.loginName,e1.childNodeId,e1.parentId,childMa.loginName parentLoginName,ma.id
+                FROM mbr_account ma
+                INNER JOIN mbr_tree e ON e.parentId = ma.id and e.depth=1
+                INNER JOIN mbr_account childMa on e.childNodeId = childMa.id
+                INNER JOIN mbr_tree e1 ON e1.parentId = e.childNodeId
+                INNER JOIN mbr_account act ON act.id = e1.childNodeId
+                WHERE ma.loginName = #{loginName}
+                <if test="isSign =='1'.toString()">
+                    and childMa.agyflag = 1
+                </if>
+                <if test="isSign =='2'.toString()">
+                    and childMa.agyflag = 0
+                </if>
+                <if test="isSign =='3'.toString()">
+                </if>
+            ) ma ON rbrd.username= ma.loginName
+	        LEFT JOIN (SELECT MIN(id),accountId, createTime FROM fund_deposit where status = 1 GROUP BY accountid) fe ON fe.accountId  = ma.id
+            <where>
+                <include refid="winLostTime_cat_rpt"/>
+                <include refid="winLostTime_where"/>
+            </where>
+            GROUP BY rbrd.username
+        ) rbrd
+        <if test="orderBy != null and orderBy != ''">
+            ORDER BY ${orderBy}
+        </if>
+    </select>
+
+
+</mapper>

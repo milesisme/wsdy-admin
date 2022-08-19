@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wsdy.saasops.modules.analysis.mapper.RptBetRcdDayLogMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.wsdy.saasops.modules.analysis.entity.RptBetRcdDayLog">
+        <id column="id" property="id" />
+        <result column="startday" property="startday" />
+        <result column="username" property="username" />
+        <result column="platform" property="platform" />
+        <result column="gametype" property="gametype" />
+        <result column="bet" property="bet" />
+        <result column="validbet" property="validbet" />
+        <result column="payout" property="payout" />
+        <result column="jackpotbet" property="jackpotbet" />
+        <result column="jackpotpayout" property="jackpotpayout" />
+        <result column="tip" property="tip" />
+        <result column="deposit" property="deposit" />
+        <result column="withdrawal" property="withdrawal" />
+        <result column="rebate" property="rebate" />
+        <result column="quantity" property="quantity" />
+        <result column="devsource" property="devsource" />
+        <result column="gamecategory" property="gamecategory" />
+        <result column="createtime" property="createtime" />
+        <result column="israte" property="israte" />
+        <result column="cost" property="cost" />
+        <result column="waterrate" property="waterrate" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, startday, username, platform, gametype, bet, validbet, payout, jackpotbet, jackpotpayout, tip, deposit, withdrawal, rebate, quantity, devsource, gamecategory, createtime, israte, cost, waterrate
+    </sql>
+
+	
+    <select id="selectList" resultType="com.wsdy.saasops.modules.analysis.entity.RptBetRcdDayLog">
+        SELECT * FROM rpt_bet_rcd_day_log
+        <where>
+        	<if test="username != null and username != ''">
+        		AND username = #{username}
+        	</if>
+        	<if test="startTime != null and startTime != ''">
+        		AND DATE_FORMAT(updatetime, '%Y-%m-%d') >= #{startTime}
+        	</if>
+        	<if test="endTime != null and endTime != ''">
+        		AND DATE_FORMAT(updatetime, '%Y-%m-%d') <![CDATA[ <= ]]>  #{endTime}
+        	</if>
+        </where>
+    </select>
+    
+</mapper>

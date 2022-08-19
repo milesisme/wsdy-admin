@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<head>
+<meta charset="utf-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<script type="text/javascript" th:src="${obj.jsUrl}"></script>
+<script th:inline="javascript">
+    iapiSetCallout('Logout', calloutLogout);
+    iapiSetCallout('Login', calloutLogin);
+    function login(realMode) {
+    	iapiLogin([[${obj.loginName}]], [[${obj.pwd}]], realMode, [[${obj.language}]]);
+    }
+
+    function logout(allSessions, realMode) {
+        iapiLogout(allSessions, realMode);
+    }
+
+    function calloutLogin(response) {
+
+        // errorCode=6错误在登录时可能会发生，但游戏可以正常进入。可以忽略
+        var code = response.errorCode;
+        if (code && code != 6) {
+
+            alert("Login failed, " + response.errorText);
+        }
+        else {
+        	//alert('登陆成功');
+        	window.location=[[${obj.gameUrl}]];
+        }
+    }
+
+    function calloutLogout(response) {
+        if (response.errorCode) {
+            alert("Logout failed, " + response.errorCode);
+        }
+        else {
+            delete_cookie();
+        }
+    }
+    window.onload = function () {login(1);};
+</script>
+</head>
+</html> 

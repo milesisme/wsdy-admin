@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modulesV2.mapper.AgentV2LoginLogMapper">
+    <select id="findMemberLoginLastOne" resultType="com.wsdy.saasops.agapi.modulesV2.entity.LogAgyLogin"
+            parameterType="java.lang.String">
+		select * from log_agylogin where loginName=#{loginName}
+		order by loginTime
+		desc limit 1
+	</select>
+    <update id="updateLoginTime" parameterType="Integer">
+		update log_agylogin set logoutTime=now(),onlineTime=TIMESTAMPDIFF(SECOND,loginTime,now()) where id=#{id}
+	</update>
+
+	<select id="getLoginLogListAgent" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2LoginLogDto"
+			parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2LoginLogDto">
+		-- 代理登入日志
+		select parent.agyaccount parentName,agy.realname realName,log.*
+		from log_agylogin log
+		left join agy_account agy on log.accountid = agy.id
+		left join agy_account parent on agy.parentid = parent.id
+		inner join (
+			-- 找出属于登录账号下的该代理的id
+			select id
+			from agy_account a
+			LEFT JOIN agy_tree e on a.id = e.childnodeid
+			WHERE e.parentid = #{agyId}
+			and a.agyaccount = #{searchName}
+		) agentid on log.accountid = agentid.id
+		where 1=1
+		<if test="startTime !=null and startTime !='' ">
+			AND log.logintime <![CDATA[ >= ]]>#{startTime}
+		</if>
+		<if test="endTime !=null and endTime !='' ">
+			AND log.logintime <![CDATA[ <= ]]>#{endTime}
+		</if>
+		<if test="loginIp !=null and loginIp !='' ">
+			AND log.loginip = #{loginIp}
+		</if>
+		order by log.logintime desc
+	</select>
+	<select id="getLoginLogListMbr" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2LoginLogDto"
+			parameterType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2LoginLogDto">
+		-- 会员登入日志
+		select agy.agyaccount parentName, ma.realname realName ,log.*
+		from log_mbrlogin log
+		left join mbr_account ma on log.accountid = ma.id
+		left join agy_account agy on ma.cagencyid = agy.id
+		where ma.id in(
+			-- 属于该代理(包括自己)的所有会员的id
+			select id from mbr_account where cagencyid in(
+				select childnodeid from agy_tree where  parentid = #{agyId}
+			)
+		)
+		and log.loginname = #{searchName}
+		<if test="startTime !=null and startTime !='' ">
+			AND log.logintime <![CDATA[ >= ]]>#{startTime}
+		</if>
+		<if test="endTime !=null and endTime !='' ">
+			AND log.logintime <![CDATA[ <= ]]>#{endTime}
+		</if>
+		<if test="loginIp !=null and loginIp !='' ">
+			AND log.loginip = #{loginIp}
+		</if>
+		order by log.logintime desc
+	</select>
+</mapper>

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.wsdy.saasops.modules.member.mapper.MbrActivityLevelHighestMapper">
+
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="com.wsdy.saasops.modules.member.entity.MbrActivityLevelHighest">
+        <id column="id" property="id" />
+        <result column="accountlevel" property="accountlevel" />
+        <result column="loginname" property="loginname" />
+        <result column="recoverTime" property="recoverTime" />
+    </resultMap>
+
+    <!-- 通用查询结果列 -->
+    <sql id="Base_Column_List">
+        id, accountlevel, loginname
+    </sql>
+    
+    <update id="updateLevelHighest">
+ 		REPLACE INTO mbr_activity_level_highest (loginname, accountlevel) VALUES (#{loginName}, #{accountLevel})
+    </update>
+    
+    <update id="updateRecoverTime">
+ 		UPDATE mbr_activity_level_highest SET recoverTime = NOW() WHERE loginname = #{loginName}
+    </update>
+
+</mapper>

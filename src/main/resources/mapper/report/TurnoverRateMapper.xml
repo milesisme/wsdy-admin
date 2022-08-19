@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.analysis.mapper.TurnoverRateMapper">
+
+    <select id="findRptBetRcdDayRateList" resultType="com.wsdy.saasops.modules.analysis.dto.RptBetRcdDayDto">
+        SELECT * from rpt_bet_rcd_day WHERE israte is null LIMIT #{num}
+    </select>
+
+    <sql id="gameTableSql">
+       (SELECT tb1.depotName platform,tb1.depotId,tb2.catName,tb2.id catId,
+       tb1.gameCode codeid,tb1.gameName codename,tb1.id gameId FROM
+       (SELECT * FROM ( SELECT id,depotId,depotName,catId,gameCode,gameName,subCatId FROM t_gm_game WHERE gameCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,mbGameCode,gameName,subCatId FROM t_gm_game WHERE mbGameCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,adGameCode,gameName,subCatId FROM t_gm_game WHERE adGameCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,downGameCode,gameName,subCatId FROM t_gm_game WHERE downGameCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,embeddedCode,gameName,subCatId FROM t_gm_game WHERE embeddedCode !=''
+        UNION ALL SELECT id,depotId,depotName,catId,embeddedCode1,gameName,subCatId FROM t_gm_game WHERE embeddedCode1 !='') d
+        GROUP BY d.depotId,d.catId,d.gameCode ORDER BY d.gameCode )tb1,t_gm_cat tb2 WHERE tb1.catId=tb2.id)
+    </sql>
+
+    <select id="findSetGameRate" resultType="java.math.BigDecimal">
+        SELECT game.waterrate from (<include refid="gameTableSql"/>) a
+        LEFT JOIN set_game game ON a.gameId = game.gameid
+        where a.platform =#{platform} and a.codeid =#{gametype}
+    </select>
+
+    <select id="findDepotRate" resultType="java.math.BigDecimal">
+        SELECT game.waterrate FROM t_game_logo logo
+        LEFT JOIN set_gm_game game ON logo.id = game.gamelogoid
+        LEFT JOIN t_gm_depot depot ON depot.id = logo.depotid
+        WHERE logo.catid=#{catid} and depot.depotcode=#{depotcode}
+    </select>
+
+    <update id="updateRptBetRcdDayCost">
+        UPDATE rpt_bet_rcd_day SET cost =#{cost},israte =#{israte},waterrate=#{waterrate} WHERE id=#{id}
+    </update>
+
+</mapper>

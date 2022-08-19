@@ -1,0 +1,9 @@
+package com.wsdy.saasops.modules.activity.dao;
+
+import com.wsdy.saasops.modules.activity.entity.MbrRebateHuPengReward;
+import com.wsdy.saasops.modules.base.mapper.MyMapper;
+import org.apache.ibatis.annotations.Mapper;
+
+@Mapper
+public interface MbrRebateHuPengRewardMapper  extends MyMapper<MbrRebateHuPengReward> {
+}

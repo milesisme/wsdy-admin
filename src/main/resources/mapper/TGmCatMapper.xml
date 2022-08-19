@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.dao.TGmCatMapper">
+
+    <select id="getTrunmanShowCategory" resultType="com.wsdy.saasops.modules.operate.dto.SetGameCategoryDto">
+		SELECT
+			cat.id id,
+			cat.catname name,
+			depot.id gamelogoid,
+			cat.sortid
+			FROM t_gm_cat cat 
+			LEFT JOIN t_gm_game tgame ON tgame.subcatid = cat.id 
+			LEFT JOIN set_game sgame ON tgame.id = sgame.gameId
+			LEFT JOIN t_gm_depot depot ON tgame.depotId = depot.id
+  		WHERE tgame.catId = 3 AND tgame.available=1 
+			AND depot.id = #{gamelogoid}
+		GROUP BY cat.id ORDER BY cat.sortid
+	</select>
+
+</mapper>

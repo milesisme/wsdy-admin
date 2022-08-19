@@ -1,0 +1,289 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.agapi.modulesV2.mapper.AgentV2Mapper">
+
+    <select id="getAgentInfo" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select t.id,t.agyaccount,t.available,t.parentid,t.salt,t.agypwd,
+        t.weChat,t.mobile,t.qq,t.realName,t.email,
+        r.agentType,
+        w.balance,
+        o.bettingstatus,o.realpeople,o.electronic,o.realpeoplewash,o.electronicwash
+        from agy_account t
+        LEFT JOIN agy_wallet w ON t.id = w.accountId
+        LEFT JOIN agy_account_other o ON t.id = o.agentId
+        LEFT JOIN (
+        SELECT max(depth) agentType,childNodeId
+                FROM agy_tree GROUP BY childNodeId
+        )r ON r.childNodeId = t.id
+        <where>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND t.agyAccount = #{agyAccount}
+            </if>
+            <if test="id != null">
+                AND t.id =#{id}
+            </if>
+        </where>
+    </select>
+
+    <select id="findAccountInfo" resultType="com.wsdy.saasops.agapi.modules.dto.AgentAccountDto">
+        SELECT t.id,t.agyAccount,t.mobile,t.qq,t.spreadCode,t.realName,t.email,
+        t.weChat,w.balance
+        FROM agy_account t
+        LEFT JOIN agy_wallet w ON t.id = w.accountId
+        WHERE t.id = #{accountId}
+    </select>
+
+    <select id="getSubAgentList" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2ListDto"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT 'AGENT' userCode,r.agentType,a.agyaccount loginName,a.id accountId,a.realName,a.available,a.createtime,
+        w.balance balance,ifnull(t.accountNum,0) accountNum,ifnull(e1.agentNum,0) agentNum,
+        o.bettingstatus,o.realpeople,o.electronic,o.realpeoplewash,o.electronicwash
+        from agy_account a
+        LEFT JOIN agy_tree e on a.id = e.childnodeid
+        LEFT JOIN agy_wallet w on a.id = w.accountid
+        LEFT JOIN (SELECT count(*) accountNum,cagencyId from mbr_account GROUP BY cagencyId) t ON t.cagencyId = e.childnodeid
+        LEFT JOIN (SELECT count(*) agentNum,parentid from agy_tree WHERE depth = 1 GROUP BY parentid) e1 on e1.parentid = e.childnodeid
+        LEFT JOIN agy_account_other o ON a.id = o.agentId
+        LEFT JOIN (
+        SELECT max(depth) agentType,childNodeId
+                        FROM agy_tree GROUP BY childNodeId
+        )r ON r.childNodeId = a.id
+        WHERE e.depth =1 and e.parentid = #{id}
+        order by a.agyaccount
+    </select>
+
+    <select id="getSubAccountList" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2ListDto"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT 'ACCOUNT' userCode,t.loginname,t.id accountId,t.realName,t.available,
+        w.balance balance,l.logintime,
+        o.bettingstatus,o.realpeoplewash,o.electronicwash
+        FROM mbr_account t
+        LEFT JOIN mbr_wallet w ON t.id = w.accountid
+        LEFT JOIN (SELECT MAX(logintime) logintime,accountid from log_mbrlogin GROUP BY accountid) l on t.id = l.accountid
+        LEFT JOIN mbr_account_other o on o.accountid = t.id
+        WHERE t.cagencyId = #{id}
+        order by t.loginname
+    </select>
+
+    <select id="getAgentByDepth" resultType="com.wsdy.saasops.modules.agent.entity.AgyTree">
+        select * from agy_tree where  childnodeid = #{childNodeId} order by depth desc limit #{depth},1
+    </select>
+
+    <update id="updateMbrBettingStatus" parameterType="com.wsdy.saasops.modules.member.entity.MbrAccountOther">
+        update mbr_account_other
+        set bettingStatus=#{bettingStatus}
+        where accountId=#{id}
+    </update>
+
+    <update id="updateMbrBettingStatusByAgent" parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        update mbr_account_other set bettingstatus = #{bettingStatus}
+        where accountid in(
+            select id from mbr_account where cagencyid in(
+                select childnodeid from agy_tree where  parentid = #{id}
+            )
+        )
+    </update>
+    <select id="getMbrBettingStatusByAgentList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccountOther"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select * from mbr_account_other
+        where accountid in(
+            select id from mbr_account where cagencyid in(
+                select childnodeid from agy_tree where  parentid = #{id}
+            )
+        )
+    </select>
+
+    <update id="updateAgentBettingStatus" parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        update agy_account_other set bettingstatus = #{bettingStatus}
+        where agentid in(
+            select childnodeid from agy_tree where  parentid = #{id}
+        )
+    </update>
+    <select id="getAgentBettingStatusList" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccountOther"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select * from agy_account_other
+        where agentid in(
+            select childnodeid from agy_tree where  parentid = #{id}
+        )
+    </select>
+
+    <select id="selectByAgent" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccountOther"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select * from agy_account_other o
+        <where>
+            <if test="id != null">
+                AND o.agentId = #{id}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectByMbr" resultType="com.wsdy.saasops.modules.member.entity.MbrAccountOther"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select * from mbr_account_other o
+        <where>
+            <if test="id != null">
+                    AND o.accountId = #{id}
+            </if>
+        </where>
+    </select>
+
+    <select id="getSearchUser" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2ListDto"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select * from (
+            -- 属于会员的信息
+            select 'ACCOUNT' userCode,-1 agentType, t.loginname,t.id accountId,t.realName,t.available, t.registerTime createtime,
+                    w.balance balance,l.logintime,
+                    o.bettingstatus,0 realpeople, 0 electronic,o.realpeoplewash,o.electronicwash
+            FROM mbr_account t
+            LEFT JOIN mbr_wallet w ON t.id = w.accountid
+            LEFT JOIN (SELECT MAX(logintime) logintime,accountid from log_mbrlogin GROUP BY accountid) l on t.id = l.accountid
+            LEFT JOIN mbr_account_other o on o.accountid = t.id
+            where t.id in(
+              -- 属于该代理(包括自己)的所有会员的id
+                select id from mbr_account where cagencyid in(
+                        select childnodeid from agy_tree where  parentid = #{id}
+                )
+            )
+            and t.loginname = #{searchName}
+
+            union all
+
+            -- 属于代理的
+            select 'AGENT' userCode,r.agentType,a.agyaccount loginName,a.id accountId,a.realName,a.available,a.createtime,
+                            w.balance balance, '' logintime,
+                            o.bettingstatus,o.realpeople,o.electronic,o.realpeoplewash,o.electronicwash
+            from agy_account a
+            LEFT JOIN agy_wallet w on a.id = w.accountid
+            LEFT JOIN agy_account_other o ON a.id = o.agentId
+            LEFT JOIN (
+                SELECT max(depth) agentType,childNodeId
+                FROM agy_tree GROUP BY childNodeId
+            )r ON r.childNodeId = a.id
+            inner join (
+                -- 以此代理为子代理的上级代理
+                select * from agy_tree e
+                inner join (
+                -- 找出该代理的id
+                select id
+                 from agy_account a
+                 LEFT JOIN agy_tree e on a.id = e.childnodeid
+                WHERE e.parentid = #{id}
+                and a.agyaccount = #{searchName}
+                ) childid on e.childnodeid = childid.id
+                order by e.depth asc
+            )parent on parent.parentid =  a.id
+        )t order by t.userCode asc, t.agentType desc
+    </select>
+
+    <select id="getSearchUserMbr" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2ListDto"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select * from (
+            -- 属于会员的信息
+            select 'ACCOUNT' userCode,-1 agentType, t.loginname,t.id accountId,t.realName,t.available, t.registerTime createtime,
+                    w.balance balance,l.logintime,
+                    o.bettingstatus,0 realpeople, 0 electronic,o.realpeoplewash,o.electronicwash
+            FROM mbr_account t
+            LEFT JOIN mbr_wallet w ON t.id = w.accountid
+            LEFT JOIN (SELECT MAX(logintime) logintime,accountid from log_mbrlogin GROUP BY accountid) l on t.id = l.accountid
+            LEFT JOIN mbr_account_other o on o.accountid = t.id
+            where t.loginname = #{searchName}
+
+            union all
+
+            -- 属于代理的
+            select 'AGENT' userCode,r.agentType,a.agyaccount loginName,a.id accountId,a.realName,a.available,a.createtime,
+                                            w.balance balance, '' logintime,
+                                            o.bettingstatus,o.realpeople,o.electronic,o.realpeoplewash,o.electronicwash
+            from agy_account a
+            LEFT JOIN agy_wallet w on a.id = w.accountid
+            LEFT JOIN agy_account_other o ON a.id = o.agentId
+            LEFT JOIN (
+                    SELECT max(depth) agentType,childNodeId
+                    FROM agy_tree GROUP BY childNodeId
+            )r ON r.childNodeId = a.id
+            inner join (
+               -- 属于该会员的上级代理又属于登录账号的下级
+                select e.parentid
+                from  agy_tree e
+                inner join (
+                 -- 找出属于该会员的上级代理的id
+                    select ma.cagencyid
+                    from mbr_account ma
+                    where ma.loginname = #{searchName}
+                )cagencyid on e.childnodeid = cagencyid.cagencyid
+                inner join (
+                    -- 属于登录账号的下级代理
+                    select e.childnodeid id
+                     from  agy_tree e
+                    WHERE e.parentid = #{id}
+                )totalid on e.parentid = totalid.id
+            )parent on parent.parentid =  a.id
+        )t order by t.userCode asc, t.agentType desc
+    </select>
+
+    <select id="judgeMbrOrAgent" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2ListDto"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        -- 判断是代理还是会员
+        -- 属于会员的信息
+        select 'ACCOUNT' userCode,t.id accountId
+        FROM mbr_account t
+        where t.id in(
+          -- 属于该代理(包括自己)的所有会员的id
+            select id from mbr_account where cagencyid in(
+                    select childnodeid from agy_tree where  parentid = #{id}
+            )
+        )
+        and t.loginname = #{searchName}
+        union all
+        -- 属于代理的
+        select 'AGENT' userCode,a.id accountId
+        from agy_account a
+        inner join (
+            -- 以此代理为子代理的上级代理
+            select * from agy_tree e
+            inner join (
+                -- 找出该代理的id
+                select id
+                from agy_account a
+                LEFT JOIN agy_tree e on a.id = e.childnodeid
+                WHERE e.parentid = #{id}
+                    and a.agyaccount =  #{searchName}
+            ) childid on e.childnodeid = childid.id
+            order by e.depth asc
+        )parent on parent.parentid =  a.id
+    </select>
+
+    <select id="getSearchUserAgent" resultType="com.wsdy.saasops.agapi.modulesV2.dto.AgentV2ListDto"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+            -- 属于代理的
+            select 'AGENT' userCode,r.agentType,a.agyaccount loginName,a.id accountId,a.realName,a.available,a.createtime,
+                            w.balance balance, '' logintime,
+                            o.bettingstatus,o.realpeople,o.electronic,o.realpeoplewash,o.electronicwash
+            from agy_account a
+            LEFT JOIN agy_wallet w on a.id = w.accountid
+            LEFT JOIN agy_account_other o ON a.id = o.agentId
+            LEFT JOIN (
+                SELECT max(depth) agentType,childNodeId
+                FROM agy_tree GROUP BY childNodeId
+            )r ON r.childNodeId = a.id
+            inner join (
+                -- 以此代理为子代理的上级代理又属于登录账号下级代理的代理
+                select e.* from agy_tree e
+                inner join (
+                    -- 找出该代理的id
+                    select a.id from agy_account a
+                    WHERE  a.agyaccount = #{searchName}
+                ) childid on e.childnodeid = childid.id
+                inner join (
+                    -- 属于登录账号的下级代理
+                    select e.childnodeid id
+                     from  agy_tree e
+                    WHERE e.parentid = #{id}
+                )totalid on e.parentid = totalid.id
+                order by e.depth asc
+            )parent on parent.parentid =  a.id
+            order by agentType desc
+    </select>
+</mapper>

@@ -1,0 +1,185 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.FinanciaCenterMapper">
+
+    <select id="sumWithdramAmount" resultType="java.math.BigDecimal">
+		SELECT IFNULL(sum(actualarrival),0) drawingAmount
+		from agy_withdraw WHERE status != 0 and status !=1
+		and accountid =#{agentId}
+	</select>
+
+    <select id="walletFlow" resultType="com.wsdy.saasops.agapi.modules.dto.WalletFlowResponseDto"
+            parameterType="com.wsdy.saasops.agapi.modules.dto.WalletFlowParamDto">
+		SELECT * from (
+			SELECT 
+				d.financialCode type,
+				w.createtime time,
+				w.orderno,
+				w.actualarrival amount,
+				d.afterBalance balance,
+				CASE w.status WHEN 3 THEN 2 WHEN 4 THEN 2 WHEN 5 THEN 2 
+				ELSE w.status
+				END status,
+				agyaccount loginName,
+				ma.loginname meraccount
+			from agy_withdraw w
+			LEFT JOIN agy_bill_detail d ON w.billdetailid = d.id
+			LEFT JOIN mbr_account ma on ma.id = d.meraccountid
+			<where>
+				<if test="startTime != null and startTime != ''">
+					AND w.createtime <![CDATA[ >= ]]>#{startTime}
+				</if>
+				<if test="endTime != null and endTime != ''">
+					AND w.createtime <![CDATA[ <= ]]>#{endTime}
+				</if>
+				<if test="agentId != null">
+					AND w.accountid =#{agentId}
+				</if>
+			</where>
+			UNION ALL
+			SELECT 
+				d.financialCode type,
+				d.ordertime time,
+				d.orderno,
+				d.amount,
+				d.afterbalance balance,
+				'1' status,
+				d.agyaccount loginName,
+				ma.loginname meraccount
+			FROM agy_bill_detail d
+			LEFT JOIN mbr_account ma ON ma.id = d.meraccountid
+			WHERE wallettype = 0 AND financialcode !='ATK'
+			<if test="startTime != null and startTime != ''">
+				AND d.ordertime <![CDATA[ >= ]]>#{startTime}
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND d.ordertime <![CDATA[ <= ]]>#{endTime}
+			</if>
+			<if test="agentId != null">
+				AND d.accountid =#{agentId}
+			</if>
+		) a
+		<where>
+			<if test="status != null">
+				AND status =#{status}
+			</if>
+			<if test="type != null">
+				AND type =#{type}
+			</if>
+		</where>
+		order by time desc
+    </select>
+
+
+	<select id="rechargeWalletFlow" resultType="com.wsdy.saasops.agapi.modules.dto.WalletFlowResponseDto"
+			parameterType="com.wsdy.saasops.agapi.modules.dto.WalletFlowParamDto">
+		SELECT * from (
+			SELECT 'ACK' type,w.createtime time,w.orderno,w.actualarrival amount,
+			IFNULL(d.afterBalance,0) balance,case w.status when 4 then 2 when 5 then 2 ELSE w.status
+			end status,ma.loginname meraccount
+			from agy_deposit w
+			LEFT JOIN agy_bill_detail d ON w.billdetailid = d.id
+			LEFT JOIN mbr_account ma on ma.id = d.meraccountid
+			<where>
+				<if test="startTime != null and startTime != ''">
+					AND createtime <![CDATA[ >= ]]>#{startTime}
+				</if>
+				<if test="endTime != null and endTime != ''">
+					AND createtime <![CDATA[ <= ]]>#{endTime}
+				</if>
+				<if test="agentId != null">
+					AND w.accountid =#{agentId}
+				</if>
+			</where>
+			UNION ALL
+			SELECT 
+				d.financialCode type,
+				d.ordertime time,
+				d.orderno,
+				d.amount,
+				d.afterbalance balance, 
+				'1' status,
+				ma.loginname meraccount
+			from agy_bill_detail d
+			LEFT JOIN mbr_account ma on ma.id = d.meraccountid
+			where wallettype =1 and financialcode !='ACK'
+			<if test="startTime != null and startTime != ''">
+				AND d.ordertime <![CDATA[ >= ]]>#{startTime}
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND d.ordertime <![CDATA[ <= ]]>#{endTime}
+			</if>
+			<if test="agentId != null">
+				AND d.accountid =#{agentId}
+			</if>
+		) a
+		<where>
+			<if test="status != null">
+				AND status =#{status}
+			</if>
+			<if test="type != null">
+				AND type =#{type}
+			</if>
+		</where>
+		order by time desc
+	</select>
+
+	<select id="payoffWalletFlow" resultType="com.wsdy.saasops.agapi.modules.dto.WalletFlowResponseDto"
+			parameterType="com.wsdy.saasops.agapi.modules.dto.WalletFlowParamDto">
+		SELECT * from (
+			SELECT 
+				'ACK' type,w.createtime time,w.orderno,w.actualarrival amount,
+				IFNULL(d.afterBalance,0) balance,case w.status when 4 then 2 when 5 then 2 ELSE w.status
+				end status,
+				ma.loginname meraccount,
+				aa.agyaccount agyAccount,
+				d.agyaccount loginname,
+				d.memo remarks
+			FROM agy_deposit w
+			LEFT JOIN agy_bill_detail d ON w.billdetailid = d.id
+			LEFT JOIN agy_account aa on aa.id = d.agentid
+			LEFT JOIN mbr_account ma on ma.id = d.meraccountid
+			<where>
+				<if test="startTime != null and startTime != ''">
+					AND w.createtime <![CDATA[ >= ]]>#{startTime}
+				</if>
+				<if test="endTime != null and endTime != ''">
+					AND w.createtime <![CDATA[ <= ]]>#{endTime}
+				</if>
+				<if test="agentId != null">
+					AND w.accountid =#{agentId}
+				</if>
+			</where>
+			UNION ALL
+			SELECT 
+				financialCode type,abd.ordertime time,orderno,amount,afterbalance balance, '1' status,
+				ma.loginname meraccount,
+				aa.agyaccount agyaccount,
+				abd.agyaccount loginname,
+				abd.memo remarks
+			from agy_bill_detail abd
+			left join agy_account aa on aa.id = abd.agentid
+			left join mbr_account ma on ma.id = abd.meraccountid
+			where wallettype =2
+			<if test="startTime != null and startTime != ''">
+				AND ordertime <![CDATA[ >= ]]>#{startTime}
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND ordertime <![CDATA[ <= ]]>#{endTime}
+			</if>
+			<if test="agentId != null">
+				AND accountid =#{agentId}
+			</if>
+		) a
+		<where>
+			<if test="status != null">
+				AND status =#{status}
+			</if>
+			<if test="type != null">
+				AND type =#{type}
+			</if>
+		</where>
+		order by time desc
+	</select>
+</mapper>

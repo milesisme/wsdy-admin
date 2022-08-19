@@ -1,0 +1,420 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.activity.mapper.ActivityMapper">
+
+	<select id="huPengRebateRewardList"
+			resultType="com.wsdy.saasops.modules.activity.dto.RebateHuPengRewardDto">
+
+
+		SELECT t.accountid,
+		t.loginname,
+		mg.groupname,
+		(select count(*) from mbr_tree mt where mt.parentid = t.accountId and mt.depth = 1)  AS num,
+		SUM(t.amount) amount,
+		SUM(t.betNum)  betNum,
+		SUM(t.reward) reward,
+		SUM(t.rewardnum) rewardnum,
+		SUM(t.drawingamount) withdrawal,
+		SUM(t.depositamount) deposit,
+		SUM(t.bonusamount) discount,
+		SUM(t.adjustedamount) fundAdjust
+		FROM
+		(SELECT
+		ma.loginname,
+		ma.id  accountid,
+		ma.groupid  groupid,
+		mr.amount  AS amount,
+		mr.betNum AS betNum,
+		mr.reward AS reward,
+		mr.rewardnum  AS rewardnum,
+		0 drawingamount,
+		0 depositamount,
+		0 bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_account ma
+		LEFT JOIN mbr_rebate_hupeng_reward mr ON ma.id = mr.accountid
+		<where>
+		<if test="startTime != null and startTime != ''">
+			AND mr.incomeTime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND mr.incomeTime <![CDATA[ <= ]]> #{endTime}
+		</if>
+
+		<if test="loginName != null and loginName != ''">
+			AND ma.loginName  =  #{loginName}
+		</if>
+		</where>
+		UNION ALL
+		SELECT
+		ma.loginname,
+		ma.id  accountid,
+		ma.groupid  groupid,
+		0 AS amount,
+		0 AS betNum,
+		0 AS reward,
+		0 AS rewardnum,
+		faw.actualarrival drawingamount,
+		0 depositamount,
+		0 bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_account ma
+		LEFT JOIN fund_acc_withdraw faw ON ma.id = faw.accountid
+		WHERE
+		faw.STATUS = 1
+		<if test="startTime != null and startTime != ''">
+			AND faw.audittime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND faw.audittime <![CDATA[ <= ]]> #{endTime}
+		</if>
+
+		<if test="loginName != null and loginName != ''">
+			AND ma.loginName  =  #{loginName}
+		</if>
+		UNION ALL
+
+		SELECT
+		ma.loginname,
+		ma.id  accountid,
+		ma.groupid  groupid,
+		0 AS amount,
+		0 AS betNum,
+		0 AS reward,
+		0 AS rewardnum,
+		0 drawingamount,
+		fd.depositamount depositamount,
+		0 bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_account ma
+		LEFT JOIN fund_deposit fd ON ma.id = fd.accountid
+
+		WHERE
+		fd.STATUS = 1
+		<if test="startTime != null and startTime != ''">
+			AND fd.audittime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND fd.audittime <![CDATA[ <= ]]> #{endTime}
+		</if>
+
+		<if test="loginName != null and loginName != ''">
+			AND ma.loginName  =  #{loginName}
+		</if>
+		UNION ALL
+
+		SELECT
+		ma.loginname,
+		ma.id  accountid,
+		ma.groupid  groupid,
+		0 AS amount,
+		0 AS betNum,
+		0 AS reward,
+		0 AS rewardnum,
+		0 drawingamount,
+		0 depositamount,
+		oab.bonusamount bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_account ma
+		LEFT JOIN opr_act_bonus oab ON ma.id = oab.accountid
+		WHERE  oab.STATUS = 1
+		<if test="startTime != null and startTime != ''">
+			AND oab.audittime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND oab.audittime <![CDATA[ <= ]]> #{endTime}
+		</if>
+
+		<if test="loginName != null and loginName != ''">
+			AND ma.loginName  =  #{loginName}
+		</if>
+		UNION ALL
+
+		SELECT
+		ma.loginname,
+		ma.id  accountid,
+		ma.groupid  groupid,
+		0 AS amount,
+		0 AS betNum,
+		0 AS reward,
+		0 AS rewardnum,
+		0 drawingamount,
+		0 depositamount,
+		0 bonusamount,
+		fa.amount adjustedamount
+		FROM
+		mbr_account ma
+		LEFT JOIN fund_audit fa ON ma.id = fa.accountid
+		WHERE
+		fa.status = 1
+		<if test="startTime != null and startTime != ''">
+			AND fa.audittime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND fa.audittime <![CDATA[ <= ]]> #{endTime}
+		</if>
+
+		<if test="loginName != null and loginName != ''">
+			AND ma.loginName  =  #{loginName}
+		</if>
+		) t
+
+		INNER JOIN mbr_group mg ON mg.id = t.groupid
+
+		<where>
+			<if test="groupId != null and groupId != ''">
+				AND t.groupId <![CDATA[ = ]]> #{groupId}
+			</if>
+		</where>
+		GROUP BY t.accountid
+		ORDER BY reward DESC
+
+
+	</select>
+	<select id="huPengRebateRewardDetails"
+			resultType="com.wsdy.saasops.modules.activity.dto.RebateHuPengDetailsDto">
+			SELECT
+			mr.reward AS reward,
+			mr.incomeTime createTime,
+			mr.giveouttime,
+			mr.STATUS
+			FROM
+			mbr_rebate_hupeng_reward mr
+			WHERE
+			mr.loginName =  #{loginName}
+
+			<if test="startTime != null and startTime != ''">
+				AND mr.incomeTime <![CDATA[ >= ]]> #{startTime}
+			</if>
+			<if test="endTime != null and endTime != ''">
+				AND mr.incomeTime <![CDATA[ <= ]]> #{endTime}
+			</if>
+
+	</select>
+	<select id="huPengRebateRewardDetailsSummary" resultType="java.math.BigDecimal">
+		SELECT
+		IFNULL(SUM(mr.reward), 0)
+		FROM
+		mbr_rebate_hupeng_reward mr
+		WHERE
+		mr.loginName =  #{loginName}
+		<if test="startTime != null and startTime != ''">
+			AND mr.incomeTime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND mr.incomeTime <![CDATA[ <= ]]> #{endTime}
+		</if>
+	</select>
+
+    <select id="huPengFriendsRebateRewardList"
+            resultType="com.wsdy.saasops.modules.activity.dto.RebateHuPengFriendsRewardDto">
+
+		SELECT
+		t.childnodeid accountId,
+		ma2.loginname loginName,
+		(select count(*) from mbr_tree mt1 where mt1.parentid = mt2.parentid and mt1.depth = 1)  num,
+		mg.groupname,
+		ml.tiername AS vipname,
+		IFNULL(SUM( t.amount ), 0) amount,
+		IFNULL(SUM( t.betnum ), 0) betnum,
+		IFNULL(SUM( t.reward ), 0) reward,
+		IFNULL(SUM( t.rewardnum ), 0) rewardnum,
+		IFNULL(SUM( t.drawingamount ), 0) withdrawal,
+		IFNULL(SUM( t.depositamount ), 0) deposit,
+		IFNULL(SUM( t.bonusamount ), 0) discount,
+		IFNULL(SUM( t.adjustedamount ), 0) fundAdjust
+		FROM
+		(
+		SELECT
+		mt.childnodeid childnodeid,
+		mf.amount amount,
+		mf.betnum betnum,
+		mf.reward reward,
+		mf.rewardnum rewardnum,
+		0 drawingamount,
+		0 depositamount,
+		0 bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_tree mt
+		<if test="loginName != null and loginName != ''">
+			LEFT
+		</if>
+
+		<if test="loginName == null || loginName == ''">
+			INNER
+		</if >
+		 JOIN mbr_rebate_hupeng mf ON mf.subaccountid = mt.childnodeid
+		WHERE
+		mt.depth = 1
+		<if test="startTime != null and startTime != ''">
+			AND mr.incomeTime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND mr.incomeTime <![CDATA[ <= ]]> #{endTime}
+		</if>
+		UNION ALL
+		SELECT
+		mt.childnodeid childnodeid,
+		0 amount,
+		0 betnum,
+		0 reward,
+		0 rewardnum,
+		faw.actualarrival drawingamount,
+		0 depositamount,
+		0 bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_tree mt
+		<if test="loginName != null and loginName != ''">
+			LEFT
+		</if>
+
+		<if test="loginName == null || loginName == ''">
+			INNER
+		</if >
+		 JOIN fund_acc_withdraw faw ON faw.accountid = mt.childnodeid
+		WHERE
+		mt.depth = 1
+		AND faw.STATUS = 1
+		<if test="startTime != null and startTime != ''">
+			AND faw.audittime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND faw.audittime <![CDATA[ <= ]]> #{endTime}
+		</if>
+
+		UNION ALL
+		SELECT
+		mt.childnodeid childnodeid,
+		0 amount,
+		0 betnum,
+		0 reward,
+		0 rewardnum,
+		0 drawingamount,
+		fd.depositamount,
+		0 bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_tree mt
+		<if test="loginName != null and loginName != ''">
+			LEFT
+		</if>
+
+		<if test="loginName == null || loginName == ''">
+			INNER
+		</if >
+		 JOIN fund_deposit fd ON fd.accountid = mt.childnodeid
+		WHERE
+		mt.depth = 1
+		AND fd.STATUS = 1 UNION ALL
+		SELECT
+		mt.childnodeid childnodeid,
+		0 amount,
+		0 betnum,
+		0 reward,
+		0 rewardnum,
+		0 drawingamount,
+		0 depositamount,
+		oab.bonusamount,
+		0 adjustedamount
+		FROM
+		mbr_tree mt
+		<if test="loginName != null and loginName != ''">
+			LEFT
+		</if>
+
+		<if test="loginName == null || loginName == ''">
+			INNER
+		</if >
+		 JOIN opr_act_bonus oab ON oab.accountid = mt.childnodeid
+		WHERE
+		mt.depth = 1
+		AND oab.STATUS = 1
+		<if test="startTime != null and startTime != ''">
+			AND oab.audittime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND oab.audittime <![CDATA[ <= ]]> #{endTime}
+		</if>
+		UNION ALL
+		SELECT
+		mt.childnodeid childnodeid,
+		0 amount,
+		0 betnum,
+		0 reward,
+		0 rewardnum,
+		0 drawingamount,
+		0 depositamount,
+		0 bonusamount,
+		fa.amount adjustedamount
+		FROM
+		mbr_tree mt
+		<if test="loginName != null and loginName != ''">
+			LEFT
+		</if>
+
+		<if test="loginName == null || loginName == ''">
+			INNER
+		</if >
+		 JOIN fund_audit fa ON fa.accountid = mt.childnodeid
+		WHERE
+		mt.depth = 1
+		AND fa.STATUS = 1
+		<if test="startTime != null and startTime != ''">
+			AND fa.audittime <![CDATA[ >= ]]> #{startTime}
+		</if>
+		<if test="endTime != null and endTime != ''">
+			AND fa.audittime <![CDATA[ <= ]]> #{endTime}
+		</if>
+		) t
+		INNER JOIN mbr_tree mt2 ON mt2.childnodeid =  t.childnodeid
+		INNER JOIN mbr_account ma ON ma.id = mt2.parentid
+		INNER JOIN mbr_account ma2 ON ma2.id = t.childnodeid
+		INNER JOIN mbr_group mg ON mg.id = ma.groupid
+		INNER JOIN mbr_activity_level ml ON ml.id = ma.actlevelid
+		WHERE
+		mt2.depth = 1
+		<if test="groupId != null and groupId != ''">
+			AND ma.groupId <![CDATA[ = ]]> #{groupId}
+		</if>
+
+		<if test="loginName != null and loginName != ''">
+			AND ma.loginName  =  #{loginName}
+		</if>
+		GROUP BY
+		t.childnodeid
+		ORDER BY
+		reward DESC
+
+	</select>
+    <select id="getMbrHupengFriendsCount" resultType="java.lang.Integer">
+		SELECT
+		count(*)
+		FROM
+		mbr_rebate_hupeng mrh
+		WHERE
+		mrh.accountid = #{accountId}
+		AND mrh.subaccountid = #{subAccountId}
+		AND mrh.activityid = #{activityId}
+		AND date_format( mrh.incomeTime, '%Y-%m-%d' ) = #{incomeDay}
+		AND mrh.operationType = 0
+	</select>
+
+	<select id="getMbrHupengFriendsRewardCount" resultType="java.lang.Integer">
+		SELECT
+		count(*)
+		FROM
+		mbr_rebate_hupeng_reward mrhr
+		WHERE
+		mrhr.accountid = #{accountId}
+		AND mrhr.activityid = #{activityId}
+		AND date_format( mrhr.incomeTime, '%Y-%m-%d' ) = #{incomeDay}
+		AND mrhr.operationType = 0
+	</select>
+</mapper>

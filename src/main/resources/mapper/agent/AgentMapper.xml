@@ -1,0 +1,666 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.AgentMapper">
+
+    <select id="findAgyAccountListPage" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT t.id,t.agyAccount,t.parentId,t.spreadCode,ac.agyAccount agyTopAccount,ac.id agyTopAccountId,
+        ac.commissionId agyTopCommissionId,t.commissionId,t.memo,t.realName,wallet.netProfitBalance,
+        t.createTime,t.available,t.status,wallet.balance,t.qq,t.weChat,t.email,t.mobile,t.registerUrl,t.groupId,
+        (select GROUP_CONCAT(ad.domainUrl) from agy_domain ad where ad.accountId=t.id and ad.status=1) domainUrl,
+        IFNULL(act.accountNum,0) accountNum,IFNULL(tr.directAgentCount,0) directAgentCount,
+        IFNULL(tt.offlineAgentCount,0) offlineAgentCount,md.depth grade,
+        (SELECT count(DISTINCT ac.id) FROM mbr_account ac LEFT JOIN agy_tree tr
+        ON ac.cagencyId = tr.childNodeId WHERE tr.parentId=t.id AND tr.depth = 1) offlineMemberCount
+        ,t.departmentid
+        FROM agy_account t
+        LEFT JOIN agy_tree a on t.id = a.childNodeId AND depth=1
+        LEFT JOIN agy_account ac ON ac.id = a.parentId
+        LEFT JOIN (SELECT count(*) accountNum,cagencyId FROM mbr_account GROUP BY cagencyId) act on act.cagencyId = t.id
+        LEFT JOIN (SELECT count(*) directAgentCount,parentId FROM agy_tree WHERE depth = 1 GROUP BY parentId) tr ON t.id
+        = tr.parentId
+        LEFT JOIN ( SELECT count(*) offlineAgentCount,parentId FROM agy_tree WHERE depth > 0 GROUP BY parentId) tt ON
+        tt.parentId = t.id
+        LEFT JOIN (SELECT max(depth) depth,childNodeId FROM agy_tree GROUP BY childNodeId) md ON md.childNodeId = t.id
+        LEFT JOIN agy_wallet wallet ON wallet.accountId = t.id
+        <include refid="account_where"/>
+    </select>
+
+    <insert id="addAgentNode">
+        CALL addAgentNode(#{parentId},#{childNodeId})
+    </insert>
+
+    <delete id="removeSubAgyTree">
+        DELETE FROM agy_tree WHERE childNodeId IN ( SELECT * FROM (
+        SELECT childNodeId FROM agy_tree WHERE parentId = #{parentId} ) AS x )
+    </delete>
+
+    <select id="findAccountList" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT t.agyAccount,t.spreadCode,t.id,t.realName,t.parentId FROM agy_tree e
+        LEFT JOIN agy_account t ON e.childNodeId = t.id
+        <where>
+            <if test=" parentId == 0">
+                AND e.parentId in (SELECT childNodeId FROM (
+                SELECT count(*) num,childNodeId FROM agy_tree GROUP BY childNodeId) a WHERE a.num = 1) and depth = 0
+            </if>
+            <if test=" parentId > 0">
+                AND e.parentId = #{parentId} AND depth = 1
+            </if>
+            <if test=" parentIds != null">
+                AND e.parentId in (${parentIds})
+            </if>
+            <if test="available != null and available != ''">
+                AND t.available= #{available}
+            </if>
+            <if test="available == null or available == ''">
+                and t.available is not null
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND t.agyAccount= #{agyAccount}
+            </if>
+        </where>
+    </select>
+    
+    <select id="findGeneralAgent" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+	       SELECT
+				t.agyAccount,
+				t.spreadCode,
+				t.id,
+				t.realName,
+				t.parentId 
+			FROM
+				agy_tree e
+				LEFT JOIN agy_account t ON e.childNodeId = t.id 
+			WHERE
+				e.parentId IN ( select t.childnodeid FROM (SELECT MAX(depth) agentType,childnodeid FROM agy_tree GROUP BY childnodeid HAVING agentType = 1) t)
+				AND depth = 0 
+				AND t.available = 1
+    </select>
+
+
+    <select id="findSubAgent" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT
+            t.agyAccount,
+            t.spreadCode,
+            t.id,
+            t.realName,
+            t.parentId
+        FROM
+        agy_tree e
+            LEFT JOIN agy_account t ON e.childNodeId = t.id
+        WHERE
+            e.parentId IN ( select t.childnodeid FROM (SELECT MAX(depth) agentType,childnodeid FROM agy_tree GROUP BY childnodeid HAVING (agentType = 2 OR agentType = 3)) t)
+            AND depth = 0
+            AND t.available = 1
+            AND t.parentId = #{parentId}
+    </select>
+
+
+    <select id="findTopAccountLike" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select t.agyAccount,
+        t.spreadCode,
+        t.id,
+        t.realName,
+        t.parentId from agy_account t
+        LEFT JOIN (SELECT max(depth) agentType,childnodeid from agy_tree GROUP by childnodeid) ar
+        ON ar.childnodeid = t.id
+        <where>
+            ar.agentType in (1,2,3)
+
+            <if test="agyAccount != null and agyAccount != ''">
+                AND t.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+            </if>
+        </where>
+    </select>
+
+    <select id="findAllSubAgency" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+		 select * from agy_account where parentId <![CDATA[ <> ]]> 0 and available=1
+	</select>
+
+    <select id="findAllSubAgencyIncludeDisable" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT
+            t.*
+        FROM
+            agy_tree e
+        LEFT JOIN agy_account t ON e.childNodeId = t.id
+        WHERE
+        e.parentId IN (
+            SELECT
+            t.childnodeid
+        FROM
+            ( SELECT MAX( depth ) agentType, childnodeid FROM agy_tree GROUP BY childnodeid HAVING (agentType = 2 OR agentType = 3) ) t
+            )
+        AND depth = 0
+        AND t.available = 1
+	</select>
+
+    <select id="findSubAgencyByName" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount" parameterType="java.lang.Integer">
+        select * from agy_account where parentId <![CDATA[ <> ]]> 0 and available=1 and parentId=#{agyAccountId} and status = 1
+    </select>
+
+    <select id="getAgentAccountAuth" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT * FROM agy_account
+        <where>
+            <if test=" parentIds != null">
+                AND parentId in (${parentIds})
+            </if>
+            <if test="available != null and available != ''">
+                AND available= #{available}
+            </if>
+        </where>
+    </select>
+
+    <sql id="account_where">
+        <where>
+            <if test="id != null">
+                AND t.id= #{id}
+            </if>
+            <if test="parentId != null">
+                AND t.parentId= #{parentId}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND t.agyAccount = #{agyAccount}
+            </if>
+            <if test="realName != null and realName != ''">
+                AND t.realName = #{realName}
+            </if>
+            <if test="spreadCode != null and spreadCode != ''">
+                AND t.spreadCode= #{spreadCode}
+            </if>
+            <if test="available != null">
+                AND t.available= #{available}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND t.createTime <![CDATA[ >= ]]>#{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND t.createTime <![CDATA[ <= ]]>#{createTimeTo}
+            </if>
+            <if test="agyTopAccount != null and agyTopAccount != ''">
+                AND ac.agyAccount = #{agyTopAccount}
+            </if>
+        </where>
+    </sql>
+
+    <sql id="mbr_where">
+        <where>
+            <if test="id != null">
+                AND t.id= #{id}
+            </if>
+            <if test="parentId != null">
+                AND t.parentId= #{parentId}
+            </if>
+            <if test="loginName != null and loginName != ''">
+                AND t.loginname = #{loginName}
+            </if>
+            <if test="realName != null and realName != ''">
+                AND t.realName = #{realName}
+            </if>
+            <if test="available != null">
+                AND t.available= #{available}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND t.registertime <![CDATA[ >= ]]>#{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND t.registertime <![CDATA[ <= ]]>#{createTimeTo}
+            </if>
+        </where>
+    </sql>
+
+    <!--查询未配置域名的代理账号 -->
+    <select id="queryAgyCountNoUrl" resultType="java.util.Map">
+        SELECT id,agyAccount as agyAccount FROM agy_account
+        <where>
+            id not in ( SELECT agencyId FROM set_basic_agencyUrl )
+        </where>
+    </select>
+
+    <sql id="genAgt_where">
+        <where>
+            agy.parentId = 0
+            <if test="agyAccount!=null and agyAccount != ''">
+                AND agy.agyAccount LIKE CONCAT('%',#{agyAccount},'%')
+            </if>
+            <if test="genAgtId!=null">
+                AND agy.id = #{genAgtId}
+            </if>
+        </where>
+    </sql>
+
+    <sql id="agt_where">
+        <if test="agyAccount!=null and agyAccount != ''">
+            AND agy.agyAccount LIKE CONCAT('%',#{agyAccount},'%')
+        </if>
+        <if test="agtIds!=null">
+            AND agy.id in
+            <foreach collection="agtIds" item="agtId" open="(" close=")" separator=",">
+                #{agtId}
+            </foreach>
+        </if>
+    </sql>
+
+    <select id="queryAgentList" parameterType="com.wsdy.saasops.modules.operate.dto.AgyAccDto"
+            resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select agy.* from agy_account agy
+        <where>
+            <if test="loginName and loginName != ''">
+                AND agy.agyAccount LIKE CONCAT('%',#{loginName},'%')
+            </if>
+        </where>
+    </select>
+
+    <resultMap id="agentTree" type="com.wsdy.saasops.modules.agent.dto.AgentTree">
+        <id property="id" column="PId"/>
+        <result property="label" column="PAgyAccount"/>
+        <result property="parentId" column="PParentId"/>
+        <collection property="children" ofType="com.wsdy.saasops.modules.agent.dto.AgentTree">
+            <id property="id" column="CId"/>
+            <result property="label" column="CAgyAccount"/>
+            <result property="parentId" column="CParentId"/>
+        </collection>
+    </resultMap>
+
+    <select id="selectAgentTree" resultMap="agentTree">
+		 SELECT P.id PId, P.parentId PParentId,P.agyAccount PAgyAccount,C.id CId, C.parentId CParentId,C.agyAccount CAgyAccount from (SELECT id ,agyAccount ,parentId FROM agy_account WHERE available = 1 AND parentId = 0) P
+		 LEFT JOIN (SELECT id ,agyAccount ,parentId FROM agy_account WHERE available = 1 AND parentId != 0 ) C ON P.id = C.parentId
+	</select>
+
+    <select id="findSubAgency" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select t.* from agy_account t where t.agyAccount = #{agyAccount}
+    </select>
+
+    <select id="findParentIdByChildNodeId" resultType="java.lang.Integer">
+      SELECT parentId FROM agy_tree WHERE childNodeId = #{childNodeId} ORDER BY depth DESC LIMIT 1
+    </select>
+
+    <update id="updateAddAgyWallet" parameterType="com.wsdy.saasops.modules.agent.entity.AgyWallet">
+        update agy_wallet
+        set balance=balance+#{balance}
+        where accountId=#{accountId} and #{balance}>=0
+    </update>
+
+    <update id="updateReduceAgyWallet" parameterType="com.wsdy.saasops.modules.agent.entity.AgyWallet">
+        update agy_wallet
+        set balance=balance-#{balance}
+        where accountId=#{accountId} and #{balance}>=0
+        and balance-#{balance}>=0
+    </update>
+
+    <update id="updateAddRechargeWallet" parameterType="com.wsdy.saasops.modules.agent.entity.AgyWallet">
+        update agy_wallet
+        set rechargewallet=rechargewallet+#{balance}
+        where accountId=#{accountId} and #{balance}>=0
+    </update>
+    <update id="updateAddPayoffWallet" parameterType="com.wsdy.saasops.modules.agent.entity.AgyWallet">
+        update agy_wallet
+        set payoffwallet=payoffwallet+#{balance}
+        where accountId=#{accountId} and #{balance}>=0
+    </update>
+
+    <update id="updateReduceRechargeWallet" parameterType="com.wsdy.saasops.modules.agent.entity.AgyWallet">
+        update agy_wallet
+        set rechargewallet=rechargewallet-#{balance}
+        where accountId=#{accountId} and #{balance}>=0
+        and rechargewallet-#{balance}>=0
+    </update>
+    <update id="updateReducePayoffWallet" parameterType="com.wsdy.saasops.modules.agent.entity.AgyWallet">
+        update agy_wallet
+        set payoffwallet=payoffwallet-#{balance}
+        where accountId=#{accountId} and #{balance}>=0
+          and payoffwallet-#{balance}>=0
+    </update>
+
+    <select id="findAgyAccountAndGrade" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT t.id,t.agyAccount,r.grade FROM agy_account t
+        LEFT JOIN (SELECT max(depth) grade,childNodeId
+        FROM agy_tree GROUP BY childNodeId) r ON r.childNodeId = t.id
+        <where>
+            t.available = 1
+            <if test="id != null">
+                AND t.id =#{id}
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND t.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+            </if>
+            <if test="parentId != null">
+                AND t.parentId =#{parentId}
+            </if>
+        </where>
+    </select>
+
+    <select id="findWithdrawList" resultType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw">
+        SELECT * FROM agy_withdraw aw
+        <include refid="agyWithdraw_where"/>
+    </select>
+
+    <sql id="agyWithdraw_where">
+        <where>
+            <if test="id != null">
+                AND aw.id =#{id}
+            </if>
+            <if test="orderNo != null and orderNo != ''">
+                AND concat(aw.orderPrefix,aw.orderNo) LIKE CONCAT('%',#{orderNo},'%' )
+            </if>
+            <if test="auditUser != null and auditUser != ''">
+                AND aw.auditUser LIKE CONCAT('%',#{auditUser},'%' )
+            </if>
+            <if test="passUser != null and passUser != ''">
+                AND aw.passUser LIKE CONCAT('%',#{passUser},'%' )
+            </if>
+            <if test="agyAccount != null and agyAccount != ''">
+                AND aw.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+            </if>
+            <if test="status != null">
+                AND aw.status =#{status}
+            </if>
+            <if test="accountId != null">
+                AND aw.accountId =#{accountId}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND aw.createTime <![CDATA[ >= ]]>#{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND aw.createTime <![CDATA[ <= ]]>#{createTimeTo}
+            </if>
+        </where>
+    </sql>
+
+    <select id="findWithdrawById" resultType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw">
+        SELECT aw.*,tt.agyAccount agyTopAccount FROM agy_withdraw aw
+        LEFT JOIN agy_account t ON aw.accountId = t.id
+        LEFT JOIN agy_account tt ON t.parentId = tt.id
+        <include refid="agyWithdraw_where"/>
+    </select>
+
+    <select id="findWithdrawCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyWithdraw">
+        SELECT count(*) FROM agy_withdraw aw
+        <include refid="agyWithdraw_where"/>
+    </select>
+
+    <select id="sumWithdraw" resultType="java.math.BigDecimal">
+        SELECT SUM(actualarrival) FROM agy_withdraw
+        WHERE status = 1 AND date_format(passTime, '%Y-%m-%d') =#{passTime}
+    </select>
+
+    <select id="findBankExists" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgyBankcard">
+        SELECT count(*) FROM agy_bankcard WHERE cardNo =#{cardNo} AND id !=#{id} and isDel=0
+    </select>
+
+    <select id="queryAllDomains" resultType="com.wsdy.saasops.modules.agent.entity.AgyDomain">
+        select t.* from agy_domain t where agyAccount is null
+    </select>
+
+    <select id="findAgyDomainListPage" parameterType="com.wsdy.saasops.modules.agent.entity.AgyDomain" resultType="com.wsdy.saasops.modules.agent.entity.AgyDomain">
+        SELECT 
+        	t.*,
+        	CASE t.`status` WHEN 0 THEN '失败' WHEN 1 THEN '成功' WHEN 2 THEN '待处理' END statusStr,
+        	IF(NOW() <![CDATA[ < ]]> t.expireDate OR t.expireDate IS NULL, '未到期', '到期') expireStatusStr,
+        	IF(t.available=1, '开启', '关闭') availableStr
+        FROM agy_domain t
+        <include refid="agy_domain_where"/>
+        ORDER BY t.createTime DESC
+    </select>
+
+    <sql id="agy_domain_where">
+        WHERE t.agyAccount is not null
+            <if test="agyAccount != null and agyAccount != ''">
+                AND t.agyAccount =#{agyAccount}
+            </if>
+            <if test="available != null">
+                AND t.available= #{available}
+            </if>
+            <if test="status != null">
+                AND t.status= #{status}
+            </if>
+            <if test="createTimeFrom != null and createTimeFrom != ''">
+                AND t.createTime <![CDATA[ >= ]]>#{createTimeFrom}
+            </if>
+            <if test="createTimeTo != null and createTimeTo != ''">
+                AND t.createTime <![CDATA[ <= ]]>#{createTimeTo}
+            </if>
+            <if test="domainUrl != null and domainUrl != ''">
+                AND t.domainUrl =#{domainUrl}
+            </if>
+            <if test="expireStatusStr == '未到期'">
+                AND (NOW() <![CDATA[ < ]]> t.expireDate OR t.expireDate IS NULL)
+            </if>
+            <if test="expireStatusStr == '到期'">
+                AND NOW() >  t.expireDate
+            </if>
+            <if test="expireDateStart != null and expireDateStart != ''">
+                AND t.expireDate <![CDATA[ >= ]]>#{expireDateStart}
+            </if>
+            <if test="expireDateEnd != null and expireDateEnd != ''">
+                AND t.expireDate <![CDATA[ <= ]]>#{expireDateEnd}
+            </if>
+            
+    </sql>
+
+    <select id="selectCountByDomainUrl" parameterType="java.lang.String" resultType="java.lang.Integer">
+        select count(1) from agy_domain t
+        where t.status=1
+          and t.domainUrl LIKE CONCAT('%',#{domainUrl}, '%')
+          and t.agyAccount is not null
+    </select>
+
+    <select id="findAgyDomain" parameterType="java.lang.Integer" resultType="java.lang.String">
+        select GROUP_CONCAT(t.domainUrl) as doamin from agy_domain t where t.status = 1
+    </select>
+
+    <select id="findAgyCommitDomain" resultType="java.lang.String">
+        select GROUP_CONCAT(t.domainUrl) as doamin from agy_domain t where t.status in (1, 2)
+    </select>
+
+    <select id="findAgyCommitDomainCount" resultType="java.lang.Integer">
+        select count(*) from agy_domain t where t.status in (1, 2) and domainurl=#{domainurl}
+    </select>
+
+    <select id="getAgentAndMemberCount" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select IFNULL(act.accountNum,0) accountNum,IFNULL(tr.directAgentCount,0) directAgentCount,t.id from agy_account t
+        LEFT JOIN (SELECT count(*) accountNum,cagencyId FROM mbr_account ac
+        <if test="available != null">where ac.available = 1 </if>
+        GROUP BY cagencyId) act on act.cagencyId = t.id
+        LEFT JOIN (SELECT count(aa1.id) directAgentCount,at1.parentId FROM agy_tree at1
+        inner join agy_account aa1 on aa1.id = at1.childNodeId WHERE depth = 1
+        <if test="available != null">and aa1.available = 1 </if>
+        GROUP BY at1.parentId) tr ON t.id = tr.parentId
+        where t.id = #{id}
+    </select>
+
+    <select id="getAgent" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select a1.id,a1.agyaccount,a1.realname, a2.parentid agyTopAccountId, a2.agyaccount agyTopAccount from agy_account a1
+        left join agy_account a2 on a1.parentid = a2.id
+        where a1.available = 1
+        <if test="agyAccount != null and agyAccount != ''">
+          AND a1.agyAccount LIKE CONCAT('%',#{agyAccount}, '%')
+        </if>
+        order by a1.parentid asc,a1.createtime desc
+    </select>
+
+    <select id="accountAuditDetail" resultType="com.wsdy.saasops.modules.fund.entity.FundAudit">
+        SELECT * FROM fund_audit WHERE financialCode in ('AM','AA')
+        AND loginName =#{loginName} AND status=1
+        AND date_format(auditTime, '%Y-%m-%d') =#{auditTime}
+        order by auditTime desc
+    </select>
+
+    <select id="findAgentByloginName" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT t.agyaccount,e.depth from agy_tree e
+        LEFT JOIN agy_account t ON e.parentid = t.id
+        WHERE e.childnodeid = (SELECT cagencyId from mbr_account WHERE loginname=#{loginName})
+        ORDER BY e.depth desc
+    </select>
+
+    <select id="findAgentByAgyaccount" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT t.agyaccount,e.depth from agy_tree e
+        LEFT JOIN agy_account t ON e.parentid = t.id
+        WHERE e.childnodeid = (SELECT id from agy_account WHERE agyAccount=#{agyAccount})
+        ORDER BY e.depth desc
+    </select>
+
+    <select id="getAgentBanner" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT 'agent' bannerType,t.id,t.agyaccount,t.departmentid,e.depth,t.parentId
+        from agy_tree e
+        LEFT JOIN agy_account t ON e.parentid = t.id
+        WHERE e.childnodeid = (
+            SELECT id from agy_account t
+            <include refid="account_where"/>
+        )
+        and e.depth !=0
+        ORDER BY e.depth desc
+
+    </select>
+
+    <select id="getMbrBanner" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select * from (
+            -- 属于会员的  这一层获取上级id,前端需要
+            select mbr.*,e.parentid from(
+                 -- 属于会员的
+                SELECT 'mbr' bannerType,t.id,t.loginname agyAccount,e.depth
+                from mbr_tree e
+                LEFT JOIN mbr_account t ON e.parentid = t.id
+                WHERE e.childnodeid = (
+                    SELECT id from mbr_account t
+                    <include refid="mbr_where"/>
+                )
+                and e.depth !=0
+            )mbr
+            left join  mbr_tree e on mbr.id = e.childnodeid and e.depth = 1
+
+			union all
+			-- 属于代理的
+            select 'agent' bannerType,t.id,t.agyaccount agyAccount,e.depth,t.parentId
+            from agy_account t
+            inner join (
+               -- 属于该会员的上级代理
+                select e.parentid, e.depth
+                from  agy_tree e
+                inner join (
+                 -- 找出属于该会员的上级代理的id
+                    select cagencyid
+                    from mbr_account t
+                    <include refid="mbr_where"/>
+                )cagencyid on e.childnodeid = cagencyid.cagencyid
+            )e on t.id = e.parentid
+		)t order by t.bannerType asc, t.depth desc
+    </select>
+
+    <select id="getTagentByCagent" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount"
+            parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        select t1.*
+        from agy_account t
+        inner join agy_tree e on t.id = e.childnodeid
+        inner join agy_account t1 on e.parentid = t1.id and t1.parentid = 0
+        where t.id= #{id}
+    </select>
+
+    <select id="findAgyTreeByparentId" resultType="com.wsdy.saasops.modules.agent.entity.AgyTree">
+        select * from agy_tree WHERE parentid=#{parentid} ORDER BY depth asc
+    </select>
+
+    <select id="findAgyParentId" resultType="com.wsdy.saasops.modules.agent.entity.AgyTree">
+        SELECT * from agy_tree WHERE childnodeid=#{childnodeid} and depth=1
+    </select>
+
+    <delete id="deleteAgyTreeByparentId">
+        DELETE FROM agy_tree WHERE parentid=#{parentid} or childnodeid=#{parentid}
+    </delete>
+
+    <update id="updateParentId">
+        UPDATE agy_account SET parentid =#{parentid} WHERE id =#{id}
+    </update>
+
+    <update id="updateAccountTagencyId">
+        UPDATE mbr_account SET tagencyId =#{tagencyId} WHERE cagencyId =#{cagencyId}
+    </update>
+
+    <update id="modifyAgentCateGory" parameterType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        UPDATE agy_account SET departmentid =#{departmentid}  WHERE agyAccount =#{agyAccount}
+    </update>
+    <update id="updateAgentRate">
+        UPDATE agy_account SET uprate =#{upRate}  WHERE id =#{agentId}
+    </update>
+
+    <select id="domainList" resultType="java.lang.String">
+        SELECT siteurl from t_cp_siteurl
+        WHERE siteurl not in (SELECT domainurl from agy_domain WHERE isdel=1)
+        and sitecode=#{siteCode}
+        and available = 1 AND clienttype != 1
+        and pid is null
+        ORDER BY id desc
+    </select>
+    
+    <select id="domainSubList" resultType="java.lang.String">
+        SELECT siteurl from t_cp_siteurl
+        WHERE siteurl not in (SELECT domainurl from agy_domain WHERE isdel=1)
+        and sitecode=#{siteCode}
+        and available = 1 AND clienttype != 1
+        and pid is not null
+        ORDER BY id desc
+    </select>
+    
+    <select id="isTagencyid" resultType="java.lang.Integer">
+        SELECT count(*) from agy_tree WHERE childnodeid=#{id} and depth >0
+    </select>
+
+    <select id="isParent" resultType="java.lang.Integer">
+        SELECT count(*) from agy_tree WHERE childnodeid=#{childNodeId} and parentid=#{parentId} and  depth >0
+    </select>
+    
+    <select id="getAgentByAccount" resultType="com.wsdy.saasops.modules.agent.entity.AgentAccount">
+        SELECT * FROM agy_account WHERE agyaccount=#{agyAccount}
+    </select>
+
+    <select id="getAllAgentType" resultType="com.wsdy.saasops.modules.agent.dto.AgentTypeDto">
+        SELECT
+            tt.agentType,
+            tt.childnodeid as agentid,
+            agty.parentid
+        FROM
+            agy_tree agty
+            INNER JOIN ( SELECT max( depth ) agentType, childnodeid FROM agy_tree GROUP BY childnodeid ) tt ON agty.childnodeid = tt.childnodeid
+        WHERE
+            agty.depth = 1
+    </select>
+    
+    <select id="getAllLowerLevel" resultType="java.lang.Integer">
+        SELECT t.childnodeid
+         FROM agy_account ct
+         LEFT JOIN agy_tree e ON ct.id = e.parentid
+         LEFT JOIN agy_tree t ON e.childnodeid = t.parentid
+         LEFT JOIN agy_account ct2 ON ct2.id = t.parentid
+         WHERE  e.depth = 1
+         	<if test="agyAccount != null and agyAccount != ''">
+           		AND ct.agyAccount = #{agyAccount} 
+         	</if>
+    </select>
+
+    <select id="findParentAgent" resultType="com.wsdy.saasops.modules.agent.dto.ParentAgentDto">
+        SELECT t.parentid as parentId, p.agyAccount as parentAccount,
+               t.childnodeid as agyId, a.agyAccount as agyAccount
+        from agy_account a
+                 LEFT JOIN agy_tree t ON t.childnodeid = a.id AND t.depth=1
+                 LEFT JOIN agy_account p ON t.parentid = p.id
+        where 1=1
+        <if test="agtAccounts != null and agtAccounts.size()>0">
+            AND  a.agyAccount IN
+            <foreach item="account" collection="agtAccounts" open="(" separator="," close=")">
+                #{account}
+            </foreach>
+        </if>
+    </select>
+
+
+</mapper>

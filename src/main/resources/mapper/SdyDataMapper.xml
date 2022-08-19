@@ -1,0 +1,182 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.api.modules.user.mapper.SdyDataMapper">
+
+    <select id="findAcocountList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="com.wsdy.saasops.aff.dto.AccountListRequestDto">
+        SELECT t.*,g.agyaccount,r.registerip
+        FROM mbr_account t
+        LEFT JOIN agy_account g ON t.cagencyid = g.id
+        LEFT JOIN log_mbrregister r ON t.id = r.accountid
+        <where>
+            <if test="agentAccount != null and agentAccount != ''">
+                AND g.agyaccount=#{agentAccount}
+            </if>
+            <if test="registerStartTime != null and registerStartTime != ''">
+                AND t.registerTime <![CDATA[ >= ]]> #{registerStartTime}
+            </if>
+            <if test="registerEndTime != null and registerEndTime != ''">
+                AND t.registerTime <![CDATA[ <= ]]> #{registerEndTime}
+            </if>
+            <if test="updatedStartTime != null and updatedStartTime != ''">
+                AND t.modifyTime <![CDATA[ >= ]]> #{updatedStartTime}
+            </if>
+            <if test="updatedEndTime != null and updatedEndTime != ''">
+                AND t.modifyTime <![CDATA[ <= ]]> #{updatedEndTime}
+            </if>
+            <if test="loginStartTime != null and loginStartTime != ''">
+                AND t.logintime <![CDATA[ >= ]]> #{loginStartTime}
+            </if>
+            <if test="loginEndTime != null and loginEndTime != ''">
+                AND t.logintime <![CDATA[ <= ]]> #{loginEndTime}
+            </if>
+            order by t.id
+        </where>
+    </select>
+
+    <select id="findAccountIpCount" resultType="java.lang.Integer">
+         SELECT count(*) FROM log_mbrregister
+         WHERE accountid !=#{accountId} and registerip =#{registerip}
+    </select>
+
+    <select id="depositAndWithdrawalList"
+            resultType="com.wsdy.saasops.aff.dto.AccountDepositResponseDto"
+            parameterType="com.wsdy.saasops.aff.dto.AccountDepositRequestDto">
+        SELECT * from (
+        SELECT d.`status`,d.actualArrival amount,d.createtime receiveddate,
+        t.loginname membercode,'deposit' type,d.id,d.modifyTime updatedDate
+        FROM fund_deposit d
+        LEFT JOIN mbr_account t ON d.accountid = t.id
+        <include refid="depositAndWithdrawalList_where"/>
+        UNION ALL
+        SELECT d.`status`,d.actualarrival amount,d.createtime receiveddate,
+        t.loginname membercode,'withdrawal' type,d.id,d.modifyTime updatedDate
+        FROM fund_acc_withdraw d
+        LEFT JOIN mbr_account t ON d.accountid = t.id
+        <include refid="depositAndWithdrawalList_where"/>
+        and d.status<![CDATA[ <= ]]>2
+        ) a order by receiveddate
+    </select>
+
+    <sql id="depositAndWithdrawalList_where">
+        <where>
+            <if test="membercode != null and membercode != ''">
+                AND t.loginname=#{membercode}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND d.modifyTime <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND d.modifyTime <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+    </sql>
+
+    <select id="auditAndBonusList" resultType="com.wsdy.saasops.aff.dto.AuditBonusResponseDto"
+            parameterType="com.wsdy.saasops.aff.dto.AccountDepositRequestDto">
+        SELECT * from (
+            SELECT b.loginname membercode,b.applicationtime receiveddate,
+            b.`status`,b.bonusamount credit,'' debit,
+            y.activityname reason,b.memo description,b.id,auditTime updatedDate,b.orderno,
+            case when a.tmplcode='AQ0000005' then '2'
+            when a.tmplcode!='AQ0000005' then '1'
+            end type
+            FROM opr_act_bonus b
+            LEFT JOIN opr_act_activity y ON b.activityid = y.id
+            LEFT JOIN opr_act_rule r ON r.id = b.ruleid
+            LEFT join t_op_acttmpl a ON a.id = r.acttmplid
+            <where>
+                <if test="membercode != null and membercode != ''">
+                    AND b.loginname=#{membercode}
+                </if>
+                <if test="startTime != null and startTime != ''">
+                    AND IF(`status` =2, b.applicationtime <![CDATA[ >= ]]> #{startTime}, b.auditTime <![CDATA[ >= ]]> #{startTime})
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND IF(`status` =2, b.applicationtime <![CDATA[ <= ]]> #{endTime}, b.auditTime <![CDATA[ <= ]]> #{endTime})
+                </if>
+            </where>
+            UNION ALL
+            SELECT b.loginname membercode,b.time receiveddate,'1' status,b.bonusamount credit,'' debit,
+            c.taskname reason,'' description,b.id,b.time updatedDate,b.orderno orderno,'1' type
+            from task_bonus b
+            LEFT JOIN task_config c ON b.configid = c.id
+            <where>
+                <if test="membercode != null and membercode != ''">
+                    AND b.loginname=#{membercode}
+                </if>
+                <if test="startTime != null and startTime != ''">
+                    AND b.time <![CDATA[ >= ]]> #{startTime}
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND b.time <![CDATA[ <= ]]> #{endTime}
+                </if>
+            </where>
+        ) a ORDER BY receiveddate,membercode
+    </select>
+
+
+    <select id="findAccountBet" resultType="com.wsdy.saasops.aff.dto.AccountBetResponseDto"
+            parameterType="com.wsdy.saasops.aff.dto.AccountBetRequestDto">
+        SELECT t.loginname membercode, act.spreadcode affiliatecode,t.mobile phoneNumber,
+        t.registertime registerDate,dp.totaldp,wd.totalwd
+        FROM  rpt_bet_rcd_day rpt
+        INNER JOIN mbr_account t ON t.loginname = rpt.username
+        LEFT JOIN agy_account act ON act.id = t.cagencyid
+        LEFT JOIN (
+            SELECT sum(actualarrival) totaldp,accountid from fund_deposit WHERE `status`=1 GROUP BY accountid
+        ) dp ON dp.accountid = t.id
+        LEFT JOIN (
+            SELECT sum(actualarrival) totalwd,accountid from fund_acc_withdraw WHERE `status`=1 GROUP BY accountid
+        ) wd ON wd.accountid = t.id
+        <where>
+            <if test="membercode != null and membercode != ''">
+                AND t.loginname=#{membercode}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND rpt.startday <![CDATA[ >= ]]> str_to_date(#{startTime}, '%Y-%m-%d')
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND rpt.startday <![CDATA[ <= ]]> str_to_date(#{endTime}, '%Y-%m-%d')
+            </if>
+        </where>
+        GROUP BY t.id
+    </select>
+
+    <select id="maxDpAudittime" resultType="java.lang.String">
+        SELECT max(dp.audittime)
+        from fund_deposit dp
+        LEFT JOIN mbr_account t ON t.id = dp.accountid
+        WHERE dp.status = 1 AND t.loginname=#{membercode}
+    </select>
+
+    <select id="maxWdAudittime" resultType="java.lang.String">
+        SELECT max(dp.audittime)
+        from fund_acc_withdraw dp
+        LEFT JOIN mbr_account t ON t.id = dp.accountid
+        WHERE dp.status = 1 AND t.loginname=#{membercode}
+    </select>
+
+    <select id="maxRptTime" resultType="com.wsdy.saasops.aff.dto.AccountBetResponseDto">
+        SELECT max(startday) lastBetDate,sum(validbet) totalTurnover
+        from rpt_bet_rcd_day WHERE username=#{membercode}
+    </select>
+
+    <select id="findAdjustBonus" resultType="com.wsdy.saasops.aff.dto.BonusWriteOffDto">
+        SELECT loginname membercode,amount,audittime,orderNo
+        FROM fund_audit WHERE reduceType=1
+        and financialCode ='AM' and status=1
+        <if test="membercode != null and membercode != ''">
+            AND loginname=#{membercode}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND audittime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND audittime <![CDATA[ <= ]]> #{endTime}
+        </if>
+        ORDER BY audittime desc
+    </select>
+
+</mapper>

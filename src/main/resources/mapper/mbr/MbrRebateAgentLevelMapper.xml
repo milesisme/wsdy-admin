@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.mbrRebateAgent.mapper.MbrRebateAgentLevelMapper">
+    <select id="getMbrAgentLevelList"  resultType="com.wsdy.saasops.modules.mbrRebateAgent.entity.MbrRebateAgentLevel">
+        select level.*,IFNULL(count(ma.id),0) memNum
+        from mbr_rebate_agent_level level
+        left join mbr_account ma on ma.agyLevelId = level.id
+        group by level.id
+        order by level.accountLevel asc
+    </select>
+
+</mapper>

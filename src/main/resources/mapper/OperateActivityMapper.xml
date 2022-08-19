@@ -1,0 +1,1226 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.operate.mapper.OperateActivityMapper">
+
+    <resultMap id="findOprActActivityListMap" type="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        <id property="id" column="id"/>
+        <collection property="actCatList" ofType="com.wsdy.saasops.modules.operate.entity.OprActCat">
+            <result property="catName" column="catName"/>
+        </collection>
+    </resultMap>
+
+    <select id="findOprActActivityList" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        SELECT 
+        	acy.*,IFNULL(bs.applyNum,0) applyNum,rule.actTmplId,rule.rulename,
+        	(SELECT GROUP_CONCAT(c.catName) FROM opr_act_cat c inner JOIN opr_act_catActivity y ON c.id= y.catId WHERE y.activityid = acy.id) catName
+        FROM opr_act_activity acy
+        LEFT JOIN (SELECT count(*) applyNum,activityId FROM opr_act_bonus WHERE status=2 GROUP BY activityId) bs ON
+        bs.activityId = acy.id
+        LEFT JOIN opr_act_rule rule ON rule.id = acy.ruleId
+        WHERE acy.isdel = 0
+        <if test="id != null and id !=''">
+            AND acy.id =#{id}
+        </if>
+        <if test="activityName != null and activityName !=''">
+            AND acy.activityName like concat('%',#{activityName},'%')
+        </if>
+        <if test="actCatIdList != null and actCatIdList !='' ">
+            AND EXISTS(
+            SELECT cy.activityId FROM opr_act_catActivity cy
+            WHERE cy.catId in ( ${actCatIdList} ) AND acy.id = cy.activityId
+            )
+        </if>
+        <if test="actTmplIdList != null and actTmplIdList !='' ">
+            AND rule.actTmplId in ( ${actTmplIdList} )
+        </if>
+        <if test="useStateList != null and useStateList !='' ">
+            AND acy.useState in ( ${useStateList} )
+        </if>
+        <if test="useStart != null and useStart != ''">
+            AND #{useStart}  <![CDATA[ <= ]]>  date_format(acy.useEnd,'%Y-%m-%d')
+        </if>
+        <if test="useEnd != null and useEnd != ''">
+            AND #{useEnd}  <![CDATA[ >= ]]> date_format(acy.useStart,'%Y-%m-%d')
+        </if>
+        <if test="rulename != null and rulename != ''">
+            AND rule.rulename  LIKE CONCAT('%',#{rulename},'%')
+        </if>
+        <if test="available != null">
+            AND acy.available =#{available}
+        </if>
+        <if test="isShow != null">
+            AND acy.isShow =#{isShow}
+        </if>
+        <if test="isOnline != null">
+            AND acy.isonline =#{isOnline}
+        </if>
+        ORDER BY acy.sort,acy.createtime desc
+    </select>
+
+    <select id="findOprActActivity" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        SELECT act.*,re.rule,atl.tmplCode,atl.tmplName,atl.tmplNameTag,re.isAudit
+        FROM opr_act_activity act
+        LEFT JOIN opr_act_rule re ON act.ruleId = re.id
+        LEFT JOIN t_op_acttmpl atl ON atl.id = re.actTmplId
+        WHERE act.id = #{id}
+    </select>
+
+    <select id="findOprActBouns" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT count(*) FROM opr_act_bonus
+        <include refid="activity_where"/>
+    </select>
+
+
+    <sql id="activity_where">
+        <where>
+            <if test="isStatus == 1">
+                AND status != 0
+            </if>
+            <if test="activityId != null and activityId != ''">
+                AND activityId = #{activityId}
+            </if>
+            <if test="depositId != null and depositId != ''">
+                AND depositId = #{depositId}
+            </if>
+            <if test="accountId != null and accountId != ''">
+                AND accountId = #{accountId}
+            </if>
+            <if test="applicationTime != null and applicationTime != ''">
+                AND date_format(applicationTime,'%Y-%m-%d') = #{applicationTime}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND date_format(applicationTime,'%Y-%m-%d') <![CDATA[ >= ]]> #{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND date_format(applicationTime,'%Y-%m-%d') <![CDATA[ <= ]]> #{endTime}
+            </if>
+        </where>
+    </sql>
+
+    <select id="findGameList" parameterType="com.wsdy.saasops.modules.operate.entity.TGmGame"
+            resultType="com.wsdy.saasops.modules.operate.entity.TGmGame">
+        select * from t_gm_game
+        <where>
+            <if test="depotId !=null and depotId>0">
+                And depotId =#{depotId}
+            </if>
+            <if test="catId !=null and catId>0">
+                And catId =#{catId}
+            </if>
+            <if test="subCatId !=null and subCatId>0">
+                And subCatId =#{subCatId}
+            </if>
+        </where>
+    </select>
+    
+    <select id="findWebActList" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        SELECT t.*,t5.catId
+        FROM (
+            SELECT t1.id,t1.activityname,t1.usestart,t1.useend,t1.isshow,t1.enablepc,t1.enablemb,t1.pclogourl,t1.mblogourl,
+	            <if test="terminal==0">
+	                t1.content content,
+	            </if>
+	            <if test="terminal==1">
+	                t1.mbContent content,
+	            </if>
+	            t1.createtime,t1.available,t1.createuser,t1.modifyuser,t1.modifytime,t1.usestate,t1.pcremotefilename,t1.mbremotefilename,
+	            t1.ruleid,t1.sort,t1.isdel,t1.labelId,
+	            t2.rule,t2.isAudit,
+	            t4.tmplCode,t4.tmplName,t4.tmplNameTag,
+	            4 buttonShow,
+	            lab.labelname
+            FROM opr_act_activity t1
+            LEFT JOIN opr_act_rule t2 ON t1.ruleId = t2.id
+            LEFT JOIN t_op_acttmpl t4 ON t2.actTmplId = t4.id
+            LEFT JOIN opr_act_label lab on t1.labelId = lab.id
+            <choose>
+                <when test="accountId != null">
+                    WHERE t1.available=1 and t1.useState !=0
+                    <if test="actCatId != null">
+                        AND EXISTS(
+                            SELECT cy.activityId
+                            FROM opr_act_catActivity cy
+                            INNER JOIN opr_act_cat cat on cat.id = cy.catid
+                            WHERE cy.catId =#{actCatId} AND t1.id = cy.activityId
+                                and cat.disable = 1 and cat.available = 1
+                        )
+                    </if>
+                    <if test="terminal==0">
+                        AND t1.enablePc=1
+                    </if>
+                    <if test="terminal==1">
+                        AND t1.enableMb=1
+                    </if>
+                    <if test="discount==1">
+                        AND (t4.tmplCode != 'AQ0000005' or t4.tmplCode != 'AQ0000011' or t4.tmplCode != 'AQ0000015'
+                         or t4.tmplCode != 'AQ0000016' or t4.tmplCode!='AQ0000021')
+                        AND t1.ruleId > 0
+                        <choose>
+                            <when test="buttonShow == 1">
+                                AND t1.useState !=2
+                                AND DATE_FORMAT(t1.useStart,'%Y-%m-%d') <![CDATA[ <= ]]> #{time}
+                                AND DATE_FORMAT(t1.useEnd,'%Y-%m-%d')  <![CDATA[ >=]]>#{time}
+                            </when>
+                            <when test="buttonShow == 0">
+                                AND (t1.useState = 2
+                                OR DATE_FORMAT(t1.useEnd,'%Y-%m-%d')  <![CDATA[ < ]]>#{time})
+                            </when>
+                        </choose>
+                    </if>
+                    <if test="tmplCode != null and tmplCode != ''">
+                        and t4.tmplCode =#{tmplCode}
+                    </if>
+                    <if test="isShow != null">
+                        and t1.isShow=#{isShow}
+                    </if>
+                    and t1.isdel = 0
+                </when>
+                <otherwise>
+                    WHERE t1.available=1 AND t1.useState !=0
+                    AND t1.available=1
+                    <if test="actCatId != null">
+                        AND EXISTS(
+                            SELECT cy.activityId
+                            FROM opr_act_catActivity cy
+                            INNER JOIN opr_act_cat cat on cat.id = cy.catid
+                            WHERE cy.catId =#{actCatId} AND t1.id = cy.activityId
+                                and cat.disable = 1 and cat.available = 1
+                        )
+                    </if>
+                    <if test="terminal==0">
+                        AND t1.enablePc=1
+                    </if>
+                    <if test="terminal==1">
+                        AND t1.enableMb=1
+                    </if>
+                    <if test="isShow != null">
+                        and t1.isShow=#{isShow}
+                    </if>
+                    and t1.isdel = 0
+                </otherwise>
+            </choose>
+            ORDER BY t1.usestate,t1.sort,t1.createtime desc
+        ) t
+        LEFT JOIN opr_act_catActivity t5 on t.id = t5.activityId
+        group by t.id
+        order by t.usestate,t.sort asc
+    </select>
+
+    <select id="findWaterBonusList" resultType="com.wsdy.saasops.modules.operate.entity.OprActBonus"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT ws.*,tl.tmplCode,tl.tmplName,ay.activityName,agy.agyAccount,
+        ay.useState,mt.tagencyId,mt.loginName,tl.tmplName catName,c.catname gmCatName,ws.subRuleTmplCode,
+        (select count(1)  from opr_act_blacklist where accountid in (ws.accountId,(SELECT cagencyId from mbr_account where id =ws.accountId)) and tmplcode in (tl.tmplCode,'AQALL')) isBlack
+        FROM opr_act_bonus ws
+        LEFT JOIN opr_act_activity ay ON ws.activityId = ay.id
+        LEFT JOIN opr_act_rule re ON ws.ruleId = re.id
+        LEFT JOIN t_op_acttmpl tl ON re.actTmplId = tl.id
+        LEFT JOIN mbr_account mt ON ws.accountId = mt.id
+        LEFT JOIN agy_account agy ON agy.id = mt.cagencyId
+        LEFT JOIN t_gm_cat c ON c.id = ws.catid
+        <where>
+            <if test="source != null">
+                AND ws.source =#{source}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND ws.applicationTime <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND ws.applicationTime <![CDATA[ <= ]]>#{endTime}
+            </if>
+            <if test="auditTimeFrom != null and auditTimeFrom != ''">
+                AND ws.auditTime <![CDATA[ >= ]]>#{auditTimeFrom}
+            </if>
+            <if test="auditTimeTo != null and auditTimeTo != ''">
+                AND ws.auditTime <![CDATA[ <= ]]>#{auditTimeTo}
+            </if>
+            <if test="loginName != null and loginName !=''">
+                AND ws.loginName like concat('%',#{loginName},'%')
+            </if>
+            <if test="agyAccount != null and agyAccount !=''">
+                AND agy.agyAccount like concat('%',#{agyAccount},'%')
+            </if>
+            <if test="tagencyIds != null and tagencyIds.size()>0">
+                AND tagencyId in
+                <foreach item="tagencyId" collection="tagencyIds" open="(" separator="," close=")">
+                    #{tagencyId}
+                </foreach>
+            </if>
+
+            <if test="cagencyIds != null and cagencyIds.size()>0">
+                AND cagencyId in
+                <foreach item="cagencyId" collection="cagencyIds" open="(" separator="," close=")">
+                    #{cagencyId}
+                </foreach>
+            </if>
+
+            <if test="actTmplIds != null and actTmplIds.size()>0">
+                AND actTmplId in
+                <foreach item="actTmplId" collection="actTmplIds" open="(" separator="," close=")">
+                    #{actTmplId}
+                </foreach>
+            </if>
+
+            <if test="activityId != null">
+                AND activityId = #{activityId}
+            </if>
+            <if test="ids != null and ids.size()>0">
+                AND activityId in
+                <foreach item="activityId" collection="ids" open="(" separator="," close=")">
+                    #{activityId}
+                </foreach>
+            </if>
+            <if test="accountIds != null and accountIds.size()>0">
+                AND accountId in
+                <foreach item="accountId" collection="accountIds" open="(" separator="," close=")">
+                    #{accountId}
+                </foreach>
+            </if>
+            <if test="statuss != null and statuss.size()>0">
+                AND ws.status in
+                <foreach item="status" collection="statuss" open="(" separator="," close=")">
+                    #{status}
+                </foreach>
+            </if>
+            <if test="devSourceList != null and devSourceList != ''">
+                AND ws.devSource in (${devSourceList})
+            </if>
+            <if test="status != null">
+                AND ws.status = #{status}
+            </if>
+        </where>
+        order by ws.applicationTime desc
+    </select>
+
+    <resultMap id="waterAuditListQry" type="com.wsdy.saasops.modules.operate.dto.ActivityWaterDetailDto">
+        <result property="accountId" column="accountid"/>
+        <result property="id" column="id"/>
+        <result property="activityId" column="activityid"/>
+        <result property="loginName" column="loginname"/>
+        <result property="applicationTime" column="applicationtime"/>
+        <result property="cagentcyId" column="cagencyid"/>
+        <result property="agyAccount" column="agyaccount"/>
+        <result property="totalValidbet" column="validbet"/>
+        <result property="totalAmount" column="bonusamount"/>
+        <result property="status" column="status"/>
+        <result property="auditTime" column="audittime"/>
+        <result property="auditUser" column="audituser"/>
+        <result property="memo" column="memo"/>
+        <result property="activityName" column="activityname"/>
+        <result property="tmplCode" column="tmplcode"/>
+        <result property="tmplName" column="tmplname"/>
+        <result property="tierName" column="tiername"/>
+    </resultMap>
+
+     <select id="depotAuditListQry" resultType="com.wsdy.saasops.modules.operate.dto.ActivityWaterCatDto">
+            select water.activityid,water.time,water.accountid,water.catid,water.depotid,water.validbet,
+            water.amount amount,t.depotname depotName,cat.catname catName, water.bonusid from opr_act_water water
+            LEFT JOIN t_gm_depot t ON t.id = water.depotid
+            LEFT JOIN t_gm_cat cat ON cat.id = water.catid
+            where water.bonusid in
+             <foreach collection="ids" item="id" separator="," open="(" close=")">
+                 #{id}
+             </foreach>
+    </select>
+
+    <select id="waterAuditList" resultType="com.wsdy.saasops.modules.operate.dto.ActivityWaterDetailDto"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+            select  bonus.id,bonus.activityid,bonus.accountid,bonus.loginname,bonus.applicationtime,accout.cagencyid,agy.agyaccount,bonus.validbet totalValidbet,bonus.bonusamount totalAmount,
+                bonus.status,bonus.audittime,bonus.audituser,bonus.memo,
+                ay.activityname,tl.tmplcode,tl.tmplname,mal.tiername tiername
+                from opr_act_bonus bonus
+                left join mbr_account accout on bonus.accountid = accout.id
+                left join agy_account agy on accout.cagencyid = agy.id
+                LEFT JOIN opr_act_activity ay ON bonus.activityId = ay.id
+                LEFT JOIN opr_act_rule re ON bonus.ruleId = re.id
+                LEFT JOIN t_op_acttmpl tl ON re.actTmplId = tl.id
+                LEFT JOIN mbr_activity_level mal ON accout.actlevelid = mal.id
+                where bonus.financialcode = 'FS'
+                <if test="waterdateid != null">
+                    AND bonus.waterdateid = #{waterdateid}
+                </if>
+                <if test="activityId != null">
+                    AND bonus.activityid = #{activityId}
+                </if>
+                <if test="accountId != null">
+                    AND bonus.accountId = #{accountId}
+                </if>
+                <if test="startTime != null and startTime != ''">
+                    AND DATE_FORMAT(bonus.applicationTime,'%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+                </if>
+                <if test="endTime != null and endTime != ''">
+                    AND DATE_FORMAT(bonus.applicationTime,'%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+                </if>
+                <if test="applicationTime != null and applicationTime != ''">
+                    AND DATE_FORMAT(bonus.applicationtime,'%Y-%m-%d') = DATE_FORMAT(#{applicationTime},'%Y-%m-%d')
+                </if>
+                <if test="loginName != null and loginName != ''">
+                    AND accout.loginname like concat('%',#{loginName},'%')
+                </if>
+                <if test="agyAccount != null and agyAccount != ''">
+                    AND agy.agyaccount like concat('%',#{agyAccount},'%')
+                </if>
+                <if test="status != null">
+                    AND bonus.status = #{status}
+                </if>
+                ORDER BY bonus.status DESC,bonus.applicationTime DESC
+        </select>
+
+    <select id="waterList" resultType="com.wsdy.saasops.modules.operate.dto.ActivityWaterTotalDto"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        select total.*, bonus.status,
+            count( CASE WHEN bonus.STATUS = 0 THEN STATUS ELSE NULL END )  statisticsRejection,-- 拒绝
+            count( CASE WHEN bonus.STATUS = 1 THEN STATUS ELSE NULL END ) statisticsApproved,	-- 通过
+            count( CASE WHEN bonus.STATUS = 2 THEN STATUS ELSE NULL END ) statisticsPending		-- 待审核
+        from opr_act_water_betdate betd
+        LEFT JOIN opr_act_bonus bonus on  betd.id = bonus.waterdateid
+        LEFT JOIN
+            (
+            select betd.id,bonus.activityid, act.activityname, betd.applicationtime, sum(bonus.bonusamount) totalBonus, betd.waterstart, betd.waterend,
+            SUM( CASE WHEN bonus.STATUS = 1 THEN bonusamount ELSE 0 END ) totalBonusAudit-- 实际发放
+            from opr_act_water_betdate betd
+            LEFT JOIN opr_act_bonus bonus on betd.id = bonus.waterdateid
+            LEFT JOIN opr_act_activity act ON act.id = bonus.activityid
+            WHERE bonus.financialcode = 'FS'
+            GROUP BY betd.id
+            ) total  on total.id = betd.id
+        <where>
+            bonus.financialcode = 'FS'
+            <if test="waterStart != null and waterStart != ''">
+                AND total.waterstart <![CDATA[ >= ]]> #{waterStart}
+            </if>
+            <if test="waterEnd != null and waterEnd != ''">
+                AND total.waterend <![CDATA[ <= ]]> #{waterEnd}
+            </if>
+            <if test="applicationTimeStart != null and applicationTimeStart != ''">
+                AND total.applicationtime <![CDATA[ >= ]]> #{applicationTimeStart}
+            </if>
+            <if test="applicationTimeEnd != null and applicationTimeEnd != ''">
+                AND total.applicationtime <![CDATA[ <= ]]> #{applicationTimeEnd}
+            </if>
+        </where>
+
+        GROUP BY betd.id
+        order by total.waterend desc
+    </select>
+
+    <select id="findAccountBonusList" resultType="com.wsdy.saasops.modules.operate.entity.OprActBonus"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT IF(bonus.source = 3, bonus.bonusAmount * -1, bonus.bonusAmount)bonusAmount, bonus.applicationTime,bonus.`status`,
+           activity.activityName, acttmpl.tmplName,bonus.memo,bonus.orderNo,bonus.auditUser,bonus.applicationMemo,
+        IFNULL(bonus.transferAmount,0) transferAmount,bonus.prizename,bonus.prizetype,bonus.subRuleTmplCode,activity.useState
+        FROM opr_act_bonus bonus
+        LEFT JOIN opr_act_activity activity ON bonus.activityId = activity.id
+        LEFT JOIN opr_act_rule rule ON rule.id = activity.ruleId
+        LEFT JOIN t_op_acttmpl acttmpl ON rule.actTmplId = acttmpl.id
+        WHERE bonus.accountId=#{accountId}
+        <if test="status != null and status != ''">
+            AND bonus.status =#{status}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND bonus.applicationTime <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND bonus.applicationTime <![CDATA[ <= ]]>#{endTime}
+        </if>
+        <if test="activityName != null and activityName != ''">
+            AND activity.activityName =#{activityName}
+        </if>
+        <if test="activityId != null">
+            AND bonus.activityId =#{activityId}
+        </if>
+        ORDER BY bonus.applicationTime DESC
+    </select>
+
+    <select id="findAccountBonusListEgSanGong" resultType="com.wsdy.saasops.modules.operate.entity.OprActBonus"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT t.* FROM (
+            SELECT audit.amount bonusAmount,audit.createTime applicationTime,
+            audit.status status,'三公返利' as tmplName,audit.memo,audit.orderNo,audit.auditUser,
+            0 transferAmount
+            FROM fund_audit audit
+            WHERE audit.accountId=#{accountId} AND audit.financialCode = 'FA'
+            <if test="startTime != null and startTime != ''">
+                AND audit.createTime <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND audit.createTime <![CDATA[ <= ]]>#{endTime}
+            </if>
+        ) t ORDER BY t.applicationTime DESC
+    </select>
+
+
+    <select id="findBounsCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT count(*) FROM opr_act_bonus bonus
+        LEFT JOIN opr_act_activity activity ON bonus.activityId = activity.id
+        <where>
+            AND bonus.status != 0
+            <if test="actLevelId != null">
+                AND bonus.actLevelId =#{actLevelId}
+            </if>
+            <if test="accountId != null and accountId != ''">
+                AND bonus.accountId =#{accountId}
+            </if>
+            <if test="activityId != null and activityId != ''">
+                AND bonus.activityId =#{activityId}
+            </if>
+            <if test="applicationTime != null and applicationTime != ''">
+                AND DATE_FORMAT(bonus.applicationTime,'%Y-%m-%d') =#{applicationTime}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND DATE_FORMAT(bonus.applicationTime,'%Y-%m-%d') <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND DATE_FORMAT(bonus.applicationTime,'%Y-%m-%d') <![CDATA[ <= ]]>#{endTime}
+            </if>
+            <if test="applicationTimeYear != null and applicationTimeYear != ''">
+                AND DATE_FORMAT(bonus.applicationTime,'%Y') =#{applicationTimeYear}
+            </if>
+            <if test="subRuleTmplCode != null and subRuleTmplCode != ''">
+                AND bonus.subRuleTmplCode =#{subRuleTmplCode}
+            </if>
+        </where>
+    </select>
+    <select id="findBounsCountEx" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT count(*) FROM opr_act_bonus bonus
+        LEFT JOIN opr_act_activity activity ON bonus.activityId = activity.id
+        <where>
+            <if test="accountId != null and accountId != ''">
+                AND bonus.accountId =#{accountId}
+            </if>
+            <if test="activityId != null and activityId != ''">
+                AND bonus.activityId =#{activityId}
+            </if>
+            <if test="applicationTime != null and applicationTime != ''">
+                AND DATE_FORMAT(bonus.applicationTime,'%Y-%m-%d') =#{applicationTime}
+            </if>
+            <if test="startTime != null and startTime != ''">
+                AND DATE_FORMAT(bonus.applicationTime,'%Y-%m-%d') <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND DATE_FORMAT(bonus.applicationTime,'%Y-%m-%d') <![CDATA[ <= ]]>#{endTime}
+            </if>
+        </where>
+    </select>
+
+    <select id="findActivityBySatatus" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        SELECT * FROM opr_act_activity WHERE useState !=2
+    </select>
+
+    <select id="findAccountBouns" resultType="com.wsdy.saasops.modules.operate.dto.BonusListDto">
+        SELECT bs.id,bs.STATUS,ay.useEnd,ay.activityName,acl.tmplName,bs.bonusAmount,bs.ruleId,
+        acl.tmplCode,ay.id activityId,bs.discountAudit,account.actLevelId
+        FROM opr_act_bonus bs
+        LEFT JOIN opr_act_activity ay ON bs.activityId = ay.id
+        LEFT JOIN t_op_acttmpl acl ON ay.actTmplId = acl.id
+        LEFT JOIN mbr_account account ON account.id = bs.accountId
+        <where>
+            <if test="accountId !=null and accountId != '' ">
+                AND bs.accountId =#{accountId}
+            </if>
+            <if test="id !=null">
+                AND bs.id =#{id}
+            </if>
+            <if test="status !=null">
+                AND bs.status =#{status}
+            </if>
+            AND acl.tmplCode in ('AQ0000001','AQ0000003','AQ0000002')
+        </where>
+        ORDER BY FIELD(bs. STATUS, 3, 2, 0, 4, 1)
+    </select>
+
+    <select id="findAccountBounsByStatus" resultType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT bs.*,ay.useState FROM opr_act_bonus bs
+        LEFT JOIN opr_act_activity ay ON bs.activityId = ay.id
+        LEFT JOIN t_op_acttmpl acl ON ay.actTmplId = acl.id
+        WHERE bs.accountId =#{accountId}
+        AND bs.status IN (2,3)
+        AND ay.useState = 2
+        AND acl.tmplCode in ('AQ0000001','AQ0000003','AQ0000002')
+        <if test="id !=null">
+            AND bs.id =#{id}
+        </if>
+    </select>
+
+    <select id="findDepotByCatId" resultType="com.wsdy.saasops.modules.operate.entity.TGmDepot">
+        SELECT dt.* FROM t_gm_depot dt
+        LEFT JOIN t_gm_depotcat dcat ON dt.id = dcat.depotId
+        WHERE dcat.catId = #{catId}
+    </select>
+
+    <update id="updateBounsState">
+        UPDATE opr_act_bonus SET status=#{status}
+        <if test="memo != null and memo != ''">
+            ,memo=#{memo}
+        </if>
+        WHERE activityId =#{activityId} AND (status=2 or status=3)
+    </update>
+
+    <select id="findDepositApplyForActivity" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT count(*) FROM (
+        SELECT * FROM fund_deposit WHERE accountId = #{accountId} and status =1
+        <if test="applicationTime != null and applicationTime != ''">
+            AND DATE_FORMAT(auditTime,'%Y-%m-%d') =#{applicationTime}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND DATE_FORMAT(auditTime,'%Y-%m-%d') <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND DATE_FORMAT(auditTime,'%Y-%m-%d') <![CDATA[ <= ]]>#{endTime}
+        </if>
+        ORDER BY id LIMIT 1
+        ) t
+        INNER JOIN opr_act_bonus b ON t.id = b.depositId
+        WHERE b.status != 0 AND b.activityId != #{activityId}
+    </select>
+
+    <select id="findWaterActivity" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        SELECT acy.*,re.rule,re.isAudit,re.isselfhelp,re.islimit,re.minamount
+        FROM opr_act_activity acy
+        INNER JOIN opr_act_rule re ON acy.ruleId = re.id
+        INNER JOIN t_op_acttmpl acl ON acl.id = re.actTmplId
+        WHERE acy.available = 1 AND acl.tmplCode =#{tmplCode} AND acy.isdel = 0
+        AND re.isdelete = 0
+        AND date_format(acy.useStart, '%Y-%m-%d') <![CDATA[ <= ]]> #{useStart}
+        AND date_format(acy.useEnd,'%Y-%m-%d') <![CDATA[ > ]]> #{useStart}
+        <if test="isSelfHelp != null">
+            AND re.isselfhelp = #{isSelfHelp}
+        </if>
+        <if test="isSelfHelpShow != null">
+            AND re.isselfhelpshow = #{isSelfHelpShow}
+        </if>
+    </select>
+
+    <select id="findAffActivity" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        SELECT acy.*,re.rule,re.isAudit,re.isselfhelp,re.islimit,re.minamount
+        FROM opr_act_activity acy
+        INNER JOIN opr_act_rule re ON acy.ruleId = re.id
+        INNER JOIN t_op_acttmpl acl ON acl.id = re.actTmplId
+        WHERE acy.available = 1 AND acl.tmplCode =#{tmplCode}
+        AND acy.isdel = 0
+    </select>
+
+    <select id="findValidbetCount" resultType="java.lang.Integer">
+        SELECT IFNULL( count(*),0)  FROM opr_act_bonus WHERE activityId = #{activityId}
+        AND date_format(applicationtime, '%Y-%m-%d') = #{time} AND createuser =#{createuser}
+        AND accountId =#{accountId}
+    </select>
+
+    <select id="findSumAccountWater" resultType="com.wsdy.saasops.modules.operate.entity.OprActWater">
+        SELECT IFNULL(sum(validBet),0) validBet,IFNULL(sum(auditAmount),0) auditAmount,IFNULL(sum(amount),0) amount
+        FROM opr_act_water WHERE accountId =#{accountId}
+        AND id IN
+        <foreach item="waterId" collection="waterIds" open="(" separator="," close=")">
+            #{waterId}
+        </foreach>
+    </select>
+
+   <update id="updateOprActWater">
+       UPDATE opr_act_water SET bonusid =#{bonusId}
+       WHERE id IN
+       <foreach item="waterId" collection="waterIds" open="(" separator="," close=")">
+           #{waterId}
+       </foreach>
+    </update>
+
+    <select id="findBonusWaterCount" resultType="java.lang.Integer">
+        SELECT count(*) FROM opr_act_bonus bs
+        LEFT JOIN opr_act_rule rule ON bs.ruleId = rule.id
+        LEFT JOIN t_op_acttmpl al ON rule.actTmplId = al.id
+        WHERE bs.accountId=#{accountId} AND al.tmplCode =#{tmplCode}
+        AND bs.status !=0 AND date_format(bs.auditTime, '%Y-%m-%d') = #{time}
+    </select>
+
+    <select id="findoActRuleList" resultType="com.wsdy.saasops.modules.operate.entity.OprActRule"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActRule">
+        select o.*,mp.tmplName,mp.tmplcode from opr_act_rule o
+        LEFT JOIN t_op_acttmpl mp ON mp.id = o.actTmplId
+        WHERE o.actTmplId > 0 and o.isdelete = 0
+        <if test="ruleName != null and ruleName != ''">
+            AND o.ruleName like concat('%',#{ruleName},'%')
+        </if>
+        <if test="actTmplId != null">
+            AND o.actTmplId =#{actTmplId}
+        </if>
+        <if test="available != null">
+            AND o.available =#{available}
+        </if>
+        order by o.time desc
+    </select>
+
+    <select id="activityAuditCountByStatus" parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus"
+            resultType="com.wsdy.saasops.modules.fund.dto.CountEntity">
+        SELECT ws.status conditions,count(ws.status) counts
+        FROM opr_act_bonus ws
+        LEFT JOIN opr_act_activity ay ON ws.activityId = ay.id
+        LEFT JOIN mbr_account mt ON ws.accountId = mt.id
+        LEFT JOIN log_mbrregister mr ON mt.id = mr.accountId
+        LEFT JOIN agy_account agy ON agy.id = mt.cagencyId
+        LEFT JOIN agy_account agy1 ON agy.parentId = agy1.id
+        <where>
+            <if test="startTime != null and startTime != ''">
+                AND ws.applicationTime <![CDATA[ >= ]]>#{startTime}
+            </if>
+            <if test="endTime != null and endTime != ''">
+                AND ws.applicationTime <![CDATA[ <= ]]>#{endTime}
+            </if>
+            <if test="auditTimeFrom != null and auditTimeFrom != ''">
+                AND ws.auditTime <![CDATA[ >= ]]>#{auditTimeFrom}
+            </if>
+            <if test="auditTimeTo != null and auditTimeTo != ''">
+                AND ws.auditTime <![CDATA[ <= ]]>#{auditTimeTo}
+            </if>
+            <if test="loginName != null and loginName !=''">
+                AND ws.loginName like concat('%',#{loginName},'%')
+            </if>
+            <if test="tagencyIds != null and tagencyIds.size()>0">
+                AND tagencyId in
+                <foreach item="tagencyId" collection="tagencyIds" open="(" separator="," close=")">
+                    #{tagencyId}
+                </foreach>
+            </if>
+
+            <if test="cagencyIds != null and cagencyIds.size()>0">
+                AND cagencyId in
+                <foreach item="cagencyId" collection="cagencyIds" open="(" separator="," close=")">
+                    #{cagencyId}
+                </foreach>
+            </if>
+
+            <if test="actTmplIds != null and actTmplIds.size()>0">
+                AND actTmplId in
+                <foreach item="actTmplId" collection="actTmplIds" open="(" separator="," close=")">
+                    #{actTmplId}
+                </foreach>
+            </if>
+
+            <if test="activityIds != null and activityIds.size()>0">
+                AND activityId in
+                <foreach item="activityId" collection="activityIds" open="(" separator="," close=")">
+                    #{activityId}
+                </foreach>
+            </if>
+            <if test="statuss != null and statuss.size()>0">
+                AND ws.status in
+                <foreach item="status" collection="statuss" open="(" separator="," close=")">
+                    #{status}
+                </foreach>
+            </if>
+            <if test="devSourceList != null and devSourceList != ''">
+                AND ws.devSource in (${devSourceList})
+            </if>
+        </where>
+        group by ws.status
+    </select>
+
+    <select id="findOprActCatList" resultType="com.wsdy.saasops.modules.operate.entity.OprActCat">
+        SELECT * FROM opr_act_cat WHERE available = 1 AND disable = 1 ORDER BY sort,createtime desc
+    </select>
+
+    <select id="findOprActCatListPage" resultType="com.wsdy.saasops.modules.operate.entity.OprActCat">
+        SELECT * FROM opr_act_cat ORDER BY createtime desc
+    </select>
+
+    <select id="findRuleActivityList"  resultType="com.wsdy.saasops.modules.operate.entity.OprActRule">
+	  	SELECT rule.id,rule.rulename,activity.id activityId 
+			FROM opr_act_rule rule
+		    LEFT JOIN opr_act_activity activity ON rule.id = activity.ruleId
+    	WHERE rule.available = 1 
+		GROUP BY rule.id		
+    </select>
+    
+    <select id="findExistRuleIds"  resultType="Integer">
+	  SELECT 
+	  	rule.id
+			FROM opr_act_rule rule
+	    LEFT JOIN opr_act_activity activity ON rule.id = activity.ruleId
+	    WHERE rule.available = 1 
+			  AND activity.usestate != 2
+		GROUP BY rule.id
+    </select>
+    
+    
+    <select id="findActivityByTmplId" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        SELECT act.*,re.rule,atl.tmplCode,atl.tmplName,atl.tmplNameTag,re.isAudit
+        FROM opr_act_activity act
+        INNER JOIN opr_act_rule re ON act.ruleId = re.id
+        LEFT JOIN t_op_acttmpl atl ON atl.id = re.actTmplId
+        <where>
+            usestate = 1
+            and act.available = 1
+            <if test="tmplId != null">
+                and atl.id = #{tmplId}
+            </if>
+        </where>
+    </select>
+
+    <select id="findNoRuleActivities" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        SELECT *
+        FROM opr_act_activity act
+        <where>
+            usestate = 1
+            and act.available = 1
+            and act.ruleId is null
+        </where>
+    </select>
+
+    <select id="getActivitiesWithAuditCount" parameterType="com.wsdy.saasops.modules.operate.entity.OprActActivity"
+            resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        select * from (
+            select oaa.*,GROUP_CONCAT(oac.catname) catName,IFNULL(noaudit,0) noaudit,IFNULL(pass,0) pass,IFNULL(reject,0) reject,atl.tmplcode
+            from opr_act_activity oaa
+            LEFT JOIN opr_act_rule re ON oaa.ruleId = re.id
+            LEFT JOIN t_op_acttmpl atl ON atl.id = re.actTmplId
+            LEFT JOIN opr_act_catactivity oaca ON oaa.id = oaca.activityid
+            LEFT JOIN opr_act_cat oac ON oaca.catid = oac.id
+            LEFT JOIN
+                (
+                    select oab.activityid,count(*) reject
+                    from opr_act_bonus oab
+                    where oab.`status`=0
+                    <if test="loginName != null and loginName != '' ">
+                        and oab.loginName = #{loginName}
+                    </if>
+                    GROUP BY oab.activityid
+                ) t1 on t1.activityid = oaa.id
+            LEFT JOIN
+                (
+                    select oab.activityid,count(*) pass
+                    from opr_act_bonus oab
+                    where oab.`status`=1
+                    <if test="loginName != null and loginName != '' ">
+                        and oab.loginName = #{loginName}
+                    </if>
+                    GROUP BY oab.activityid
+                ) t2 on t2.activityid = oaa.id
+            LEFT JOIN
+                (
+                    select oab.activityid,count(*) noaudit
+                    from opr_act_bonus oab
+                    where oab.`status`=2
+                    <if test="loginName != null and loginName != '' ">
+                        and oab.loginName = #{loginName}
+                    </if>
+                    GROUP BY oab.activityid
+                ) t3 on t3.activityid = oaa.id
+            <where>
+                (atl.tmplcode is null or (atl.tmplcode != 'AQ0000005' and atl.tmplcode != 'AQ0000011')) and oaa.isdel = 0
+                <if test="activityName != null and activityName != '' ">
+                    and oaa.activityname LIKE CONCAT('%',#{activityName}, '%')
+                </if>
+                <if test="actIds != null and actIds.size() > 0">
+                    and oac.id in
+                    <foreach item="catid" collection="actIds" open="(" separator="," close=")">
+                      #{catid}
+                    </foreach>
+                </if>
+                <if test="useStart != null and useStart!=''">
+                    and #{useStart} <![CDATA[ <= ]]>  oaa.useend
+
+                </if><if test="useEnd != null and useEnd!=''">
+                    and #{useEnd} <![CDATA[ >= ]]> oaa.usestart
+                </if>
+                <if test="useStateList != null and useStateList !='' ">
+                    AND oaa.useState in ( ${useStateList} )
+                </if>
+            </where>
+            GROUP BY oaa.id
+        ) result
+        <where>
+            <if test="status != null">
+            -- 0 拒绝 1通过 2待审核
+                case #{status}
+                when 0 then reject>0
+                when 1 then pass>0
+                when 2 then noaudit>0
+                end
+            </if>
+            <if test="status == null and loginName != null and loginName != '' ">
+                and (reject>0 or pass>0 or noaudit>0)
+            </if>
+        </where>
+        order by result.useend desc
+    </select>
+
+    <select id="findRuleRate" resultType="com.wsdy.saasops.modules.operate.entity.OprActRule">
+        SELECT re.* from opr_act_rule re
+        INNER JOIN opr_act_activity oaa on re.id = oaa.ruleid
+        LEFT JOIN t_op_acttmpl tl on re.acttmplid = tl.id
+        WHERE re.rule->'$.scope'= 1 and tl.tmplcode='AQ0000005' and isDelete = 0
+        and re.isselfhelp = 1
+    </select>
+
+    <select id="findActRuleByCode" resultType="com.wsdy.saasops.modules.operate.entity.OprActRule">
+        SELECT re.* from opr_act_rule re
+        LEFT JOIN t_op_acttmpl tl on re.acttmplid = tl.id
+        WHERE tl.tmplcode=#{tmplCode} and re.isDelete = 0 and re.available = 1
+    </select>
+
+    <select id="findWaterDetailList" resultType="com.wsdy.saasops.modules.operate.dto.ActivityWaterCatDto">
+        SELECT 
+        		water.activityid,water.time,water.accountid,water.catid,water.depotid,water.validbet validbet,
+		        water.amount amount,IFNULL(sgame.depotname ,t.depotname) depotName,
+		        cat.catname catName,bs.`status`,bs.applicationTime,bs.auditTime
+        FROM opr_act_water water
+        LEFT JOIN t_gm_depot t ON t.id = water.depotid
+        LEFT JOIN t_gm_cat cat ON cat.id = water.catid
+		LEFT JOIN opr_act_bonus bs ON bs.id = water.bonusId
+		LEFT JOIN set_gm_game sgame ON sgame.depotid = t.id
+		WHERE water.accountId = #{accountId}
+        <if test="catId != null">
+            AND water.catId = #{catId}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND DATE_FORMAT(water.time,'%Y-%m-%d') <![CDATA[ >= ]]> DATE_FORMAT(#{startTime},'%Y-%m-%d')
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND DATE_FORMAT(water.time,'%Y-%m-%d') <![CDATA[ <= ]]> DATE_FORMAT(#{endTime},'%Y-%m-%d')
+        </if>
+        AND (bs.createuser = '自助洗码' or (bs.createuser = '系统审核' and bs.status = 1))
+        GROUP BY water.id
+        ORDER BY water.time desc
+    </select>
+
+    <select id="findWaterBetDateByTime" resultType="com.wsdy.saasops.modules.operate.entity.OprActWaterBetdata">
+        SELECT * FROM opr_act_water_betdate WHERE activityid =#{activityid}
+        AND DATE_FORMAT(waterstart,'%Y-%m-%d') <![CDATA[ = ]]> DATE_FORMAT(#{waterstart},'%Y-%m-%d')
+        AND DATE_FORMAT(waterend,'%Y-%m-%d') <![CDATA[ = ]]> DATE_FORMAT(#{waterend},'%Y-%m-%d')
+    </select>
+
+    <select id="findActRuleCount" resultType="java.lang.Integer">
+        SELECT count(*) from opr_act_rule re
+        LEFT JOIN t_op_acttmpl tl on re.acttmplid = tl.id
+        WHERE tl.tmplcode=#{tmplCode} and re.isDelete = 0
+    </select>
+
+
+
+    <select id="findSelfActRuleCount" resultType="java.lang.Integer">
+        SELECT count(*) from opr_act_rule re
+        LEFT JOIN t_op_acttmpl tl on re.acttmplid = tl.id
+        WHERE tl.tmplcode=#{tmplCode} and re.isDelete = #{isDelete}
+        and re.isselfhelp = #{isSelfHelp}
+        and re.id !=  #{id}
+    </select>
+
+    <select id="findLastBonus" resultType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT * from opr_act_bonus oab
+        WHERE activityid = #{activityId}
+        and accountid = #{accountId}
+        and applicationtime <![CDATA[ >= ]]> #{startTime}
+        and applicationtime <![CDATA[ <= ]]> #{endTime}
+        ORDER BY oab.applicationtime desc
+        LIMIT 1
+    </select>
+    <select id="getMbrAllBonusAmount" resultType="java.math.BigDecimal">
+        SELECT sum(t1.totalAmount) totalAmount from (
+            SELECT IFNULL(sum(bonusamount),0) totalAmount from opr_act_bonus oab
+            WHERE accountid = #{accountId}
+            and applicationtime <![CDATA[ >= ]]> #{startTime}
+            and applicationtime  <![CDATA[ < ]]> #{endTime}
+            and status = 1
+            union
+            SELECT IFNULL(sum(IFNULL(re.amount,0)),0) totalAmount from fund_audit fa
+            INNER JOIN mbr_rebate_report_new re on fa.id = re.auditid
+            WHERE fa.accountid = #{accountId}
+            and audittime <![CDATA[ >= ]]> #{startTime}
+            and audittime  <![CDATA[ < ]]> #{endTime}
+            and status = 1
+        ) t1
+    </select>
+
+    <select id="getClaimedActivities" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        select DISTINCT *
+        from(
+            select
+            oab.activityid id,
+            oaa.activityname,
+            0 subCount,
+            oab.bonusamount amountMax,
+            oar.rule,
+            oab.id bonusId,oaa.usestart,oaa.useend,oaa.isshow,oaa.enablepc,oaa.enablemb,
+            oaa.createtime,oaa.available,oaa.createuser,oaa.usestate,oab.applicationtime claimedTime,
+            oaa.ruleid,oaa.sort,oaa.isdel,t.tmplCode,t.tmplName,t.tmplNameTag,oab.audittime, oab.accountid
+            from opr_act_bonus oab
+            INNER JOIN opr_act_activity oaa ON oab.activityid = oaa.id
+            INNER JOIN opr_act_rule oar ON oaa.ruleid = oar.id
+            INNER JOIN opr_act_catActivity c ON oaa.id = c.activityid
+            INNER JOIN opr_act_cat cat on cat.id = c.catid
+            INNER JOIN (select * from t_op_acttmpl where tmplcode not in ('AQ0000005','AQ0000011','AQ0000024'))t ON oar.acttmplid = t.id
+            WHERE oab.accountid = #{accountId}
+            AND oab.`status` = 1
+            AND cat.disable = 1 and cat.available = 1
+
+            union all
+            select oab.activityid id,
+            oaa.activityname,
+            count(oab.subRuleTmplCode) subCount,
+            ifnull(sum(oab.bonusamount),0) amountMax,
+            oar.rule,
+            oab.id bonusId,oaa.usestart,oaa.useend,oaa.isshow,oaa.enablepc,oaa.enablemb,
+            oaa.createtime,oaa.available,oaa.createuser,oaa.usestate,oab.applicationtime claimedTime,
+            oaa.ruleid,oaa.sort,oaa.isdel,t.tmplCode,t.tmplName,t.tmplNameTag,oab.audittime, oab.accountid
+            from opr_act_bonus oab
+            INNER JOIN opr_act_activity oaa ON oab.activityid = oaa.id
+            INNER JOIN opr_act_rule oar ON oaa.ruleid = oar.id
+            INNER JOIN opr_act_catActivity c ON oaa.id = c.activityid
+            INNER JOIN opr_act_cat cat on cat.id = c.catid
+            INNER JOIN (select * from t_op_acttmpl where tmplcode = 'AQ0000024')t ON oar.acttmplid = t.id
+            WHERE oab.accountid = #{accountId}
+            AND oab.`status` = 1
+            AND cat.disable = 1 and cat.available = 1
+            group by oab.activityid
+        ) t
+        order by t.audittime
+
+    </select>
+
+    <select id="getClaimedMixActivities" resultType="com.wsdy.saasops.modules.operate.entity.OprActActivity">
+        select oab.activityid,
+        oaa.activityname,
+        count(oab.subRuleTmplCode) subCount,
+        ifnull(sum(oab.bonusamount),0) amountMax,
+        oar.rule
+        from opr_act_bonus oab
+        INNER JOIN opr_act_activity oaa ON oab.activityid = oaa.id
+        INNER JOIN opr_act_rule oar ON oaa.ruleid = oar.id
+        INNER JOIN opr_act_catActivity c ON oaa.id = c.activityid
+        INNER JOIN opr_act_cat cat on cat.id = c.catid
+        INNER JOIN (select * from t_op_acttmpl where tmplcode = 'AQ0000024')t ON oar.acttmplid = t.id
+        WHERE oab.accountid = #{accountId}
+        AND oab.`status` = 1
+        AND cat.disable = 1 and cat.available = 1
+        group by oab.activityid
+    </select>
+
+    <select id="bonusAndTaskList" resultType="com.wsdy.saasops.modules.operate.entity.OprActBonus"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT t.* FROM (
+        -- 活动优惠
+        SELECT bonus.bonusAmount,bonus.applicationTime,bonus.`status`,
+        activity.activityName activityName,acttmpl.tmplName,bonus.memo,bonus.orderNo,bonus.auditUser,
+        IFNULL(bonus.transferAmount,0) transferAmount,bonus.prizename,bonus.prizetype
+        FROM opr_act_bonus bonus
+        LEFT JOIN opr_act_activity activity ON bonus.activityId = activity.id
+        LEFT JOIN opr_act_rule rule ON rule.id = activity.ruleId
+        LEFT JOIN t_op_acttmpl acttmpl ON rule.actTmplId = acttmpl.id
+        WHERE bonus.accountId=#{accountId}
+        <if test="status != null and status != ''">
+            AND bonus.status =#{status}
+        </if>
+        <if test="startTime != null and startTime != ''">
+            AND bonus.applicationTime <![CDATA[ >= ]]>#{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND bonus.applicationTime <![CDATA[ <= ]]>#{endTime}
+        </if>
+        <if test="activityName != null and activityName != ''">
+            AND activity.activityName =#{activityName}
+        </if>
+
+        UNION ALL
+        -- 任务
+        SELECT bonus.bonusAmount, bonus.time applicationTime,1 status,
+        c.taskname activityName ,e.codeName tmplName,'' memo, '' orderNo, '' auditUser, 0 transferAmount,'' prizename,'0' prizetype
+        FROM task_bonus bonus
+        LEFT JOIN task_config c ON c.id = bonus.configid
+        LEFT JOIN t_bs_financialcode e ON c.financialcode = e.code
+        where bonus.accountId =#{accountId}
+        <if test="startTime != null and startTime != ''">
+            AND bonus.time <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND bonus.time <![CDATA[ <= ]]> #{endTime}
+        </if>
+        <if test="activityName != null and activityName != ''">
+            AND c.taskname =#{activityName}
+        </if>
+        ) t ORDER BY t.applicationTime DESC
+    </select>
+
+    <select id="getTodyRedPacketRainCount" resultType="java.lang.Integer"
+            parameterType="com.wsdy.saasops.modules.operate.entity.OprActBonus">
+        SELECT count(*)
+        FROM opr_act_bonus bonus
+        where bonus.accountId =#{accountId} and bonus.activityId =#{activityId}
+        AND DATE_FORMAT(bonus.applicationTime,'%Y-%m-%d') <![CDATA[ = ]]>DATE_FORMAT(now(),'%Y-%m-%d')
+    </select>
+
+    <select id="friendRebateRewardList" resultType="com.wsdy.saasops.modules.operate.dto.RebateFriendsRewardDto">
+        SELECT
+            mr.loginname,
+            mr.accountid,
+            mg.groupname,
+            IFNULL(MAX( CASE WHEN mr.type = 2  THEN mr.invitenum END ), 0) AS invitenum,
+            IFNULL(SUM( CASE WHEN mr.type = 3  THEN mr.reward END ), 0) AS firstchargereward,
+            IFNULL(SUM( CASE WHEN mr.type = 4  THEN mr.reward END ), 0) AS validbetreward,
+            IFNULL(SUM( CASE WHEN mr.type = 5  THEN mr.reward END ), 0) AS vipupgradereward,
+            IFNULL(SUM( CASE WHEN mr.type = 6  THEN mr.reward END ), 0) AS chargereward,
+            IFNULL(SUM( CASE WHEN mr.type = 3 OR  mr.type = 4 OR mr.type = 5 OR  mr.type = 6 THEN mr.reward END ), 0) AS selfreward,
+            IFNULL(SUM( CASE WHEN mr.type = 8  THEN mr.reward END ), 0)AS  friendreward,
+            IFNULL(SUM( CASE WHEN mr.type = 3 OR  mr.type = 4 OR mr.type = 5 OR  mr.type = 6  THEN mr.reward END ), 0) AS actualReward
+        FROM
+            mbr_rebate_friends_reward mr
+            INNER JOIN  mbr_account  ma  ON ma.id = mr.accountid
+            INNER JOIN  mbr_group  mg on mg.id = ma.groupid
+        WHERE 1 = 1
+        <if test="startTime != null and startTime != ''">
+            AND mr.incomeTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND mr.incomeTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+
+        <if test="groupId != null and groupId != ''">
+            AND ma.groupId <![CDATA[ = ]]> #{groupId}
+        </if>
+
+        <if test="loginName != null and loginName != ''">
+            AND mr.loginName  =  #{loginName}
+        </if>
+        GROUP BY
+        loginname
+    </select>
+
+    <select id="friendRebateList" resultType="com.wsdy.saasops.modules.operate.dto.RebateFriendsDto">
+        SELECT
+            mt.childnodeid  subaccountid,
+            ma.loginname subloginname,
+            mg.groupname,
+            mal.accountlevel,
+            IFNULL( MAX( CASE WHEN mf.type = 3 THEN mf.eventtime END ), 0 ) AS firstchargetime,
+            IFNULL( MAX( CASE WHEN mf.type = 3 THEN mf.amount END ), 0 ) AS firstcharge,
+            IFNULL(
+        SUM(
+        CASE
+
+            WHEN mf.type = 20
+            OR mf.type = 21
+            OR mf.type = 22
+            OR mf.type = 23
+            OR mf.type = 24
+            OR mf.type = 25 THEN
+            mf.amount
+            END
+            ),
+            0
+            ) AS validbet,
+            IFNULL( SUM( CASE WHEN mf.type = 1 THEN mf.amount END ), 0 ) AS totaldeposit
+        FROM
+            mbr_account ma
+            INNER JOIN mbr_tree mt ON ma.id = mt.childnodeid
+            INNER JOIN mbr_group mg ON mg.id = ma.groupid
+            INNER JOIN mbr_activity_level mal ON mal.id = ma.actlevelid
+            INNER JOIN mbr_account ma2  ON ma2.id = mt.parentid
+        <choose>
+            <when test="loginName != null and loginName != ''">
+                LEFT JOIN mbr_rebate_friends mf ON mf.subaccountid = ma.id
+            </when>
+            <otherwise>
+                INNER JOIN mbr_rebate_friends mf ON mf.subaccountid = ma.id
+            </otherwise>
+        </choose>
+        WHERE  mt.depth = 1
+        <if test="startTime != null and startTime != ''">
+            AND mf.incomeTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND mf.incomeTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+
+        <if test="groupId != null and groupId != ''">
+            AND ma.groupId <![CDATA[ = ]]> #{groupId}
+        </if>
+
+        <if test="loginName != null and loginName != ''">
+            AND ma2.loginName <![CDATA[ = ]]> #{loginName}
+        </if>
+
+        <if test="firstChargeStartTime != null and firstChargeStartTime != ''">
+            AND mf.type = 3
+            AND mf.eventtime <![CDATA[ >= ]]> #{firstChargeStartTime}
+        </if>
+        <if test="firstChargeEndTime != null and firstChargeEndTime != ''">
+            AND mf.type = 3
+            AND mf.eventtime <![CDATA[ <= ]]> #{firstChargeEndTime}
+        </if>
+        GROUP BY
+            mt.childnodeid
+    </select>
+
+    <select id="friendRebateRewardDetails" resultType="com.wsdy.saasops.modules.member.dto.RebateFriendsDetailsDto">
+        SELECT
+            mr.reward AS actualReward,
+            mr.incomeTime createTime,
+            mr.giveouttime,
+            mr.type,
+            mr.STATUS
+        FROM
+            mbr_rebate_friends_reward mr
+        WHERE
+            mr.loginName =  #{loginName}
+            AND (mr.type = 3
+            OR mr.type = 4
+            OR mr.type = 5
+            OR mr.type = 6)
+        <if test="startTime != null and startTime != ''">
+            AND mr.incomeTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND mr.incomeTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+
+    </select>
+
+
+    <select id="friendRebatePersonalList" resultType="com.wsdy.saasops.modules.member.dto.RebateFriendsPersonalDto">
+        SELECT
+            orderno,
+            type as rewardType,
+            reward,
+            incomeTime  createTime,
+            creater,
+            memo
+        FROM
+            mbr_rebate_friends_reward
+        WHERE
+            loginname = #{loginName}
+            AND (type = 3
+            OR type = 4
+            OR type = 5
+            OR type = 6)
+        ORDER BY
+            incomeTime DESC
+    </select>
+
+
+    <select id="friendRebateRewardDetailsSummary" resultType="java.math.BigDecimal">
+        SELECT
+            IFNULL(SUM(mr.reward), 0)
+        FROM
+        mbr_rebate_friends_reward mr
+        WHERE
+        mr.loginName =  #{loginName}
+        AND (mr.type = 3
+        OR mr.type = 4
+        OR mr.type = 5
+        OR mr.type = 6)
+        <if test="startTime != null and startTime != ''">
+            AND mr.incomeTime <![CDATA[ >= ]]> #{startTime}
+        </if>
+        <if test="endTime != null and endTime != ''">
+            AND mr.incomeTime <![CDATA[ <= ]]> #{endTime}
+        </if>
+
+    </select>
+
+
+</mapper>

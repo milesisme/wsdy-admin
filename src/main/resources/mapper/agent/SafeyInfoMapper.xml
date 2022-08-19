@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.agent.mapper.SafeyInfoMapper">
+
+    <select id="fundSubAccountList" resultType="com.wsdy.saasops.modules.agent.entity.AgentSubAccount">
+		SELECT *
+		FROM agy_sub_account t
+		WHERE t.agentid =#{agentId}
+		ORDER BY t.modifytime desc
+	</select>
+
+	<select id="fundAgySubMenu" resultType="com.wsdy.saasops.modules.agent.entity.AgySubMenu">
+		SELECT * FROM agy_sub_menu t
+		WHERE t.subagentid =#{subagentid}
+	</select>
+
+    <select id="fundSubAccountMenu" resultType="com.wsdy.saasops.modules.sys.entity.SysMenuEntity">
+		SELECT * FROM agy_menu WHERE menu_id in (1,2,3,4,5,6)
+	</select>
+
+	<delete id="deleteSubMenu">
+		DELETE FROM agy_sub_menu WHERE agyaccount =#{agyaccount}
+	</delete>
+
+	<select id="findSubAccountCount" resultType="java.lang.Integer">
+		SELECT count(*) FROM agy_sub_account  WHERE id !=#{id} and agyaccount =#{agyaccount}
+	</select>
+
+	<insert id="addSubMenu">
+		INSERT INTO agy_sub_menu( `agyaccount`,`subagentid`, `menu_id`)
+		VALUES ( #{agyaccount}, #{subagentid}, #{menu_id});
+	</insert>
+
+</mapper>

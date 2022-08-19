@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.dao.MbrRebateActDataMapper">
+
+
+    <select id="findFriendRebateVipRewardData"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrRebateActData" >
+        SELECT
+        md.*
+        FROM
+        mbr_rebate_act_data  md
+        WHERE
+        md.accountid = #{accountId}
+        AND md.activityid = #{activityId}
+        AND md.subaccountid = #{subAccountId}
+        AND md.dataType = #{dataType}
+    </select>
+
+    <select id="findFriendRebateChargeRewardData"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrRebateActData">
+        SELECT
+        md.*
+        FROM
+        mbr_rebate_act_data  md
+        WHERE
+        md.accountid = #{accountId}
+        AND md.activityid = #{activityId}
+        AND md.dataType = #{dataType}
+    </select>
+</mapper>

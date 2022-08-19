@@ -1,0 +1,285 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd" >
+
+<mapper namespace="com.wsdy.saasops.modules.member.mapper.MbrWindMapper">
+    <sql id="account_where">
+        <where>
+            <if test="groupIdList != null and groupIdList.size()>0">
+                AND t1.groupId in
+                <foreach item="groupId" collection="groupIdList" open="(" separator="," close=")">
+                    #{groupId}
+                </foreach>
+            </if>
+            <if test="id != null">
+                AND t1.id = #{id}
+            </if>
+            <if test="loginName != null and loginName!=''">
+                AND t1.loginName = #{loginName}
+            </if>
+            <if test="registerTime != null and registerTime!=''">
+                AND t1.registerTime&gt;=#{registerTime}
+            </if>
+            <if test="registerTimeEnd != null and registerTimeEnd!=''">
+                AND t1.registerTime&lt;=#{registerTimeEnd}
+            </if>
+            <if test="loginTime != null and loginTime!=''">
+                AND t1.loginTime&gt;=#{loginTime}
+            </if>
+            <if test="loginTimeEnd != null and loginTimeEnd!=''">
+                AND t1.loginTime&lt;=#{loginTimeEnd}
+            </if>
+            <if test="realName != null and realName!=''">
+                AND t1.realName like concat('%',#{realName},'%')
+            </if>
+            <if test="registerIp != null and registerIp !='' ">
+                AND t4.registerIp like concat('%',#{registerIp},'%')
+            </if>
+            <if test="loginIp != null and loginIp !='' ">
+                AND t1.id in (select l.accountId from log_mbrlogin l where l.loginIp like concat('%', #{loginIp},'%') group by l.accountId)
+            </if>
+            <if test="agyAccount != null and agyAccount !='' ">
+                and t0.agyaccount = #{agyAccount}
+            </if>
+        </where>
+    </sql>
+
+    <select id="getMbrAccountList" resultType="com.wsdy.saasops.modules.member.entity.MbrAccount"
+            parameterType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+        select t1.id,t1.loginname,
+        t0.agyaccount,
+        t0.memo agymemo,
+        t1.realname,
+        t5.groupName,
+        wa.balance,
+        t1.registertime,
+        t1.logintime,
+        t1.available
+        from mbr_account t1
+        left join agy_account t0 on t1.cagencyId = t0.id
+        left join mbr_wallet wa on t1.loginName = wa.loginName
+        left join log_mbrregister t4 on t1.loginName=t4.loginName
+        left join mbr_group t5 on t1.groupId=t5.id
+        <include refid="account_where"/>
+        order by t1.logintime desc
+    </select>
+    
+    <select id="mbrInfoByAccount" parameterType="java.lang.Integer"
+            resultType="com.wsdy.saasops.modules.member.entity.MbrAccount">
+         SELECT distinct ma.id,ma.loginname, agy.agyaccount, agy.memo agymemo, g.groupname, ma.realname, ma.registertime,ma.logintime,
+        (SELECT SUM(deposit.depositAmount) FROM fund_deposit deposit where deposit.accountid = #{accountId} and deposit.status = 1 ) totaldeposit,
+        (SELECT SUM(w.actualarrival) FROM fund_acc_withdraw w where w.accountid = #{accountId} and w.`status`=1) totalWithdrawal,
+        (
+            select sum(t.bonusAmount)
+            from (
+                  -- 红利
+                  select t.bonusAmount,accountId
+                  from opr_act_bonus t
+                  where status = 1 and accountId = #{accountId}
+                  union all
+                  -- 任务
+                  select t.bonusAmount,accountId
+                  from task_bonus t
+                  where accountId = #{accountId}
+              ) t
+        ) totalProfit,
+        (select sum(rpt.payout) from rpt_bet_rcd_day rpt where rpt.username = ma.loginname ) totalPayout,
+        (select mm.memo from mbr_memo mm where mm.accountid = #{accountId}  order by id desc limit 1) memo
+        from mbr_account ma
+        left join agy_account agy on ma.cagencyid = agy.id
+        left join mbr_group g on g.id = ma.groupid
+        where ma.id = #{accountId}
+    </select>
+
+    <select id="getBonusList" resultType="com.wsdy.saasops.modules.member.dto.MbrWindDto">
+        select * from (
+            select t.accountId, t.time appTime, e.codename catName,c.taskname activityName,t.bonusAmount totalBonusAmount
+            from task_bonus t
+            left join task_config c on t.configId = c.id
+             LEFT JOIN t_bs_financialcode e ON c.financialcode = e.code
+            where t.accountId = #{accountId}
+
+            union all
+
+            select bonus.accountId, bonus.applicationTime apptime, aco.catName catname,activity.activityName activityname,bonus.bonusAmount totalBonusAmount
+            from opr_act_bonus bonus
+            LEFT JOIN opr_act_activity activity ON bonus.activityId = activity.id
+            LEFT JOIN opr_act_cat aco on bonus.catid=aco.id
+            where bonus.accountId = #{accountId} and bonus.status =1
+        ) t
+    </select>
+    <select id="queryAccountIPNum" parameterType="Integer" resultType="Integer">
+        SELECT COUNT(DISTINCT l.accountId) loginIpNum
+        FROM log_mbrlogin n
+        INNER JOIN log_mbrlogin l ON n.loginIp = l.loginIp
+        WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+   </select>
+
+    <select id="queryAccountDeviceNum" parameterType="Integer" resultType="Integer">
+        SELECT  COUNT(DISTINCT l.accountId) deviceuuidNum
+        FROM mbr_account_device n
+        INNER JOIN mbr_account_device l ON n.deviceuuid = l.deviceuuid
+        WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+        and n.deviceuuid != ''
+   </select>
+
+    <select id="queryAccountIPProfNum" parameterType="Integer" resultType="Integer">
+        select count(distinct t.accountId ) totalBonusAmountNum
+        from (
+             -- 红利
+             select bonusAmount,accountId
+             from opr_act_bonus tb
+             where tb.`status` = 1
+             and tb.accountid in
+             (
+                    SELECT DISTINCT l.accountId
+                    FROM log_mbrlogin n
+                    INNER JOIN log_mbrlogin l ON n.loginIp = l.loginIp
+                    WHERE n.accountId = #{accountId}  AND l.accountId != #{accountId}
+             )
+             union all
+
+             -- 任务
+             select bonusAmount,accountId
+             from task_bonus t
+             where t.accountid in
+            (
+                    SELECT DISTINCT l.accountId
+                    FROM log_mbrlogin n
+                    INNER JOIN log_mbrlogin l ON n.loginIp = l.loginIp
+                    WHERE n.accountId = #{accountId}  AND l.accountId != #{accountId}
+            )
+        ) t
+    </select>
+
+    <select id="queryAccountDeviceProfNum" parameterType="Integer" resultType="Integer">
+        select count(distinct t.accountId ) totalBonusAmountNum
+        from (
+            -- 红利
+            select bonusAmount,accountId
+            from opr_act_bonus tb
+            where tb.`status` = 1
+            and tb.accountid in
+            (
+                SELECT DISTINCT l.accountId
+                FROM mbr_account_device n
+                INNER JOIN mbr_account_device l ON n.deviceuuid = l.deviceuuid
+                WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+                and n.deviceuuid != ''
+            )
+            union all
+             -- 任务
+             select bonusAmount,accountId
+             from task_bonus t
+             where t.accountid in
+             (
+                SELECT DISTINCT l.accountId
+                FROM mbr_account_device n
+                INNER JOIN mbr_account_device l ON n.deviceuuid = l.deviceuuid
+                WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+                and n.deviceuuid != ''
+            )
+        ) t
+    </select>
+
+    <select id="activitymbrDevice" resultType="com.wsdy.saasops.modules.member.dto.MbrWindDto">
+        SELECT  l.accountid,l.loginName,y.agyaccount,l.deviceUuid,l.deviceType,l.createtime loginTime
+        FROM mbr_account_device n
+                 INNER JOIN mbr_account_device l ON n.deviceuuid = l.deviceuuid
+                 LEFT JOIN mbr_account t ON t.id = l.accountid
+                 LEFT JOIN agy_account y ON y.id = t.cagencyid
+        WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+          and n.deviceuuid != ''
+          group by l.loginName
+        order by l.loginName
+    </select>
+
+    <select id="mbrwithIPPrefNum" resultType="com.wsdy.saasops.modules.member.dto.MbrWindDto">
+        select m.accountid,t.loginname,y.agyaccount,o.loginIp,count(m.bonusAmount) totalBonusAmountNum
+        from (
+             -- 红利
+             select bonusAmount,accountId
+             from opr_act_bonus tb
+             where tb.`status` = 1
+             and tb.accountid in
+             (
+                    SELECT DISTINCT l.accountId
+                    FROM log_mbrlogin n
+                    INNER JOIN log_mbrlogin l ON n.loginIp = l.loginIp
+                    WHERE n.accountId = #{accountId}  AND l.accountId != #{accountId}
+             )
+             union all
+
+             -- 任务
+             select bonusAmount,accountId
+             from task_bonus t
+             where t.accountid in
+            (
+                    SELECT DISTINCT l.accountId
+                    FROM log_mbrlogin n
+                    INNER JOIN log_mbrlogin l ON n.loginIp = l.loginIp
+                    WHERE n.accountId = #{accountId}  AND l.accountId != #{accountId}
+            )
+        ) m
+        LEFT JOIN mbr_account t ON t.id = m.accountid
+        LEFT JOIN agy_account y ON y.id = t.cagencyid
+        LEFT JOIN (
+            SELECT distinct l.accountId, l.loginIp
+            FROM log_mbrlogin n
+            INNER JOIN log_mbrlogin l ON n.loginIp = l.loginIp
+            WHERE n.accountId = #{accountId}  AND l.accountId != #{accountId}
+        ) o on m.accountId = o.accountId
+        group by m.accountId
+    </select>
+
+    <select id="mbrwithDevicePrefNum" resultType="com.wsdy.saasops.modules.member.dto.MbrWindDto">
+        select m.accountid,t.loginname,y.agyaccount,o.deviceuuid,o.devicetype,count(m.bonusAmount) totalBonusAmountNum
+        from (
+             -- 红利
+            select bonusAmount,accountId
+            from opr_act_bonus tb
+            where tb.`status` = 1
+            and tb.accountid in
+            (
+                SELECT DISTINCT l.accountId
+                FROM mbr_account_device n
+                INNER JOIN mbr_account_device l ON n.deviceuuid = l.deviceuuid
+                WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+                and n.deviceuuid != ''
+            )
+            union all
+             -- 任务
+             select bonusAmount,accountId
+             from task_bonus t
+             where t.accountid in
+             (
+                SELECT DISTINCT l.accountId
+                FROM mbr_account_device n
+                INNER JOIN mbr_account_device l ON n.deviceuuid = l.deviceuuid
+                WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+                and n.deviceuuid != ''
+            )
+        ) m
+        LEFT JOIN mbr_account t ON t.id = m.accountid
+        LEFT JOIN agy_account y ON y.id = t.cagencyid
+        LEFT JOIN (
+             SELECT l.accountId,l.deviceuuid,l.devicetype
+                FROM mbr_account_device n
+                INNER JOIN mbr_account_device l ON n.deviceuuid = l.deviceuuid
+                WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+                and n.deviceuuid != ''
+                group by l.accountId
+        ) o on m.accountId = o.accountId
+        group by m.accountId
+    </select>
+
+    <select id="activitymbrIP" resultType="com.wsdy.saasops.modules.member.dto.MbrWindDto">
+      SELECT l.accountid,l.loginName,l.loginIp,l.logintime,y.agyaccount
+      FROM log_mbrlogin n
+           INNER JOIN log_mbrlogin l ON n.loginIp = l.loginIp
+           LEFT JOIN mbr_account t ON t.id = l.accountid
+           LEFT JOIN agy_account y ON y.id = t.cagencyid
+      WHERE n.accountId = #{accountId} AND l.accountId != #{accountId}
+      group by l.accountId
+      order by l.logintime
+    </select>
+</mapper>
